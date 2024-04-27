@@ -33,4 +33,13 @@ export class AuthService {
     const accessToken = this.jwtService.sign(payload);
     return { user, accessToken };
   }
+
+  async generateToken(email: string){
+    const user = await this.userService.findUserByEmail(email);
+    const payload = { email: user.email, sub: user["_id"] };
+    const accessToken = this.jwtService.sign(payload);
+    return { user, accessToken };
+  }
 }
+
+

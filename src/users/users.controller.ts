@@ -4,6 +4,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UserService } from './users.service';
 import { ConfirmUserDto } from './dto/confirm-user.dto';
 
+
 @Controller('users')
 export class UserController {
   constructor(
@@ -63,17 +64,24 @@ export class UserController {
         throw new BadRequestException(validationResult.error.message);
       }
 
+      // Call userService.confirmAccount to verify the account
       const result = await this.userService.confirmAccount(body);
 
-      return {
-        status: "success",
-        message: "Account Confirmed",
-      };
+      // Assuming confirmAccount returns user data upon successful confirmation
+      if (result) {
+
+        return {
+          status: 'success',
+          message: 'Account Confirmed',
+          user: result,
+        };
+      } else {
+        throw new NotFoundException('User not found'); // Handle case where user data is not returned
+      }
     } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw new NotFoundException(error.message);
-      }  else if (error instanceof BadRequestException) {
-        throw new BadRequestException(error.message);
+      // Handle different types of errors
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error; // Re-throw these errors to propagate them to the client
       } else {
         throw new InternalServerErrorException('Failed to confirm account');
       }

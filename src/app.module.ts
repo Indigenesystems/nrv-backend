@@ -24,6 +24,6 @@ import { JwtModule } from '@nestjs/jwt'; // Import JwtModule only
     AuthModule,
   ],
   controllers: [AppController, UserController, AuthController],
-  providers: [AppService, UserService, AuthService], // Remove JwtService from providers
+  providers: [AppService, UserService, AuthService], 
 })
 export class AppModule {}
