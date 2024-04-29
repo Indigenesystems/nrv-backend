@@ -5,13 +5,15 @@ import { Model } from 'mongoose';
 import { generateConfirmationCode } from '../helper/utils';
 import { AuthService } from '../auth/auth.service';
 import { JwtService } from '@nestjs/jwt';
+import { EmailService } from '../email-sender/email.service';
 
 
 @Injectable()
 export class UserService {
   constructor(
   @InjectModel(User.name) private readonly userModel: Model<User>, 
-  private jwtService: JwtService
+  private jwtService: JwtService,
+  private emailService: EmailService
   ) { }
 
   async findAllUsers(): Promise<User[]> {
@@ -41,6 +43,10 @@ export class UserService {
 
     try {
       const createdUser = await newUser.save();
+
+      if(createdUser) {
+        this.emailService.sendUserCreatedEmail(createdUser)
+      }
       return createdUser;
     } catch (error) {
       console.error("Error creating user:", error);

@@ -11,11 +11,14 @@ import { AuthModule } from './auth/auth.module';
 import { AuthController } from './auth/auth.controller';
 import { AuthService } from './auth/auth.service';
 import { JwtModule } from '@nestjs/jwt'; // Import JwtModule only
+import { EmailService } from './email-sender/email.service';
+import { EmailServiceModule } from './email-sender/email-sender.module';
 
 @Module({
   imports: [
     MongodbModule,
     UsersModule,
+    EmailServiceModule,
     MongooseModule.forFeature([{ name: 'User', schema: UserSchema }]),
     JwtModule.register({
       secret: 'your-secret-key-here', // Provide your secret key here
@@ -24,6 +27,6 @@ import { JwtModule } from '@nestjs/jwt'; // Import JwtModule only
     AuthModule,
   ],
   controllers: [AppController, UserController, AuthController],
-  providers: [AppService, UserService, AuthService], 
+  providers: [AppService, UserService, AuthService, EmailService], 
 })
 export class AppModule {}
