@@ -1,8 +1,9 @@
-import { Controller, Post, Body, Get, BadRequestException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
+import { Controller, Post, Body, Get, BadRequestException, NotFoundException, InternalServerErrorException, Put, Param } from '@nestjs/common';
 import { createUserSchema, confirmUserSchema } from '../validations/validator';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UserService } from './users.service';
 import { ConfirmUserDto } from './dto/confirm-user.dto';
+import { User } from './entities/user.entity';
 
 
 @Controller('users')
@@ -86,6 +87,11 @@ export class UserController {
         throw new InternalServerErrorException('Failed to confirm account');
       }
     }
+  }
+
+  @Put(':id')
+  async updateUser(@Param('id') id: string, @Body() updatedUser: User): Promise<User> {
+    return await this.userService.updateUser(id, updatedUser);
   }
 }
 

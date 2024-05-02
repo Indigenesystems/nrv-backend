@@ -25,7 +25,7 @@ export class User {
   @Prop()
   password: string;
 
-  @Prop({ default: 'inactive' }) // Add status field with default value
+  @Prop({ default: 'inactive' }) 
   status: string;
 
   @Prop()
@@ -33,6 +33,9 @@ export class User {
 
   @Prop()
   accountType: string;
+
+  @Prop({ default: false })
+  isOnboarded: boolean;
 }
 
 export type UserDocument = User & Document;

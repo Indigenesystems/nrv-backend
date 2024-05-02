@@ -1,4 +1,4 @@
-import { IsString, IsEmail, IsNotEmpty, IsNumberString, Length, IsEnum } from 'class-validator';
+import { IsString, IsEmail, IsNotEmpty, IsNumberString, Length, IsEnum, IsBoolean } from 'class-validator';
 
 // Define enum for account type
 export enum AccountType {
@@ -43,6 +43,10 @@ export class CreateUserDto {
   @IsString()
   @IsNotEmpty()
   status: string;
+
+  @IsBoolean()
+  @IsNotEmpty()
+  isOnboarded: boolean;
 
   @IsEnum(AccountType) 
   @IsNotEmpty()

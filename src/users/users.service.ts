@@ -55,7 +55,7 @@ export class UserService {
   }
 
   async confirmAccount(body: any): Promise<any> {
-    // Find the user by email and confirmation code
+  
     const { email, confirmationCode } = body;
     const user = await this.userModel.findOne({ email });
 
@@ -73,6 +73,7 @@ export class UserService {
     const payload = { email: user.email, sub: user["_id"] };
     const accessToken = this.jwtService.sign(payload);
     user.status = 'active';
+    user.isOnboarded = false;
     await user.save();
     return { message: 'Account confirmed successfully', data: { user , token: accessToken} };
   }
