@@ -75,7 +75,7 @@ export class UserService {
     user.status = 'active';
     user.isOnboarded = false;
     await user.save();
-    return { message: 'Account confirmed successfully', data: { user , token: accessToken} };
+    return {user, accessToken};
   }
 
   async updateUser(id: string, updatedUser: User): Promise<User> {

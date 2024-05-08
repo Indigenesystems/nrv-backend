@@ -13,20 +13,28 @@ import { AuthService } from './auth/auth.service';
 import { JwtModule } from '@nestjs/jwt'; // Import JwtModule only
 import { EmailService } from './email-sender/email.service';
 import { EmailServiceModule } from './email-sender/email-sender.module';
+import { PropertiesModule } from './properties/properties.module';
+import { CloudinaryService } from './upload/cloudinary.service';
+import { MyMulterModule } from './upload/multer.module';
+import { PropertiesController } from './properties/properties.controller';
+import { PropertiesService } from './properties/properties.service';
+import { PropertySchema } from './properties/entities/property.entity';
 
 @Module({
   imports: [
     MongodbModule,
     UsersModule,
     EmailServiceModule,
-    MongooseModule.forFeature([{ name: 'User', schema: UserSchema }]),
+    MyMulterModule,
+    MongooseModule.forFeature([{ name: 'User', schema: UserSchema }, { name: 'Property', schema: PropertySchema }]),
     JwtModule.register({
       secret: 'your-secret-key-here', // Provide your secret key here
       signOptions: { expiresIn: '1d' }, // Optional: Set token expiration time
     }),
     AuthModule,
+    PropertiesModule,
   ],
-  controllers: [AppController, UserController, AuthController],
-  providers: [AppService, UserService, AuthService, EmailService], 
+  controllers: [AppController, UserController, AuthController, PropertiesController],
+  providers: [AppService, UserService, AuthService, EmailService, CloudinaryService, PropertiesService], 
 })
 export class AppModule {}

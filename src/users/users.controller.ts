@@ -64,25 +64,16 @@ export class UserController {
       if (validationResult.error) {
         throw new BadRequestException(validationResult.error.message);
       }
-
-      // Call userService.confirmAccount to verify the account
       const result = await this.userService.confirmAccount(body);
-
-      // Assuming confirmAccount returns user data upon successful confirmation
       if (result) {
 
-        return {
-          status: 'success',
-          message: 'Account Confirmed',
-          user: result,
-        };
+        return result
       } else {
-        throw new NotFoundException('User not found'); // Handle case where user data is not returned
+        throw new NotFoundException('User not found'); 
       }
     } catch (error) {
-      // Handle different types of errors
       if (error instanceof NotFoundException || error instanceof BadRequestException) {
-        throw error; // Re-throw these errors to propagate them to the client
+        throw error; 
       } else {
         throw new InternalServerErrorException('Failed to confirm account');
       }

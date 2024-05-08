@@ -21,3 +21,13 @@ export const confirmUserSchema = Joi.object({
     email: Joi.string().email().required(),
     password: Joi.string().required()
   });
+
+  export const createPropertySchema = Joi.object({
+    streetAddress: Joi.string().required(),
+    unit: Joi.string().required(),
+    city: Joi.string().required(),
+    state: Joi.string().required(),
+    zipCode: Joi.string().required(),
+    createdBy: Joi.string().required(),
+    file: Joi.any()
+  });
