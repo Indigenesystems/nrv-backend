@@ -61,4 +61,22 @@ export class PropertiesController {
     }
   }
 
+  @Get('/single/:id')
+  async findPropertyById(@Param('id') id: string, ) {
+    const property = await this.propertiesService.findPropertyById(id);
+    if (!property) {
+      return {
+        status: "success",
+        message: "No property found",
+        data: null
+      }
+    } else {
+      return {
+        status: "success",
+        message: "Property fetched",
+        data: property
+      };
+    }
+  }
+
 }

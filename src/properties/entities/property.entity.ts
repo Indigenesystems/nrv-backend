@@ -2,7 +2,7 @@ import { Schema, Prop, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { User } from '../../users/entities/user.entity';
 
-@Schema()
+@Schema({ timestamps: true })
 export class Property {
   @Prop()
   streetAddress: string;

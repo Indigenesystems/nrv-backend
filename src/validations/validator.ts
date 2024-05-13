@@ -31,3 +31,11 @@ export const confirmUserSchema = Joi.object({
     createdBy: Joi.string().required(),
     file: Joi.any()
   });
+
+  export const createRoomSchema = Joi.object({
+    name: Joi.string().required(),
+    description: Joi.string().required(),
+    propertyId: Joi.any().required(),
+    targetAudience: Joi.string().required(),
+    targetDeposit: Joi.string().required(),
+  });

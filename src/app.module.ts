@@ -19,6 +19,10 @@ import { MyMulterModule } from './upload/multer.module';
 import { PropertiesController } from './properties/properties.controller';
 import { PropertiesService } from './properties/properties.service';
 import { PropertySchema } from './properties/entities/property.entity';
+import { RoomsModule } from './rooms/rooms.module';
+import { RoomsController } from './rooms/rooms.controller';
+import { RoomsService } from './rooms/rooms.service';
+import { RoomSchema } from './rooms/entities/room.entity';
 
 @Module({
   imports: [
@@ -26,15 +30,16 @@ import { PropertySchema } from './properties/entities/property.entity';
     UsersModule,
     EmailServiceModule,
     MyMulterModule,
-    MongooseModule.forFeature([{ name: 'User', schema: UserSchema }, { name: 'Property', schema: PropertySchema }]),
+    MongooseModule.forFeature([{ name: 'User', schema: UserSchema }, { name: 'Property', schema: PropertySchema }, { name: 'Room', schema: RoomSchema }]),
     JwtModule.register({
       secret: 'your-secret-key-here', // Provide your secret key here
       signOptions: { expiresIn: '1d' }, // Optional: Set token expiration time
     }),
     AuthModule,
     PropertiesModule,
+    RoomsModule,
   ],
-  controllers: [AppController, UserController, AuthController, PropertiesController],
-  providers: [AppService, UserService, AuthService, EmailService, CloudinaryService, PropertiesService], 
+  controllers: [AppController, UserController, AuthController, PropertiesController, RoomsController],
+  providers: [AppService, UserService, AuthService, EmailService, CloudinaryService, PropertiesService, RoomsService], 
 })
 export class AppModule {}
