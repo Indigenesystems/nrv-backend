@@ -32,14 +32,14 @@ import { RoomSchema } from './rooms/entities/room.entity';
     MyMulterModule,
     MongooseModule.forFeature([{ name: 'User', schema: UserSchema }, { name: 'Property', schema: PropertySchema }, { name: 'Room', schema: RoomSchema }]),
     JwtModule.register({
-      secret: 'your-secret-key-here', // Provide your secret key here
-      signOptions: { expiresIn: '1d' }, // Optional: Set token expiration time
+      secret: 'your-secret-key-here',
+      signOptions: { expiresIn: '1d' }, 
     }),
     AuthModule,
     PropertiesModule,
     RoomsModule,
   ],
-  controllers: [AppController, UserController, AuthController, PropertiesController, RoomsController],
+  controllers: [AppController, UserController, AuthController, PropertiesController, RoomsController, UserController],
   providers: [AppService, UserService, AuthService, EmailService, CloudinaryService, PropertiesService, RoomsService], 
 })
 export class AppModule {}

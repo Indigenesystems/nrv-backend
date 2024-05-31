@@ -3,12 +3,17 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Room } from './entities/room.entity';
 import { CreateRoomDTO } from './dto/create-room.dto';
+import { PropertiesService } from '../properties/properties.service';
+import { Property } from '../properties/entities/property.entity';
 
 @Injectable()
 export class RoomsService {
 
     constructor(
-        @InjectModel(Room.name) private readonly roomModel: Model<Room>
+        @InjectModel(Room.name) private readonly roomModel: Model<Room>,
+        @InjectModel(Property.name) private readonly propertyModel: Model<Property>,
+       // private propertiesService: PropertiesService
+
     ) { }
 
     // async createRoom(createRoomDTO: CreateRoomDTO) {
@@ -32,9 +37,6 @@ export class RoomsService {
     // }
 
     async createRooms(createRoomDTOs: CreateRoomDTO[]) {
-        console.log({createRoomDTOs});
-        
-        // Find the room with the highest roomId
         const latestRoom = await this.roomModel.findOne({}, { roomId: 1 }).sort({ roomId: -1 }).limit(1);
         const maxRoomId = latestRoom ? latestRoom.roomId : 0;
     
@@ -65,6 +67,14 @@ export class RoomsService {
 
     async roomByPropertyId(id: any): Promise<any> {
         return await this.roomModel.find({propertyId: id});
+    }
+
+    async singlePropertyById(id: any): Promise<any> {
+        let room = await this.roomModel.findOne({_id: id});
+        let property = await this.propertyModel.findOne({_id: room.propertyId})
+        // const propertiesService = await this.propertiesService.findPropertyById(room.propertyId)
+         room.propertyId = property
+        return room;
     }
 
 }

@@ -3,6 +3,7 @@ import { CreateRoomDTO } from './dto/create-room.dto';
 import { RoomsService } from './rooms.service';
 import { createRoomSchema } from '../validations/validator';
 
+
 @Controller('rooms')
 export class RoomsController {
   constructor(private roomsService: RoomsService) { }
@@ -11,15 +12,11 @@ export class RoomsController {
   async createRoom(@Body() roomData: CreateRoomDTO[]) {
     try {
       const createdRooms = [];
-      let result = [];
 
-      // Iterate through each room data and validate
       for (const room of roomData) {
         console.log({ room });
 
         const validationResult = createRoomSchema.validate(room);
-
-
 
         if (validationResult.error) {
           console.log({ error: validationResult.error.message });
@@ -59,6 +56,24 @@ export class RoomsController {
         status: "success",
         message: "rooms fetched",
         data: users
+      };
+    }
+  }
+
+  @Get('/single/:id')
+  async findSinglePropertyById(@Param('id') id: string,) {
+    const user = await this.roomsService.singlePropertyById(id);
+    if (!user) {
+      return {
+        status: "success",
+        message: "No room found",
+        data: null
+      }
+    } else {
+      return {
+        status: "success",
+        message: "room fetched successfully",
+        data: user
       };
     }
   }

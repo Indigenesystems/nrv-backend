@@ -19,6 +19,9 @@ export class Room {
     @Prop()
     targetDeposit: string;
 
+    @Prop({ default: false })
+    listRoom: boolean;
+
     @Prop({ type: Types.ObjectId, ref: 'Property', validate: /^[0-9a-fA-F]{24}$/ })
     propertyId: Property;
 }

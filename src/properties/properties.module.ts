@@ -6,6 +6,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { Property, PropertySchema } from './entities/property.entity';
 import { RoomsService } from '../rooms/rooms.service';
 import { Room, RoomSchema } from '../rooms/entities/room.entity';
+import { RoomsController } from '../rooms/rooms.controller';
 
 @Module({
   imports: [
