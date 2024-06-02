@@ -43,20 +43,43 @@ export class PropertiesController {
 
   }
 
+  // @Get('/all/:id')
+  // async findProperyByUserId(@Param('id') id: string, ) {
+  //   const users = await this.propertiesService.findPropertyByUserId(id);
+  //   if (!users) {
+  //     return {
+  //       status: "success",
+  //       message: "No property found",
+  //       data: null
+  //     }
+  //   } else {
+  //     return {
+  //       status: "success",
+  //       message: "Properties fetched",
+  //       data: users
+  //     };
+  //   }
+  // }
+
   @Get('/all/:id')
-  async findProperyByUserId(@Param('id') id: string, ) {
-    const users = await this.propertiesService.findPropertyByUserId(id);
-    if (!users) {
+  async findPropertiesByUserId(
+    @Param('id') id: string,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
+  ) {
+    const properties = await this.propertiesService.findPropertyByUserId(id, page, limit);
+    
+    if (!properties || properties.length === 0) {
       return {
-        status: "success",
-        message: "No property found",
-        data: null
-      }
+        status: 'success',
+        message: 'No properties found',
+        data: null,
+      };
     } else {
       return {
-        status: "success",
-        message: "Properties fetched",
-        data: users
+        status: 'success',
+        message: 'Properties fetched',
+        data: properties,
       };
     }
   }

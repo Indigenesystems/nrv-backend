@@ -25,6 +25,10 @@ export class CreatePropertyDto {
 
     @IsString()
     @IsNotEmpty()
+    propertyType: string;
+
+    @IsString()
+    @IsNotEmpty()
     createdBy: string;
 
     // Add this property for file input

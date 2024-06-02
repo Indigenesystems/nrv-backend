@@ -20,6 +20,9 @@ export class Property {
   zipCode: string;
 
   @Prop()
+  propertyType: string;
+
+  @Prop()
   file: string;
 
   // Add user reference as a foreign key

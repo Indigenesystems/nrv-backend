@@ -28,6 +28,7 @@ export const confirmUserSchema = Joi.object({
     city: Joi.string().required(),
     state: Joi.string().required(),
     zipCode: Joi.string().required(),
+    propertyType: Joi.string().required(),
     createdBy: Joi.string().required(),
     file: Joi.any()
   });

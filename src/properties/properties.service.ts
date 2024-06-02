@@ -19,6 +19,7 @@ export class PropertiesService {
     property.file = imageUrl;
     property.unit = createPropertyDto.body.unit
     property.city = createPropertyDto.body.city
+    property.propertyType = createPropertyDto.body.propertyType
     property.streetAddress = createPropertyDto.body.streetAddress
     property.state = createPropertyDto.body.state
     property.zipCode = createPropertyDto.body.zipCode
@@ -29,9 +30,16 @@ export class PropertiesService {
     return createdProperty;
   }
 
-  async findPropertyByUserId(id: any): Promise<any> {
-    return await this.propertyModel.find({ createdBy: id });
+  async findPropertyByUserId(id: any, page: number = 1, limit: number = 10): Promise<any> {
+    const skip = (page - 1) * limit;
+    const properties = await this.propertyModel
+      .find({ createdBy: id })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+    return properties;
   }
+  
 
   async findPropertyById(id: any): Promise<any> {
     let result: any = {}
@@ -44,6 +52,7 @@ export class PropertiesService {
     result.city = property.city;
     result.state = property.state;
     result.zipCode = property.zipCode;
+    result.propertyType = property.propertyType;
     result.file = property.file;
     result.createdBy = property.createdBy;
     result.rooms = rooms;
