@@ -1,65 +1,77 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseInterceptors, UploadedFile, BadRequestException, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseInterceptors, UploadedFile, BadRequestException, Query, UploadedFiles } from '@nestjs/common';
 import { PropertiesService } from './properties.service';
 import { CreatePropertyDto } from './dto/create-property.dto';
 import { UpdatePropertyDto } from './dto/update-property.dto';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor , FileFieldsInterceptor} from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import * as path from 'path';
-import { createPropertySchema } from '../validations/validator';
+import { createPropertySchema, updatePropertySchema } from '../validations/validator';
+import { extname } from 'path';
+import { query } from 'express';
 
 @Controller('properties')
 export class PropertiesController {
   constructor(private propertiesService: PropertiesService) { }
 
-  @Post('/add')
-  @UseInterceptors(FileInterceptor('file', {
-    storage: diskStorage({
-      destination: './uploads', // Set your destination path
-      filename: (req, file, cb) => {
-        const filename: string = path.parse(file.originalname).name.replace(/\s/g, '') + '-' + Date.now() + path.parse(file.originalname).ext;
-        cb(null, filename);
-      },
-    }),
-  }))
-  async create(@Body() body: any, @UploadedFile() file: Express.Multer.File): Promise<any> {
 
+  @Post('/add')
+  @UseInterceptors(FileFieldsInterceptor([
+    { name: 'file', maxCount: 1 },
+    { name: 'landlordInsurancePolicy', maxCount: 5 },
+    { name: 'utilityAndMaintenance', maxCount: 5 },
+    { name: 'otherDocuments', maxCount: 5 },
+  ]))
+  async create(
+    @Body() body: CreatePropertyDto,
+    @UploadedFiles() files: { file?: Express.Multer.File, landlordInsurancePolicy?: Express.Multer.File , utilityAndMaintenance?: Express.Multer.File , otherDocuments?: Express.Multer.File }
+  ): Promise<any> {
     const validationResult = createPropertySchema.validate(body);
 
     if (validationResult.error) {
       throw new BadRequestException(validationResult.error.message);
     }
-    const createPropertyDto = Object.assign({ file, body });
-    const createdProperty = await this.propertiesService.createProperty(createPropertyDto);
+    const createPropertyDto = { ...body, ...files };
 
-    if (createdProperty.city) {
+    try {
+      const createdProperty = await this.propertiesService.createProperty(createPropertyDto);
       return {
         status: "success",
         message: "Property added successfully",
         data: createdProperty
       };
-    } else {
-      throw new BadRequestException(createdProperty);
+    } catch (error) {
+      throw new BadRequestException(error.message);
     }
-
   }
 
-  // @Get('/all/:id')
-  // async findProperyByUserId(@Param('id') id: string, ) {
-  //   const users = await this.propertiesService.findPropertyByUserId(id);
-  //   if (!users) {
-  //     return {
-  //       status: "success",
-  //       message: "No property found",
-  //       data: null
-  //     }
-  //   } else {
-  //     return {
-  //       status: "success",
-  //       message: "Properties fetched",
-  //       data: users
-  //     };
-  //   }
-  // }
+  @Patch('/update')
+  @UseInterceptors(FileFieldsInterceptor([
+    { name: 'file', maxCount: 1 },
+    { name: 'landlordInsurancePolicy', maxCount: 5 },
+    { name: 'utilityAndMaintenance', maxCount: 5 },
+    { name: 'otherDocuments', maxCount: 5 },
+  ]))
+  async update(
+    @Body() body: UpdatePropertyDto, @Query() query: 'propertyId',
+    @UploadedFiles() files: { file?: Express.Multer.File, landlordInsurancePolicy?: Express.Multer.File , utilityAndMaintenance?: Express.Multer.File , otherDocuments?: Express.Multer.File }
+  ): Promise<any> {
+    const validationResult = updatePropertySchema.validate(body);
+
+    if (validationResult.error) {
+      throw new BadRequestException(validationResult.error.message);
+    }
+    const createPropertyDto = { ...body, ...files , query};
+    try {
+      const updatedProperty = await this.propertiesService.updateProperty(createPropertyDto);
+      return {
+        status: "success",
+        message: "Property updated successfully",
+        data: updatedProperty
+      };
+    } catch (error) {
+      throw new BadRequestException(error.message);
+    }
+  }
 
   @Get('/all/:id')
   async findPropertiesByUserId(
@@ -68,7 +80,7 @@ export class PropertiesController {
     @Query('limit') limit: number = 10,
   ) {
     const properties = await this.propertiesService.findPropertyByUserId(id, page, limit);
-    
+
     if (!properties || properties.length === 0) {
       return {
         status: 'success',
@@ -85,7 +97,7 @@ export class PropertiesController {
   }
 
   @Get('/single/:id')
-  async findPropertyById(@Param('id') id: string, ) {
+  async findPropertyById(@Param('id') id: string,) {
     const property = await this.propertiesService.findPropertyById(id);
     if (!property) {
       return {
@@ -100,6 +112,32 @@ export class PropertiesController {
         data: property
       };
     }
+  }
+
+  @Delete('/delete/:id')
+  async deletePropertyById(@Param('id') id: string,) {
+    const property = await this.propertiesService.deletePropertyById(id);
+    if (!property) {
+      return {
+        status: "error",
+        message: "An error occured",
+        data: null
+      }
+    } else {
+      return {
+        status: "success",
+        message: "Property deleted successfully",
+        data: null
+      };
+    }
+  }
+
+  @Delete('/delete-document')
+  async deleteDocument(
+    @Query('id') id: string,
+    @Query('documentUrl') documentUrl: string,
+  ) {
+    return this.propertiesService.deleteDocument(id, documentUrl);
   }
 
 }

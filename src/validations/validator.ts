@@ -30,8 +30,27 @@ export const confirmUserSchema = Joi.object({
     zipCode: Joi.string().required(),
     propertyType: Joi.string().required(),
     createdBy: Joi.string().required(),
-    file: Joi.any()
+    file: Joi.any(),
+    landlordInsurancePolicy: Joi.any().optional(), // Assuming these fields can accept any type of data
+    // utilityAndMaintenance: Joi.any(),
+    // otherDocuments: Joi.any(),
   });
+
+  export const updatePropertySchema = Joi.object({
+    streetAddress: Joi.string().optional(),
+    unit: Joi.string().optional(),
+    city: Joi.string().optional(),
+    state: Joi.string().optional(),
+    zipCode: Joi.string().optional(),
+    propertyType: Joi.string().optional(),
+    createdBy: Joi.string().optional(),
+    file: Joi.any().optional(),
+    landlordInsurancePolicy: Joi.any().optional(), // Assuming these fields can accept any type of data
+    utilityAndMaintenance: Joi.any(),
+    otherDocuments: Joi.any(),
+  });
+
+
 
   export const createRoomSchema = Joi.object({
     name: Joi.string().required(),

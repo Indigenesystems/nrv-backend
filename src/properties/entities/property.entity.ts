@@ -25,6 +25,15 @@ export class Property {
   @Prop()
   file: string;
 
+  @Prop()
+  landlordInsurancePolicy: string[];
+
+  @Prop()
+  utilityAndMaintenance: string[];
+
+  @Prop()
+  otherDocuments: string[];
+
   // Add user reference as a foreign key
   @Prop({ type: Types.ObjectId, ref: 'User' })
   createdBy: User; // Assuming you have a User schema

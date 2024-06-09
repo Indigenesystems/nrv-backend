@@ -31,9 +31,11 @@ export class CreatePropertyDto {
     @IsNotEmpty()
     createdBy: string;
 
-    // Add this property for file input
     file: Express.Multer.File;
+
+    landlordInsurancePolicy: Express.Multer.File;
+
+    utilityAndMaintenance: Express.Multer.File;
+
+    otherDocuments: Express.Multer.File;
 }
-
-
-
