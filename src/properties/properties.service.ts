@@ -61,9 +61,6 @@ export class PropertiesService {
       utilityAndMaintenance: utilityAndMaintenanceUrls,
       otherDocuments: otherDocumentsUrls
     };
-
-    console.log({ propertyData });
-
     // Save the new property to the database
     const newProperty = new this.propertyModel(propertyData);
     const createdProperty = await newProperty.save();
@@ -143,10 +140,25 @@ export class PropertiesService {
     return updatedProperty;
   }
 
-  async findPropertyByUserId(id: any, page: number = 1, limit: number = 10): Promise<any> {
+  async findPropertyByUserId(id: string, page: number = 1, limit: number = 10): Promise<any> {
     const skip = (page - 1) * limit;
+  
     const properties = await this.propertyModel
       .find({ createdBy: id })
+      .populate('createdBy') // Corrected populate usage
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .exec(); // Add exec to properly execute the query
+  
+    return properties;
+  }
+  
+
+  async findAllProperty(page: number = 1, limit: number = 10): Promise<any> {
+    const skip = (page - 1) * limit;
+    const properties = await this.propertyModel
+      .find()
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
@@ -155,7 +167,7 @@ export class PropertiesService {
 
   async findPropertyById(id: any): Promise<any> {
     let result: any = {}
-    let property: any = await this.propertyModel.findOne({ _id: id });
+    let property: any = await this.propertyModel.findOne({ _id: id }).populate('createdBy') ;
 
     if (property) {
       const rooms = await this.roomService.roomByPropertyId(id);

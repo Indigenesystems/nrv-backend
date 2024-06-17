@@ -96,6 +96,28 @@ export class PropertiesController {
     }
   }
 
+  @Get('/all')
+  async findAllProperties(
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
+  ) {
+    const properties = await this.propertiesService.findAllProperty(page, limit);
+
+    if (!properties || properties.length === 0) {
+      return {
+        status: 'success',
+        message: 'No properties found',
+        data: null,
+      };
+    } else {
+      return {
+        status: 'success',
+        message: 'Properties fetched',
+        data: properties,
+      };
+    }
+  }
+
   @Get('/single/:id')
   async findPropertyById(@Param('id') id: string,) {
     const property = await this.propertiesService.findPropertyById(id);
