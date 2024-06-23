@@ -5,14 +5,18 @@ import { CloudinaryService } from '../upload/cloudinary.service';
 import { Property } from './entities/property.entity';
 import { RoomsService } from '../rooms/rooms.service';
 import { UpdatePropertyDto } from './dto/update-property.dto';
+import { Application } from './entities/application.entity';
+import { EmailService } from '../email-sender/email.service';
 
 @Injectable()
 export class PropertiesService {
 
   constructor(
     @InjectModel(Property.name) private readonly propertyModel: Model<Property>,
+    @InjectModel(Application.name) private readonly applicationModel: Model<Application>,
     private cloudinaryService: CloudinaryService,
-    private roomService: RoomsService
+    private roomService: RoomsService,
+    private emailService: EmailService
   ) { }
 
 
@@ -142,7 +146,7 @@ export class PropertiesService {
 
   async findPropertyByUserId(id: string, page: number = 1, limit: number = 10): Promise<any> {
     const skip = (page - 1) * limit;
-  
+
     const properties = await this.propertyModel
       .find({ createdBy: id })
       .populate('createdBy') // Corrected populate usage
@@ -150,10 +154,10 @@ export class PropertiesService {
       .skip(skip)
       .limit(limit)
       .exec(); // Add exec to properly execute the query
-  
+
     return properties;
   }
-  
+
 
   async findAllProperty(page: number = 1, limit: number = 10): Promise<any> {
     const skip = (page - 1) * limit;
@@ -167,7 +171,7 @@ export class PropertiesService {
 
   async findPropertyById(id: any): Promise<any> {
     let result: any = {}
-    let property: any = await this.propertyModel.findOne({ _id: id }).populate('createdBy') ;
+    let property: any = await this.propertyModel.findOne({ _id: id }).populate('createdBy');
 
     if (property) {
       const rooms = await this.roomService.roomByPropertyId(id);
@@ -223,4 +227,66 @@ export class PropertiesService {
       throw new NotFoundException('Document not found');
     }
   }
+
+  async createApplication(body: any) {
+    try {
+      const newApplication = await this.applicationModel.create(body);
+      return newApplication;
+    } catch (error) {
+      throw new Error(`Failed to creating application: ${error.message}`);
+    }
+  }
+
+  async getLandlordApplications(page: number = 1, limit: number = 10, id: any, status: string): Promise<any> {
+    try {
+      const skip = (page - 1) * limit;
+      let query = this.applicationModel.find({ ownerId: id });
+
+      if (status) {
+        query = query.where('status').equals(status);
+      }
+
+      const applications = await query
+        .populate('ownerId')
+        .populate('propertyId')
+        .populate('applicant')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .exec();
+      return applications;
+      
+    } catch (error) {
+
+      throw new Error(`Failed to fetch landlord applications: ${error}`);
+    }
+  }
+
+
+  async findApplicationyById(id: any): Promise<any> {
+    const applicant = await this.applicationModel.findOne({ _id: id });
+    return applicant;
+  }
+
+  async updateApplicationStatusById(id: any, newStatus: string): Promise<any> {
+    try {
+      const updatedApplication = await this.findApplicationyById(id);
+
+      updatedApplication.status = newStatus;
+
+      return updatedApplication.save();
+    } catch (error) {
+      throw new Error(`Failed to update application status: ${error}`);
+    }
+  }
+
+  async applicationInvitation(payload: any): Promise<any> {
+    try {
+      await this.emailService.sendApplicationInvitation(payload);
+      return "Success"
+    } catch (error) {
+      throw new Error(`Failed to update application status: ${error}`);
+    }
+  }
+
 }

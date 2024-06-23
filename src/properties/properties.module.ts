@@ -6,13 +6,14 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { Property, PropertySchema } from './entities/property.entity';
 import { RoomsService } from '../rooms/rooms.service';
 import { Room, RoomSchema } from '../rooms/entities/room.entity';
-import { RoomsController } from '../rooms/rooms.controller';
+import { Application, ApplicationSchema } from './entities/application.entity';
+import { EmailService } from '../email-sender/email.service';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: Property.name, schema: PropertySchema }, { name: Room.name, schema: RoomSchema }])
+    MongooseModule.forFeature([{ name: Property.name, schema: PropertySchema }, { name: Room.name, schema: RoomSchema }, { name: Application.name, schema: ApplicationSchema }])
   ],
   controllers: [PropertiesController],
-  providers: [PropertiesService, CloudinaryService, RoomsService],
+  providers: [PropertiesService, CloudinaryService, RoomsService, EmailService],
 })
 export class PropertiesModule {}

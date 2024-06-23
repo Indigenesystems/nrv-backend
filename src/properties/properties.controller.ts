@@ -1,8 +1,8 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseInterceptors, UploadedFile, BadRequestException, Query, UploadedFiles } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseInterceptors, UploadedFile, BadRequestException, Query, UploadedFiles, Put } from '@nestjs/common';
 import { PropertiesService } from './properties.service';
 import { CreatePropertyDto } from './dto/create-property.dto';
 import { UpdatePropertyDto } from './dto/update-property.dto';
-import { FileInterceptor, FilesInterceptor , FileFieldsInterceptor} from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor, FileFieldsInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import * as path from 'path';
 import { createPropertySchema, updatePropertySchema } from '../validations/validator';
@@ -23,7 +23,7 @@ export class PropertiesController {
   ]))
   async create(
     @Body() body: CreatePropertyDto,
-    @UploadedFiles() files: { file?: Express.Multer.File, landlordInsurancePolicy?: Express.Multer.File , utilityAndMaintenance?: Express.Multer.File , otherDocuments?: Express.Multer.File }
+    @UploadedFiles() files: { file?: Express.Multer.File, landlordInsurancePolicy?: Express.Multer.File, utilityAndMaintenance?: Express.Multer.File, otherDocuments?: Express.Multer.File }
   ): Promise<any> {
     const validationResult = createPropertySchema.validate(body);
 
@@ -51,16 +51,17 @@ export class PropertiesController {
     { name: 'utilityAndMaintenance', maxCount: 5 },
     { name: 'otherDocuments', maxCount: 5 },
   ]))
+
   async update(
     @Body() body: UpdatePropertyDto, @Query() query: 'propertyId',
-    @UploadedFiles() files: { file?: Express.Multer.File, landlordInsurancePolicy?: Express.Multer.File , utilityAndMaintenance?: Express.Multer.File , otherDocuments?: Express.Multer.File }
+    @UploadedFiles() files: { file?: Express.Multer.File, landlordInsurancePolicy?: Express.Multer.File, utilityAndMaintenance?: Express.Multer.File, otherDocuments?: Express.Multer.File }
   ): Promise<any> {
     const validationResult = updatePropertySchema.validate(body);
 
     if (validationResult.error) {
       throw new BadRequestException(validationResult.error.message);
     }
-    const createPropertyDto = { ...body, ...files , query};
+    const createPropertyDto = { ...body, ...files, query };
     try {
       const updatedProperty = await this.propertiesService.updateProperty(createPropertyDto);
       return {
@@ -162,4 +163,94 @@ export class PropertiesController {
     return this.propertiesService.deleteDocument(id, documentUrl);
   }
 
+
+  @Post('/apply')
+  async createApplication(@Body() applicationData: any) {
+    try {
+      const createdApplication = await this.propertiesService.createApplication(applicationData)
+
+      if (createdApplication.propertyId) {
+        return {
+          status: "success",
+          message: "Application created successfully",
+          data: createdApplication
+        };
+      } else {
+        throw new BadRequestException(createdApplication);
+      }
+
+    } catch (error) {
+      throw new BadRequestException(error.message);
+    }
+  }
+
+  @Get('/applications')
+  async findApplicantsByLandlordId(
+    @Query('id') id: string,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
+    @Query('status') status: string = 'New',
+  ) {
+    const properties = await this.propertiesService.getLandlordApplications(page, limit, id, status);
+
+    if (!properties || properties.length === 0) {
+      return {
+        status: 'success',
+        message: 'No properties found',
+        data: null,
+      };
+    } else {
+      return {
+        status: 'success',
+        message: 'Properties fetched',
+        data: properties,
+      };
+    }
+  }
+
+  @Get('/application/update-status')
+  async updateApplicationStatus(
+    @Query('id') id: string,
+    @Query('status') status: string
+  ) {
+    const application = await this.propertiesService.updateApplicationStatusById(id, status);
+    if (application) {
+      return {
+        status: 'success',
+        message: 'Application updated successfully',
+        data: application,
+      };
+    } else {
+      return {
+        status: 'error',
+        message: 'An error occured',
+        data: application,
+      };
+    }
+  }
+
+  @Get('/application/invite-applicant')
+  async sendApplicationInvite(
+    @Query('name') name: string,
+    @Query('landlordId') landlordId: string,
+    @Query('email') email: string
+  ) {
+    const payload: any = {
+      "name": name,
+      "email": email,
+      "landlordId" : landlordId
+    }
+    const application = await this.propertiesService.applicationInvitation(payload);
+    if (application) {
+      return {
+        status: 'success',
+        message: 'Invitation sent successfully',
+      };
+    } else {
+      return {
+        status: 'error',
+        message: 'An error occured',
+      };
+    }
+  }
 }

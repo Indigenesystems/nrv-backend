@@ -34,7 +34,6 @@ export class Property {
   @Prop()
   otherDocuments: string[];
 
-  // Add user reference as a foreign key
   @Prop({ type: Types.ObjectId, ref: 'User' })
   createdBy: User; // Assuming you have a User schema
 

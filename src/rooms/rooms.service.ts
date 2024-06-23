@@ -5,6 +5,7 @@ import { Room } from './entities/room.entity';
 import { CreateRoomDTO } from './dto/create-room.dto';
 import { PropertiesService } from '../properties/properties.service';
 import { Property } from '../properties/entities/property.entity';
+import { Application } from '../properties/entities/application.entity';
 
 @Injectable()
 export class RoomsService {
@@ -12,6 +13,7 @@ export class RoomsService {
     constructor(
         @InjectModel(Room.name) private readonly roomModel: Model<Room>,
         @InjectModel(Property.name) private readonly propertyModel: Model<Property>,
+        @InjectModel(Application.name) private readonly applicationModel: Model<Application>,
         // private propertiesService: PropertiesService
 
     ) { }
@@ -34,11 +36,9 @@ export class RoomsService {
         });
 
         try {
-            // Create multiple room entries
             const newRooms = await this.roomModel.create(rooms);
             return newRooms;
         } catch (error) {
-            // Handle error if any
             throw new Error(`Failed to create rooms: ${error.message}`);
         }
     }

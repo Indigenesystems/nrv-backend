@@ -23,6 +23,7 @@ import { RoomsModule } from './rooms/rooms.module';
 import { RoomsController } from './rooms/rooms.controller';
 import { RoomsService } from './rooms/rooms.service';
 import { RoomSchema } from './rooms/entities/room.entity';
+import { ApplicationSchema } from './properties/entities/application.entity';
 
 @Module({
   imports: [
@@ -30,7 +31,7 @@ import { RoomSchema } from './rooms/entities/room.entity';
     UsersModule,
     EmailServiceModule,
     MyMulterModule,
-    MongooseModule.forFeature([{ name: 'User', schema: UserSchema }, { name: 'Property', schema: PropertySchema }, { name: 'Room', schema: RoomSchema }]),
+    MongooseModule.forFeature([{ name: 'User', schema: UserSchema }, { name: 'Property', schema: PropertySchema }, { name: 'Room', schema: RoomSchema },  { name: 'Application', schema:  ApplicationSchema }]),
     JwtModule.register({
       secret: 'your-secret-key-here',
       signOptions: { expiresIn: '1d' }, 
