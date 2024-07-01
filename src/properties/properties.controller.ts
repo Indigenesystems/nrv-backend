@@ -3,11 +3,8 @@ import { PropertiesService } from './properties.service';
 import { CreatePropertyDto } from './dto/create-property.dto';
 import { UpdatePropertyDto } from './dto/update-property.dto';
 import { FileInterceptor, FilesInterceptor, FileFieldsInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import * as path from 'path';
 import { createPropertySchema, updatePropertySchema } from '../validations/validator';
-import { extname } from 'path';
-import { query } from 'express';
+
 
 @Controller('properties')
 export class PropertiesController {
@@ -137,6 +134,24 @@ export class PropertiesController {
     }
   }
 
+  @Get('/single/tenant/:id/:tenantId')
+  async findPropertyByIdForTenant(@Param('id') id: string, @Param('tenantId') tenantId: string,) {
+    const property = await this.propertiesService.findPropertyByIdForTenant(id, tenantId);
+    if (!property) {
+      return {
+        status: "success",
+        message: "No property found",
+        data: null
+      }
+    } else {
+      return {
+        status: "success",
+        message: "Property fetched",
+        data: property
+      };
+    }
+  }
+
   @Delete('/delete/:id')
   async deletePropertyById(@Param('id') id: string,) {
     const property = await this.propertiesService.deletePropertyById(id);
@@ -165,9 +180,14 @@ export class PropertiesController {
 
 
   @Post('/apply')
-  async createApplication(@Body() applicationData: any) {
+  @UseInterceptors(FileFieldsInterceptor([
+    { name: 'file', maxCount: 1 },
+  ]))
+
+  async createApplication(@Body() body: any,   @UploadedFiles() files: { file?: Express.Multer.File}) {
     try {
-      const createdApplication = await this.propertiesService.createApplication(applicationData)
+      const createApplicationDTO = { ...body, ...files };
+      const createdApplication = await this.propertiesService.createApplication(createApplicationDTO)
 
       if (createdApplication.propertyId) {
         return {

@@ -14,10 +14,7 @@ export class RoomsController {
       const createdRooms = [];
 
       for (const room of roomData) {
-        console.log({ room });
-
         const validationResult = createRoomSchema.validate(room);
-
         if (validationResult.error) {
           console.log({ error: validationResult.error.message });
           throw new BadRequestException(validationResult.error.message);
@@ -25,8 +22,6 @@ export class RoomsController {
 
 
         createdRooms.push(validationResult.value);
-        console.log({ createdRooms });
-
         if (createdRooms.length === roomData.length) {
           const data = await this.roomsService.createRooms(createdRooms)
           return {
