@@ -28,7 +28,6 @@ export class PropertiesController {
       throw new BadRequestException(validationResult.error.message);
     }
     const createPropertyDto = { ...body, ...files };
-
     try {
       const createdProperty = await this.propertiesService.createProperty(createPropertyDto);
       return {

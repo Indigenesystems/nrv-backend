@@ -14,10 +14,31 @@ export class Room {
     description: string;
 
     @Prop()
+    rentAmountMetrics: string;
+
+    @Prop()
+    rentAmount: string;
+
+    @Prop()
+    file: string;
+
+    @Prop()
     targetRent: string;
 
     @Prop()
     targetDeposit: string;
+
+    @Prop()
+    noOfRooms: string;
+
+    @Prop()
+    noOfBaths: string;
+
+    @Prop()
+    noOfPools: string;
+
+    @Prop()
+    otherAmentities: string;
 
     @Prop({ default: false })
     listRoom: boolean;

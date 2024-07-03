@@ -12,6 +12,18 @@ export class CreateRoomDTO {
 
     @IsString()
     @IsNotEmpty()
+    propertyId: string;
+
+    @IsString()
+    @IsNotEmpty()
+    rentAmountMetrics: string;
+
+    @IsString()
+    @IsNotEmpty()
+    rentAmount: string;
+
+    @IsString()
+    @IsNotEmpty()
     targetRent: string;
 
     @IsString()
@@ -20,7 +32,19 @@ export class CreateRoomDTO {
 
     @IsString()
     @IsNotEmpty()
-    propertyId: string;
+    noOfBaths: string;
+
+    @IsString()
+    @IsNotEmpty()
+    noOfPools: string;
+    
+    @IsString()
+    @IsNotEmpty()
+    noOfRooms: string;
+    
+    @IsString()
+    @IsNotEmpty()
+    otherAmentities: string;
 }
 
 

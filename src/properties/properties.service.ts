@@ -227,9 +227,6 @@ export class PropertiesService {
     let hasTenantApplied: any = await this.applicationModel.findOne({
       applicant: tenantId, propertyId: id,
     });
-
-    console.log({ hasTenantApplied });
-
     if (property && hasTenantApplied != null) {
       const rooms = await this.roomService.roomByPropertyId(id);
       result._id = property._id;

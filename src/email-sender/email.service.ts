@@ -257,7 +257,7 @@ export class EmailService {
         subject: 'Welcome onboard',
         html: resultEmailTemplate,
       });
-      console.log('Email sent: ', info.response);
+
     } catch (error) {
       console.error('Email sending error: ', error);
       throw error;
@@ -501,7 +501,7 @@ export class EmailService {
         subject: 'Invitation to Apply',
         html: resultEmailTemplate,
       });
-      console.log('Email sent: ', info.response);
+
     } catch (error) {
       console.error('Email sending error: ', error);
       throw error;
