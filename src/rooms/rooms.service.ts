@@ -89,9 +89,9 @@ export class RoomsService {
     async updateSubPropertyStatus(id: any, newStatus: boolean): Promise<any> {
         try {
 
-            let room = await this.roomModel.findOne({ _id: id });
+            let room: any = await this.roomModel.findOne({ _id: id });
             let property = await this.propertyModel.findOne({ _id: room.propertyId });
-            room.propertyId = property;
+            room.propertyId = room.propertyId;
             room.listRoom = newStatus;
             return room.save();
         } catch (error) {
