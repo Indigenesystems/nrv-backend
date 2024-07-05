@@ -43,6 +43,9 @@ export class Room {
     @Prop({ default: false })
     listRoom: boolean;
 
+    @Prop({ default: false })
+    assignedToTenant: boolean;
+
     @Prop({ type: Types.ObjectId, ref: 'Property', validate: /^[0-9a-fA-F]{24}$/ })
     propertyId: Property;
 }

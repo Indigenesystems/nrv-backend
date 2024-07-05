@@ -103,6 +103,7 @@ export class RoomsService {
         const skip = (page - 1) * limit;
         const properties = await this.roomModel
             .find().populate('propertyId')
+            .where('listRoom').equals(true)
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit);
