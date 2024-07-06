@@ -26,7 +26,7 @@ export class RoomsService {
         const maxRoomId = latestRoom ? latestRoom.roomId : 0;
         const fileUrl = await this.cloudinaryService.upload(createRoomDTO.file[0]);
         const roomId = maxRoomId + 1;
-     
+
 
         const {
             name,
@@ -90,7 +90,6 @@ export class RoomsService {
         try {
 
             let room: any = await this.roomModel.findOne({ _id: id });
-            let property = await this.propertyModel.findOne({ _id: room.propertyId });
             room.propertyId = room.propertyId;
             room.listRoom = newStatus;
             return room.save();
@@ -111,26 +110,21 @@ export class RoomsService {
     }
 
     async findPropertyByIdForTenant(id: any, tenantId: any): Promise<any> {
- 
         let property: any = await this.roomModel
             .findOne({ _id: id })
             .populate({
                 path: 'propertyId',
                 populate: { path: 'createdBy' }
             });
-   
-            
         let hasTenantApplied: any = await this.applicationModel.findOne({
             applicant: tenantId, propertyId: id,
         });
 
         if (property && hasTenantApplied != null) {
-            
-            return {property, "hasApplied": true};
+            return { property, "hasApplied": true };
         }
-
         if (property && hasTenantApplied == null) {
-            return {property, "hasApplied": false};
+            return { property, "hasApplied": false };
         }
         return new NotFoundException();
     }

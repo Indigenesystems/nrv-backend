@@ -227,6 +227,27 @@ export class PropertiesController {
     }
   }
 
+   @Get('/application-count')
+  async findApplicantsByLandlordIdMetrics(
+    @Query('id') id: string
+  ) {
+    const properties = await this.propertiesService.getLandLordCount(id);
+
+    if (!properties || properties.length === 0) {
+      return {
+        status: 'error',
+        message: 'Landlord applications count not found',
+        data: null,
+      };
+    } else {
+      return {
+        status: "success",
+        message: 'Landlord applications count found',
+        data: properties,
+      };
+    }
+  }
+
   @Get('/application/update-status')
   async updateApplicationStatus(
     @Query('id') id: string,

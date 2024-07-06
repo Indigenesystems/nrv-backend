@@ -17,7 +17,7 @@ export class PropertiesService {
     private cloudinaryService: CloudinaryService,
     private roomService: RoomsService,
     private emailService: EmailService,
-  ) { }
+  ) {}
 
   async createProperty(createPropertyDto: any) {
     let landlordInsurancePolicyUrls: any = null;
@@ -201,8 +201,8 @@ export class PropertiesService {
 
     if (property) {
       const rooms = await this.roomService.roomByPropertyId(id);
-      console.log("rooms" , rooms);
-      
+      console.log('rooms', rooms);
+
       result._id = property._id;
       result.streetAddress = property.streetAddress;
       result.unit = property.unit;
@@ -227,7 +227,8 @@ export class PropertiesService {
       .findOne({ _id: id })
       .populate('createdBy');
     let hasTenantApplied: any = await this.applicationModel.findOne({
-      applicant: tenantId, propertyId: id,
+      applicant: tenantId,
+      propertyId: id,
     });
     if (property && hasTenantApplied != null) {
       const rooms = await this.roomService.roomByPropertyId(id);
@@ -398,6 +399,43 @@ export class PropertiesService {
       return 'Success';
     } catch (error) {
       throw new Error(`Failed to update application status: ${error}`);
+    }
+  }
+
+  async getLandLordCount(
+    id: any,
+  ): Promise<{
+    totalNew: number;
+    totalAccepted: number;
+    totalActiveTenants: number;
+  } | any> {
+    try {
+      // Query to count total number of applicants for each status
+      const totalNewPromise = this.applicationModel
+        .countDocuments({ ownerId: id, status: 'New' })
+        .exec();
+      const totalAcceptedPromise = this.applicationModel
+        .countDocuments({ ownerId: id, status: 'Accepted' })
+        .exec();
+      const totalActiveTenantsPromise = this.applicationModel
+        .countDocuments({ ownerId: id, status: 'activeTenant' })
+        .exec();
+
+      // Await all promises to get the results
+      const [ totalNew, totalAccepted, totalActiveTenants] = await Promise.all([
+        totalNewPromise,
+        totalAcceptedPromise,
+        totalActiveTenantsPromise,
+      ]);
+
+      // Return applications and totals
+      return {
+        totalNew,
+        totalAccepted,
+        totalActiveTenants,
+      };
+    } catch (error) {
+      throw new Error(`Failed to fetch landlord applications: ${error}`);
     }
   }
 }
