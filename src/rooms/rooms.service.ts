@@ -129,4 +129,40 @@ export class RoomsService {
         return new NotFoundException();
     }
 
+    async findCurrentOccupantForRoom(id: any): Promise<any> {
+        try {
+
+            let iactiveTenant: any = await this.applicationModel.findOne({
+                propertyId: id,
+            }).where('status').equals('activeTenant').populate('propertyId')
+                .populate('applicant')
+                ;
+
+
+            return iactiveTenant
+        } catch (error) {
+            throw new NotFoundException(error);
+        }
+
+
+    }
+
+    async findRentedApartments(id: any): Promise<any> {
+        try {
+
+            let rentedApartments: any = await this.applicationModel.find({
+                applicant: id,
+            }).where('status').equals('activeTenant').populate({
+                path: 'propertyId',
+                populate: {
+                    path: 'propertyId'  // Populate nested field inside 'propertyId'
+                }
+            })
+                .populate('applicant');
+            return rentedApartments
+        } catch (error) {
+            throw new NotFoundException(error);
+        }
+    }
+
 }

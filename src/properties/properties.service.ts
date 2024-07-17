@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { CloudinaryService } from '../upload/cloudinary.service';
@@ -17,7 +17,7 @@ export class PropertiesService {
     private cloudinaryService: CloudinaryService,
     private roomService: RoomsService,
     private emailService: EmailService,
-  ) {}
+  ) { }
 
   async createProperty(createPropertyDto: any) {
     let landlordInsurancePolicyUrls: any = null;
@@ -381,8 +381,16 @@ export class PropertiesService {
     return applicant;
   }
 
-  async updateApplicationStatusById(id: any, newStatus: string): Promise<any> {
+  async updateApplicationStatusById(id: any, newStatus: string, roomId?: any): Promise<any> {
+    console.log({roomId});
+    
     try {
+      if (newStatus === "activeTenant") {
+        const doesAcriveTenantExists = await this.applicationModel.findOne({ propertyId: roomId }).where("status").equals("activeTenant");
+        console.log({doesAcriveTenantExists});
+        
+        if (doesAcriveTenantExists) return new BadRequestException("This property/apartment has an active tenant")
+      }
       const updatedApplication = await this.findApplicationyById(id);
 
       updatedApplication.status = newStatus;
@@ -422,7 +430,7 @@ export class PropertiesService {
         .exec();
 
       // Await all promises to get the results
-      const [ totalNew, totalAccepted, totalActiveTenants] = await Promise.all([
+      const [totalNew, totalAccepted, totalActiveTenants] = await Promise.all([
         totalNewPromise,
         totalAcceptedPromise,
         totalActiveTenantsPromise,

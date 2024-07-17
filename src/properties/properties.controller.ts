@@ -251,21 +251,12 @@ export class PropertiesController {
   @Get('/application/update-status')
   async updateApplicationStatus(
     @Query('id') id: string,
-    @Query('status') status: string
+    @Query('status') status: string,
+    @Query('roomId') roomId?: any
   ) {
-    const application = await this.propertiesService.updateApplicationStatusById(id, status);
+    const application = await this.propertiesService.updateApplicationStatusById(id, status, roomId);
     if (application) {
-      return {
-        status: 'success',
-        message: 'Application updated successfully',
-        data: application,
-      };
-    } else {
-      return {
-        status: 'error',
-        message: 'An error occured',
-        data: application,
-      };
+      return application
     }
   }
 

@@ -73,6 +73,38 @@ export class RoomsController {
     }
   }
 
+ 
+
+  @Get('/active/tenant')
+  async getPropertyActiveTenant(@Query('id') id: string)
+  {
+    try {
+      const activeTenant = await this.roomsService.findCurrentOccupantForRoom(id);
+      return {
+        status: "success",
+        message: "Active tenant fetched",
+        data: activeTenant
+      };
+    } catch (error) {
+      throw new BadRequestException(error);
+    }
+  }
+
+  @Get('/update/status')
+  async update(@Query('id') id: string, @Query('status') status: boolean)
+  {
+    try {
+      const updatedSubProperty = await this.roomsService.updateSubPropertyStatus(id, status);
+      return {
+        status: "success",
+        message: "Sub property updated successfully",
+        data: updatedSubProperty
+      };
+    } catch (error) {
+      throw new BadRequestException(error.message);
+    }
+  }
+
   @Get('/single/:id')
   async findSinglePropertyById(@Param('id') id: string) {
     const user = await this.roomsService.singlePropertyById(id);
@@ -108,26 +140,21 @@ export class RoomsController {
       };
     }
   }
+  
 
-
-
-  @Get('/update/status')
-  async update(@Query('id') id: string, @Query('status') status: boolean)
+  @Get('/properties/renters')
+  async getRentedProperties(@Query('id') id: string)
   {
     try {
-      const updatedSubProperty = await this.roomsService.updateSubPropertyStatus(id, status);
+      const properties = await this.roomsService.findRentedApartments(id);
       return {
         status: "success",
-        message: "Sub property updated successfully",
-        data: updatedSubProperty
+        message: "Properties fetched",
+        data: properties
       };
     } catch (error) {
-      throw new BadRequestException(error.message);
+      throw new BadRequestException(error);
     }
   }
-  
- 
- 
 
- 
 }
