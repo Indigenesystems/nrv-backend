@@ -34,11 +34,13 @@ export class RoomsController {
   }
   @Get('/all')
   async findPropertiesByUserId(
-    @Param('id') id: string,
+    @Query('search') search: string,
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10,
   ) {
-    const properties = await this.roomsService.findAllApartments(page, limit);
+    console.log("xxx", search);
+    
+    const properties = await this.roomsService.findAllApartments(page, limit , search);
 
     if (!properties || properties.length === 0) {
       return {

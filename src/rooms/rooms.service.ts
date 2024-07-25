@@ -98,15 +98,37 @@ export class RoomsService {
         }
     }
 
-    async findAllApartments(page: number = 1, limit: number = 10): Promise<any> {
+    async findAllApartments(page: number = 1, limit: number = 10, search?: string): Promise<any> {
         const skip = (page - 1) * limit;
-        const properties = await this.roomModel
-            .find().populate('propertyId')
-            .where('listRoom').equals(true)
-            .sort({ createdAt: -1 })
-            .skip(skip)
-            .limit(limit);
+        // Build the base query
+        let query = this.roomModel.find().populate('propertyId').where('listRoom').equals(true);
+    
+        // Construct the search conditions dynamically
+
+        if (search) {
+            let searchRegex = new RegExp(search, 'i');
+    
+            query.or([
+              { propertyId: { $in: await this.propertyModel.find({ state: searchRegex }).distinct('_id') } },
+              { propertyId: { $in: await this.propertyModel.find({ city: searchRegex }).distinct('_id') } },
+              { propertyId: { $in: await this.propertyModel.find({ streetAddress: searchRegex }).distinct('_id') } },
+              //add more searchable fields
+            ]);
+
+        }
+            
+
+        
+    
+        // Execute the query with sorting, skipping, and limiting
+        const properties = await query
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit)
+          .exec();
+    
         return properties;
+      
     }
 
     async findPropertyByIdForTenant(id: any, tenantId: any): Promise<any> {

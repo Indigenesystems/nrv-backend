@@ -66,3 +66,11 @@ export const confirmUserSchema = Joi.object({
     noOfRooms: Joi.string().required(),
     otherAmentities: Joi.string().required(),
   });
+
+  export const createMaintenanceSchema = Joi.object({
+    title: Joi.string().required(),
+    description: Joi.string().required(),
+    roomId: Joi.any().required(),
+    file: Joi.any().optional(),
+    createdBy: Joi.any().required()
+  });

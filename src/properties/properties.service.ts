@@ -201,8 +201,6 @@ export class PropertiesService {
 
     if (property) {
       const rooms = await this.roomService.roomByPropertyId(id);
-      console.log('rooms', rooms);
-
       result._id = property._id;
       result.streetAddress = property.streetAddress;
       result.unit = property.unit;

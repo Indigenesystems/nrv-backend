@@ -24,6 +24,10 @@ import { RoomsController } from './rooms/rooms.controller';
 import { RoomsService } from './rooms/rooms.service';
 import { RoomSchema } from './rooms/entities/room.entity';
 import { ApplicationSchema } from './properties/entities/application.entity';
+import { MaintenanceSchema } from './maintenance/entities/maintenance.entity';
+import { MaintenanceModule } from './maintenance/maintenance.module';
+import { MaintenanceService } from './maintenance/maintenance.service';
+import { MaintenanceController } from './maintenance/maintenance.controller';
 
 @Module({
   imports: [
@@ -31,7 +35,7 @@ import { ApplicationSchema } from './properties/entities/application.entity';
     UsersModule,
     EmailServiceModule,
     MyMulterModule,
-    MongooseModule.forFeature([{ name: 'User', schema: UserSchema }, { name: 'Property', schema: PropertySchema }, { name: 'Room', schema: RoomSchema },  { name: 'Application', schema:  ApplicationSchema }]),
+    MongooseModule.forFeature([{ name: 'User', schema: UserSchema }, { name: 'Property', schema: PropertySchema }, { name: 'Room', schema: RoomSchema },  { name: 'Application', schema:  ApplicationSchema }, { name: 'Maintenance', schema:  MaintenanceSchema }]),
     JwtModule.register({
       secret: 'your-secret-key-here',
       signOptions: { expiresIn: '1d' }, 
@@ -39,8 +43,9 @@ import { ApplicationSchema } from './properties/entities/application.entity';
     AuthModule,
     PropertiesModule,
     RoomsModule,
+    MaintenanceModule,
   ],
-  controllers: [AppController, UserController, AuthController, PropertiesController, RoomsController, UserController],
-  providers: [AppService, UserService, AuthService, EmailService, CloudinaryService, PropertiesService, RoomsService], 
+  controllers: [AppController, UserController, AuthController, PropertiesController, RoomsController, UserController, MaintenanceController],
+  providers: [AppService, UserService, AuthService, EmailService, CloudinaryService, PropertiesService, RoomsService, MaintenanceService], 
 })
 export class AppModule {}
