@@ -36,7 +36,7 @@ export class MaintenanceService {
 
   async findAll(createdBy: any, roomId: any): Promise<Maintenance[]> {
     try {
-      return await this.maintenanceModel.find({createdBy, roomId}).populate("roomId").exec();
+      return await this.maintenanceModel.find({createdBy, roomId}).populate("roomId").sort({createdAt: -1}).exec();
     } catch (error) {
       throw new Error(`Failed to fetch maintenance records: ${error.message}`);
     }
@@ -50,14 +50,10 @@ export class MaintenanceService {
     }
   }
 
-  async update(id: string, updateMaintenanceDto: any): Promise<Maintenance | null> {
+  async updatetoResolved(id: string, updateMaintenanceDto: any): Promise<Maintenance | null> {
     try {
-      const fileUrl = await this.cloudinaryService.upload(updateMaintenanceDto.file[0]);
       const updatedMaintenance = await this.maintenanceModel.findByIdAndUpdate(id, {
-        title: updateMaintenanceDto.title,
-        description: updateMaintenanceDto.description,
-        roomId: updateMaintenanceDto.roomId,
-        file: fileUrl,
+        status: "Resolved"
       }, { new: true });
 
       return updatedMaintenance;

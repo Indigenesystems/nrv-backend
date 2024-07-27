@@ -75,20 +75,14 @@ export class MaintenanceController {
   async update(
     @Param('id') id: string,
     @Body() updateMaintenanceDto: any,
-    @UploadedFiles() files: { file?: Express.Multer.File }
   ) {
     try {
-      // Validate request data using Joi schema
-      const validationResult = createMaintenanceSchema.validate(updateMaintenanceDto);
-      if (validationResult.error) {
-        throw new BadRequestException(validationResult.error.message);
-      }
 
       // Update maintenance record using service
-      const data = await this.maintenanceService.update(id, updateMaintenanceDto);
+      const data = await this.maintenanceService.updatetoResolved(id, updateMaintenanceDto);
 
       return this.createSuccessResponse({
-        message: "Maintenance updated successfully",
+        message: "Issue marked as resolved",
         data: data
       });
     } catch (error) {
