@@ -17,7 +17,7 @@ export class Room {
     rentAmountMetrics: string;
 
     @Prop()
-    rentAmount: string;
+    rentAmount: number;
 
     @Prop()
     file: string;

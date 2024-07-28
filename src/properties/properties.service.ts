@@ -380,13 +380,10 @@ export class PropertiesService {
   }
 
   async updateApplicationStatusById(id: any, newStatus: string, roomId?: any): Promise<any> {
-    console.log({roomId});
-    
+
     try {
       if (newStatus === "activeTenant") {
         const doesAcriveTenantExists = await this.applicationModel.findOne({ propertyId: roomId }).where("status").equals("activeTenant");
-        console.log({doesAcriveTenantExists});
-        
         if (doesAcriveTenantExists) return new BadRequestException("This property/apartment has an active tenant")
       }
       const updatedApplication = await this.findApplicationyById(id);

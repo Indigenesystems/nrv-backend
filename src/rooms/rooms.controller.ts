@@ -34,13 +34,14 @@ export class RoomsController {
   }
   @Get('/all')
   async findPropertiesByUserId(
-    @Query('search') search: string,
+    @Query('search') search?: string,
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10,
+    @Query('minPrice') minPrice?: number,
+    @Query('maxPrice') maxPrice?: number,
   ) {
-    console.log("xxx", search);
     
-    const properties = await this.roomsService.findAllApartments(page, limit , search);
+    const properties = await this.roomsService.findAllApartments(page, limit , search, minPrice , maxPrice);
 
     if (!properties || properties.length === 0) {
       return {

@@ -28,7 +28,7 @@ export class RoomsService {
         const roomId = maxRoomId + 1;
 
 
-        const {
+        let {
             name,
             description,
             propertyId,
@@ -42,6 +42,8 @@ export class RoomsService {
             otherAmentities,
         } = createRoomDTO;
 
+       let parsedrentAmount = parseInt(rentAmount)
+
 
         const finalPayload = {
             roomId,
@@ -51,7 +53,7 @@ export class RoomsService {
             targetDeposit,
             targetRent,
             rentAmountMetrics,
-            rentAmount,
+            rentAmount: parsedrentAmount,
             noOfRooms,
             noOfBaths,
             noOfPools,
@@ -98,38 +100,49 @@ export class RoomsService {
         }
     }
 
-    async findAllApartments(page: number = 1, limit: number = 10, search?: string): Promise<any> {
+    async findAllApartments(
+        page: number = 1, 
+        limit: number = 10, 
+        search?: string, 
+        minPrice?: number, 
+        maxPrice?: number
+      ): Promise<any> {
         const skip = (page - 1) * limit;
-        // Build the base query
-        let query = this.roomModel.find().populate('propertyId').where('listRoom').equals(true);
-    
-        // Construct the search conditions dynamically
-
-        if (search) {
-            let searchRegex = new RegExp(search, 'i');
-    
-            query.or([
-              { propertyId: { $in: await this.propertyModel.find({ state: searchRegex }).distinct('_id') } },
-              { propertyId: { $in: await this.propertyModel.find({ city: searchRegex }).distinct('_id') } },
-              { propertyId: { $in: await this.propertyModel.find({ streetAddress: searchRegex }).distinct('_id') } },
-              //add more searchable fields
-            ]);
-
-        }
-            
-
         
-    
+        // Base query with population and listing filter
+        let query = this.roomModel.find().populate('propertyId').where('listRoom').equals(true);
+        
+        // Search filter
+        if (search) {
+          const searchRegex = new RegExp(search, 'i');
+          query.or([
+            { propertyId: { $in: await this.propertyModel.find({ state: searchRegex }).distinct('_id') } },
+            { propertyId: { $in: await this.propertyModel.find({ city: searchRegex }).distinct('_id') } },
+            { propertyId: { $in: await this.propertyModel.find({ streetAddress: searchRegex }).distinct('_id') } },
+          ]);
+        }
+        
+        // Price range filter
+        if (minPrice !== undefined || maxPrice !== undefined) {
+          query = query.where('rentAmount');
+          if (minPrice !== undefined) {
+            query = query.gte(minPrice);
+          }
+          if (maxPrice !== undefined) {
+            query = query.lte(maxPrice);
+          }
+        }
+        
         // Execute the query with sorting, skipping, and limiting
         const properties = await query
           .sort({ createdAt: -1 })
           .skip(skip)
           .limit(limit)
           .exec();
-    
+        
         return properties;
+      }
       
-    }
 
     async findPropertyByIdForTenant(id: any, tenantId: any): Promise<any> {
         let property: any = await this.roomModel
