@@ -6,14 +6,28 @@ import { generateConfirmationCode } from '../helper/utils';
 import { AuthService } from '../auth/auth.service';
 import { JwtService } from '@nestjs/jwt';
 import { EmailService } from '../email-sender/email.service';
+import { PropertiesService } from '../properties/properties.service';
+import { Application } from '../properties/entities/application.entity';
+import { CloudinaryService } from '../upload/cloudinary.service';
+import { RoomsService } from '../rooms/rooms.service';
+import { Room } from '../rooms/entities/room.entity';
+import { Property } from '../properties/entities/property.entity';
 
 
 @Injectable()
 export class UserService {
   constructor(
-  @InjectModel(User.name) private readonly userModel: Model<User>, 
-  private jwtService: JwtService,
-  private emailService: EmailService
+    @InjectModel(Room.name) private readonly roomModel: Model<Room>,
+    @InjectModel(Property.name) private readonly propertyModel: Model<Property>,
+    @InjectModel(Application.name) private readonly applicationModel: Model<Application>,
+    @InjectModel(User.name) private readonly userModel: Model<User>,
+
+    private jwtService: JwtService,
+    private emailService: EmailService,
+    private propertiesService: PropertiesService,
+    private cloudinaryService: CloudinaryService,
+    private roomService: RoomsService,
+
   ) { }
 
   async findAllUsers(): Promise<User[]> {
@@ -31,20 +45,18 @@ export class UserService {
   async createUser(user: User): Promise<User | any | { message: string }> {
 
     const confirmationCode = generateConfirmationCode();
-
     const existingUser = await this.userModel.findOne({ email: user.email });
 
     if (existingUser) {
       return { message: "An account with this email already exists" };
     }
     user.confirmationCode = confirmationCode;
-
     const newUser = new this.userModel(user);
 
     try {
       const createdUser = await newUser.save();
 
-      if(createdUser) {
+      if (createdUser) {
         this.emailService.sendUserCreatedEmail(createdUser)
       }
       return createdUser;
@@ -53,9 +65,42 @@ export class UserService {
       throw new InternalServerErrorException("Failed to create user. Please try again later.");
     }
   }
+  async createUserByLandlord(user: any): Promise<User | any | { message: string }> {
 
+    const confirmationCode = generateConfirmationCode();
+    const existingUser = await this.userModel.findOne({ email: user.email });
+
+    if (existingUser) {
+      return { message: "An account with this email already exists" };
+    }
+
+    const isPropertyMapped = await this.propertiesService.isPropertyMappedToActiveTenant(user.propertyId)
+    if(isPropertyMapped){
+      return { message: "This property has an active occupant" };
+    }
+    user.confirmationCode = confirmationCode;
+    user.password = generateConfirmationCode();
+    user.status = "active";
+    const newUser = new this.userModel(user);
+
+    try {
+      const createdUser: any = await newUser.save();
+      if (createdUser) {
+        await this.emailService.sendUserCreatedByLandlordEmail(user);
+        const formattedPayload = {
+          ...user, "applicant": createdUser._id
+        }
+        await this.propertiesService.mapCreatedUserToApartment(formattedPayload)
+      }
+      return createdUser;
+    } catch (error) {
+      console.error("Error creating user:", error);
+      throw new InternalServerErrorException("Failed to create user. Please try again later.");
+    }
+
+  }
   async confirmAccount(body: any): Promise<any> {
-  
+
     const { email, confirmationCode } = body;
     const user = await this.userModel.findOne({ email });
 
@@ -75,7 +120,7 @@ export class UserService {
     user.status = 'active';
     user.isOnboarded = false;
     await user.save();
-    return {user, accessToken};
+    return { user, accessToken };
   }
 
   async updateUser(id: string, updatedUser: User): Promise<User> {

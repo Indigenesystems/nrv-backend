@@ -1,12 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import mongoose, { Model } from 'mongoose';
 import { Room } from './entities/room.entity';
 import { CreateRoomDTO } from './dto/create-room.dto';
 import { PropertiesService } from '../properties/properties.service';
 import { Property } from '../properties/entities/property.entity';
 import { Application } from '../properties/entities/application.entity';
 import { CloudinaryService } from '../upload/cloudinary.service';
+import { object } from 'joi';
 
 @Injectable()
 export class RoomsService {
@@ -42,7 +43,7 @@ export class RoomsService {
             otherAmentities,
         } = createRoomDTO;
 
-       let parsedrentAmount = parseInt(rentAmount)
+        let parsedrentAmount = parseInt(rentAmount)
 
 
         const finalPayload = {
@@ -101,48 +102,55 @@ export class RoomsService {
     }
 
     async findAllApartments(
-        page: number = 1, 
-        limit: number = 10, 
-        search?: string, 
-        minPrice?: number, 
-        maxPrice?: number
-      ): Promise<any> {
-        const skip = (page - 1) * limit;
-        
-        // Base query with population and listing filter
-        let query = this.roomModel.find().populate('propertyId').where('listRoom').equals(true);
-        
-        // Search filter
+        page: number = 1,
+        limit: number = 10,
+        search?: string,
+        minPrice?: number,
+        maxPrice?: number,
+        id?: any
+    ): Promise<any> {
+
+        let query = null
+
+        if (id) {
+            const rooms = await this.roomModel.find()
+                .populate('propertyId') 
+                .exec();
+
+            query = rooms.filter(room => {
+                if (room.propertyId.createdBy instanceof mongoose.Types.ObjectId) {
+                    return room.propertyId && room.propertyId.createdBy == new mongoose.Types.ObjectId(id);
+                } else {
+                    return room.propertyId && room.propertyId.createdBy === id;
+                }
+            });
+
+
+        } else {
+            query = this.roomModel.find().populate('propertyId').where('listRoom').equals(true);
+        }
+
         if (search) {
-          const searchRegex = new RegExp(search, 'i');
-          query.or([
-            { propertyId: { $in: await this.propertyModel.find({ state: searchRegex }).distinct('_id') } },
-            { propertyId: { $in: await this.propertyModel.find({ city: searchRegex }).distinct('_id') } },
-            { propertyId: { $in: await this.propertyModel.find({ streetAddress: searchRegex }).distinct('_id') } },
-          ]);
+            const searchRegex = new RegExp(search, 'i');
+            query.or([
+                { propertyId: { $in: await this.propertyModel.find({ state: searchRegex }).distinct('_id') } },
+                { propertyId: { $in: await this.propertyModel.find({ city: searchRegex }).distinct('_id') } },
+                { propertyId: { $in: await this.propertyModel.find({ streetAddress: searchRegex }).distinct('_id') } },
+            ]);
         }
-        
-        // Price range filter
+
         if (minPrice !== undefined || maxPrice !== undefined) {
-          query = query.where('rentAmount');
-          if (minPrice !== undefined) {
-            query = query.gte(minPrice);
-          }
-          if (maxPrice !== undefined) {
-            query = query.lte(maxPrice);
-          }
+            query = query.where('rentAmount');
+            if (minPrice !== undefined) {
+                query = query.gte(minPrice);
+            }
+            if (maxPrice !== undefined) {
+                query = query.lte(maxPrice);
+            }
         }
-        
-        // Execute the query with sorting, skipping, and limiting
         const properties = await query
-          .sort({ createdAt: -1 })
-          .skip(skip)
-          .limit(limit)
-          .exec();
-        
         return properties;
-      }
-      
+    }
 
     async findPropertyByIdForTenant(id: any, tenantId: any): Promise<any> {
         let property: any = await this.roomModel
@@ -171,9 +179,6 @@ export class RoomsService {
                 propertyId: id,
             }).where('status').equals('activeTenant').populate('propertyId')
                 .populate('applicant')
-                ;
-
-
             return iactiveTenant
         } catch (error) {
             throw new NotFoundException(error);
@@ -192,8 +197,7 @@ export class RoomsService {
                 populate: {
                     path: 'propertyId'  // Populate nested field inside 'propertyId'
                 }
-            })
-                .populate('applicant');
+            }).populate('applicant');
             return rentedApartments
         } catch (error) {
             throw new NotFoundException(error);

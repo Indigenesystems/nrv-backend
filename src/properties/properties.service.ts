@@ -7,16 +7,19 @@ import { RoomsService } from '../rooms/rooms.service';
 import { UpdatePropertyDto } from './dto/update-property.dto';
 import { Application } from './entities/application.entity';
 import { EmailService } from '../email-sender/email.service';
+import { LandlordAssignedTenant } from './entities/landlord_assigned_tenant.entity';
+import { Room } from '../rooms/entities/room.entity';
 
 @Injectable()
 export class PropertiesService {
   constructor(
     @InjectModel(Property.name) private readonly propertyModel: Model<Property>,
-    @InjectModel(Application.name)
-    private readonly applicationModel: Model<Application>,
+    @InjectModel(Application.name) private readonly applicationModel: Model<Application>,
+    @InjectModel(LandlordAssignedTenant.name) private readonly landlordAssignedTenantModel: Model<LandlordAssignedTenant>,
     private cloudinaryService: CloudinaryService,
     private roomService: RoomsService,
     private emailService: EmailService,
+
   ) { }
 
   async createProperty(createPropertyDto: any) {
@@ -383,8 +386,8 @@ export class PropertiesService {
 
     try {
       if (newStatus === "activeTenant") {
-        const doesAcriveTenantExists = await this.applicationModel.findOne({ propertyId: roomId }).where("status").equals("activeTenant");
-        if (doesAcriveTenantExists) return new BadRequestException("This property/apartment has an active tenant")
+        const doesActiveTenantExists = await this.applicationModel.findOne({ propertyId: roomId }).where("status").equals("activeTenant");
+        if (doesActiveTenantExists) return new BadRequestException("This property/apartment has an active tenant")
       }
       const updatedApplication = await this.findApplicationyById(id);
 
@@ -441,4 +444,61 @@ export class PropertiesService {
       throw new Error(`Failed to fetch landlord applications: ${error}`);
     }
   }
+
+  async isPropertyMappedToActiveTenant(propertyId: string): Promise<boolean> {
+    try {
+      // Check if there's an active landlordAssignedTenant with the same propertyId
+      const existingMapping = await this.landlordAssignedTenantModel.findOne({
+        propertyId: propertyId,
+        status: 'active'
+      });
+  
+      // Check if there's an active application with the same propertyId
+      const doesActiveTenantExist = await this.applicationModel.findOne({
+        propertyId: propertyId,
+        status: 'activeTenant'
+      });
+  
+      if (doesActiveTenantExist) {
+        // Handle the case where an active tenant exists (if necessary)
+        throw new BadRequestException("This property/apartment has an active tenant");
+      }
+  
+      // Return true if an active mapping exists, otherwise false
+      return !!existingMapping;
+    } catch (error) {
+      // Handle the error in a way that fits your application
+      console.error(`Failed to check property mapping: ${error.message}`);
+      throw new Error(`Failed to check property mapping: ${error.message}`);
+    }
+  }
+  
+
+  async mapCreatedUserToApartment(payload: any): Promise<any> {
+    try {
+      const { propertyId } = payload;
+      const isMapped = await this.isPropertyMappedToActiveTenant(propertyId);
+   
+      if (isMapped) {
+        throw new Error(`The propertyId ${propertyId} is already mapped to an active tenant.`);
+      }
+      const newApplication = await this.landlordAssignedTenantModel.create(payload);
+      return newApplication;
+
+    } catch (error) {
+      throw new Error(`Failed to map user to this apartment: ${error.message}`);
+    }
+  }
+
+  async findLandlordOnboardedTenants(id: any): Promise<any> {
+    const tenants = await this.landlordAssignedTenantModel.find({ ownerId: id }).populate('ownerId').populate({
+      path: 'propertyId',
+      populate: {
+        path: 'propertyId',
+  
+      }
+    }).populate('applicant');
+    return tenants;
+  }
+
 }

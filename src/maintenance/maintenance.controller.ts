@@ -61,6 +61,16 @@ export class MaintenanceController {
     }
   }
 
+  @Get('/get-landlord-maintenance/:ownerId')
+  async findAllByOwnerId(@Param('ownerId') ownerId: any) {
+    try {
+      const data = await this.maintenanceService.findAllByOwnerId(ownerId);
+      return this.createSuccessResponse(data);
+    } catch (error) {
+      throw new BadRequestException(error.message);
+    }
+  }
+
   @Get('/single/:id')
   async findOne(@Param('id') id: string) {
     try {
@@ -71,15 +81,14 @@ export class MaintenanceController {
     }
   }
 
-  @Patch(':id')
+  @Get('/resolve/:id')
   async update(
     @Param('id') id: string,
-    @Body() updateMaintenanceDto: any,
   ) {
     try {
 
       // Update maintenance record using service
-      const data = await this.maintenanceService.updatetoResolved(id, updateMaintenanceDto);
+      const data = await this.maintenanceService.updatetoResolved(id);
 
       return this.createSuccessResponse({
         message: "Issue marked as resolved",

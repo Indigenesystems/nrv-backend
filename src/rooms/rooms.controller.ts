@@ -3,11 +3,15 @@ import { CreateRoomDTO } from './dto/create-room.dto';
 import { RoomsService } from './rooms.service';
 import { createRoomSchema } from '../validations/validator';
 import { FileInterceptor, FilesInterceptor, FileFieldsInterceptor } from '@nestjs/platform-express';
+import { LandlordAssignedTenant } from '../properties/entities/landlord_assigned_tenant.entity';
+import { Model } from 'mongoose';
+import { InjectModel } from '@nestjs/mongoose';
+import { log } from 'console';
 
 
 @Controller('rooms')
 export class RoomsController {
-  constructor(private roomsService: RoomsService) { }
+  constructor(private roomsService: RoomsService, @InjectModel(LandlordAssignedTenant.name) private readonly landlordAssignedTenantModel: Model<LandlordAssignedTenant>,) { }
 
   @Post('/create')
   @UseInterceptors(FileFieldsInterceptor([
@@ -18,10 +22,10 @@ export class RoomsController {
       const createRoomDTO = { ...roomData, ...files };
       const validationResult = createRoomSchema.validate(roomData);
 
-    if (validationResult.error) {
-      throw new BadRequestException(validationResult.error.message);
-    }
-      
+      if (validationResult.error) {
+        throw new BadRequestException(validationResult.error.message);
+      }
+
       const data = await this.roomsService.createRooms(createRoomDTO)
       return {
         status: "success",
@@ -39,9 +43,10 @@ export class RoomsController {
     @Query('limit') limit: number = 10,
     @Query('minPrice') minPrice?: number,
     @Query('maxPrice') maxPrice?: number,
+    @Query('id') id?: string,
   ) {
-    
-    const properties = await this.roomsService.findAllApartments(page, limit , search, minPrice , maxPrice);
+
+    const properties = await this.roomsService.findAllApartments(page, limit, search, minPrice, maxPrice, id);
 
     if (!properties || properties.length === 0) {
       return {
@@ -76,17 +81,22 @@ export class RoomsController {
     }
   }
 
- 
+
 
   @Get('/active/tenant')
-  async getPropertyActiveTenant(@Query('id') id: string)
-  {
+  async getPropertyActiveTenant(@Query('id') id: string) {
     try {
       const activeTenant = await this.roomsService.findCurrentOccupantForRoom(id);
+      // Check if there's an active landlordAssignedTenant with the same propertyId
+      const existingMapping = await this.landlordAssignedTenantModel.findOne({
+        propertyId: id,
+        status: 'active'
+      }).populate('propertyId')
+      .populate('applicant')
       return {
         status: "success",
         message: "Active tenant fetched",
-        data: activeTenant
+        data: activeTenant || existingMapping
       };
     } catch (error) {
       throw new BadRequestException(error);
@@ -94,8 +104,7 @@ export class RoomsController {
   }
 
   @Get('/update/status')
-  async update(@Query('id') id: string, @Query('status') status: boolean)
-  {
+  async update(@Query('id') id: string, @Query('status') status: boolean) {
     try {
       const updatedSubProperty = await this.roomsService.updateSubPropertyStatus(id, status);
       return {
@@ -143,11 +152,10 @@ export class RoomsController {
       };
     }
   }
-  
+
 
   @Get('/properties/renters')
-  async getRentedProperties(@Query('id') id: string)
-  {
+  async getRentedProperties(@Query('id') id: string) {
     try {
       const properties = await this.roomsService.findRentedApartments(id);
       return {

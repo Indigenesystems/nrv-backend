@@ -284,4 +284,25 @@ export class PropertiesController {
       };
     }
   }
+
+  @Get('/tenent/landlord-onboarded')
+  async findLandlordOnboardedTenants(
+    @Query('id') id: string
+  ) {
+    const tenants = await this.propertiesService.findLandlordOnboardedTenants(id);
+
+    if (!tenants || tenants.length === 0) {
+      return {
+        status: 'error',
+        message: 'No tenent found',
+        data: null,
+      };
+    } else {
+      return {
+        status: "success",
+        message: 'Tenants fetched successfully',
+        data: tenants,
+      };
+    }
+  }
 }

@@ -37,6 +37,32 @@ export class UserController {
       throw new BadRequestException(error.message);
     }
   }
+  @Post('/landlord')
+  async createUserByLandLord(@Body() userData: CreateUserDto) {
+    try {
+
+      const validationResult = createUserSchema.validate(userData);
+
+      if (validationResult.error) {
+        throw new BadRequestException(validationResult.error.message);
+      }
+
+      const createdUser = await this.userService.createUserByLandlord(userData);
+
+      if (createdUser.firstName) {
+        return {
+          status: "success",
+          message: "User created successfully",
+          data: createdUser
+        };
+      } else {
+        throw new BadRequestException(createdUser);
+      }
+
+    } catch (error) {
+      throw new BadRequestException(error.message);
+    }
+  }
 
   @Get()
   async getUsers() {

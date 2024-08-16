@@ -5,10 +5,11 @@ export const createUserSchema = Joi.object({
   lastName: Joi.string().required(),
   email: Joi.string().email().required(),
   nin: Joi.string().required(),
-  phoneNumber: Joi.string().length(11).pattern(/^\d+$/).required(),
-  homeAddress: Joi.string().required(),
-  password: Joi.string().required(),
-  accountType: Joi.string().valid('landlord', 'tenant').required(), // Validate accountType to be either 'landlord' or 'tenant'
+  propertyId: Joi.string().required(),
+  ownerId: Joi.string().required(),
+  rentStartDate: Joi.any().required(),
+  rentEndDate: Joi.any().required(),
+  accountType: Joi.string().valid('tenant').required(), // Validate accountType to be either 'landlord' or 'tenant'
 });
 
 
@@ -45,7 +46,7 @@ export const confirmUserSchema = Joi.object({
     propertyType: Joi.string().optional(),
     createdBy: Joi.string().optional(),
     file: Joi.any().optional(),
-    landlordInsurancePolicy: Joi.any().optional(), // Assuming these fields can accept any type of data
+    landlordInsurancePolicy: Joi.any().optional(),
     utilityAndMaintenance: Joi.any(),
     otherDocuments: Joi.any(),
   });

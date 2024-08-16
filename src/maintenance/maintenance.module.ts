@@ -14,12 +14,14 @@ import { EmailService } from '../email-sender/email.service';
 import { RoomSchema, Room } from '../rooms/entities/room.entity';
 import { Property, PropertySchema } from '../properties/entities/property.entity';
 import { Application, ApplicationSchema } from '../properties/entities/application.entity';
+import { LandlordAssignedTenant, LandlordAssignedTenantSchema } from '../properties/entities/landlord_assigned_tenant.entity';
+import { PropertiesService } from '../properties/properties.service';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([ { name: Maintenance.name, schema: MaintenanceSchema }, { name: User.name, schema: UserSchema }, { name: Room.name, schema: RoomSchema }, { name: Property.name, schema: PropertySchema },  { name: Application.name, schema: ApplicationSchema }])
+    MongooseModule.forFeature([{ name: Maintenance.name, schema: MaintenanceSchema }, { name: User.name, schema: UserSchema }, { name: Room.name, schema: RoomSchema }, { name: Property.name, schema: PropertySchema }, { name: Application.name, schema: ApplicationSchema }, { name: LandlordAssignedTenant.name, schema: LandlordAssignedTenantSchema }])
   ],
   controllers: [MaintenanceController, RoomsController, UserController],
-  providers: [MaintenanceService, UserService, RoomsService, CloudinaryService, JwtService, EmailService], 
+  providers: [MaintenanceService, UserService, RoomsService, CloudinaryService, JwtService, EmailService, PropertiesService],
 })
-export class MaintenanceModule {}
+export class MaintenanceModule { }

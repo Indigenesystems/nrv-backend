@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import mongoose, { Model } from 'mongoose';
 import { CloudinaryService } from '../upload/cloudinary.service';
 import { CreateMaintenanceDTO } from './dto/create-maintenance.dto';
 import { Maintenance } from './entities/maintenance.entity';
@@ -42,15 +42,49 @@ export class MaintenanceService {
     }
   }
 
+  async findAllByOwnerId(ownerId: any): Promise<Maintenance[]> {
+    try {
+      // Fetch all maintenance records and populate related documents
+      const maintenanceRecords = await this.maintenanceModel.find()
+        .populate({
+          path: 'roomId',
+          populate: { path: 'propertyId' }
+        })
+        .sort({ createdAt: -1 })
+        .exec();
+  
+ 
+      // Filter the results based on the `createdBy` field in the populated `propertyId`
+      const filteredRecords = maintenanceRecords.filter(record => {
+        const propertyId = record.roomId?.propertyId;
+        if (propertyId && propertyId?.createdBy) {
+          if (propertyId?.createdBy instanceof mongoose.Types.ObjectId) {
+            return propertyId?.createdBy.equals(ownerId);
+          } else {
+            // For non-ObjectId types, use direct comparison
+            return propertyId?.createdBy === ownerId;
+          }
+        }
+        return false;
+      });
+  
+      return filteredRecords;
+    } catch (error) {
+      throw new Error(`Failed to fetch maintenance records: ${error.message}`);
+    }
+  }
+  
+  
+
   async findOne(id: string): Promise<Maintenance | null> {
     try {
-      return await this.maintenanceModel.findById(id).exec();
+      return await this.maintenanceModel.findById(id).populate("roomId").populate('createdBy').exec();
     } catch (error) {
       throw new NotFoundException(`Maintenance with ID ${id} not found.`);
     }
   }
 
-  async updatetoResolved(id: string, updateMaintenanceDto: any): Promise<Maintenance | null> {
+  async updatetoResolved(id: string): Promise<Maintenance | null> {
     try {
       const updatedMaintenance = await this.maintenanceModel.findByIdAndUpdate(id, {
         status: "Resolved"
