@@ -9,6 +9,7 @@ import { Application } from './entities/application.entity';
 import { EmailService } from '../email-sender/email.service';
 import { LandlordAssignedTenant } from './entities/landlord_assigned_tenant.entity';
 import { Room } from '../rooms/entities/room.entity';
+import { User } from '../users/entities/user.entity';
 
 @Injectable()
 export class PropertiesService {
@@ -16,9 +17,10 @@ export class PropertiesService {
     @InjectModel(Property.name) private readonly propertyModel: Model<Property>,
     @InjectModel(Application.name) private readonly applicationModel: Model<Application>,
     @InjectModel(LandlordAssignedTenant.name) private readonly landlordAssignedTenantModel: Model<LandlordAssignedTenant>,
+    @InjectModel(User.name) private readonly userModel: Model<User>,
     private cloudinaryService: CloudinaryService,
     private roomService: RoomsService,
-    private emailService: EmailService,
+    private emailService: EmailService
 
   ) { }
 
@@ -499,6 +501,25 @@ export class PropertiesService {
       }
     }).populate('applicant');
     return tenants;
+  }
+
+  async findTenantHistory(nin: any): Promise<any> {
+    const user = await this.userModel.findOne({ nin: nin });
+
+    if(user){
+      const userId = user._id;
+
+      const tenants = await this.landlordAssignedTenantModel.find({ applicant: userId }).populate('ownerId').populate({
+        path: 'propertyId',
+        populate: {
+          path: 'propertyId',
+    
+        }
+      }).populate('applicant');
+
+      return tenants;
+    }
+    return null;
   }
 
 }

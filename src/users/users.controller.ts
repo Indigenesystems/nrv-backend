@@ -1,5 +1,5 @@
 import { Controller, Post, Body, Get, BadRequestException, NotFoundException, InternalServerErrorException, Put, Param } from '@nestjs/common';
-import { createUserSchema, confirmUserSchema } from '../validations/validator';
+import { createUserSchema, confirmUserSchema, createUserByLandlordSchema } from '../validations/validator';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UserService } from './users.service';
 import { ConfirmUserDto } from './dto/confirm-user.dto';
@@ -38,10 +38,10 @@ export class UserController {
     }
   }
   @Post('/landlord')
-  async createUserByLandLord(@Body() userData: CreateUserDto) {
+  async createUserByLandLord(@Body() userData: CreateUserDto | any) {
     try {
 
-      const validationResult = createUserSchema.validate(userData);
+      const validationResult = createUserByLandlordSchema.validate(userData);
 
       if (validationResult.error) {
         throw new BadRequestException(validationResult.error.message);

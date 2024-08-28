@@ -9,10 +9,11 @@ import { CloudinaryService } from '../upload/cloudinary.service';
 import { Application, ApplicationSchema } from '../properties/entities/application.entity';
 import { EmailService } from '../email-sender/email.service';
 import { LandlordAssignedTenant, LandlordAssignedTenantSchema } from '../properties/entities/landlord_assigned_tenant.entity';
+import { User, UserSchema } from '../users/entities/user.entity';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: Room.name, schema: RoomSchema }, { name: Property.name, schema: PropertySchema }, { name: Application.name, schema: ApplicationSchema },  { name: LandlordAssignedTenant.name, schema: LandlordAssignedTenantSchema }]),
+    MongooseModule.forFeature([{ name: Room.name, schema: RoomSchema }, { name: User.name, schema: UserSchema }, { name: Property.name, schema: PropertySchema }, { name: Application.name, schema: ApplicationSchema },  { name: LandlordAssignedTenant.name, schema: LandlordAssignedTenantSchema }]),
   ],
   controllers: [RoomsController],
   providers: [RoomsService, PropertiesService, CloudinaryService, EmailService],

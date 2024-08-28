@@ -42,13 +42,22 @@ export class UserService {
     return await this.userModel.findOne({ email });
   }
 
+  async findUserByNin(nin: string): Promise<User> {
+    return await this.userModel.findOne({ nin });
+  }
+
   async createUser(user: User): Promise<User | any | { message: string }> {
 
     const confirmationCode = generateConfirmationCode();
-    const existingUser = await this.userModel.findOne({ email: user.email });
+    const existingUser = await this.userModel.findOne({ email: user.email }) 
+    const checkExistingUserByNin = await this.userModel.findOne({ nin: user.nin });
 
     if (existingUser) {
       return { message: "An account with this email already exists" };
+    }
+
+    if (checkExistingUserByNin) {
+      return { message: "An account with this NIN already exist" };
     }
     user.confirmationCode = confirmationCode;
     const newUser = new this.userModel(user);
@@ -69,9 +78,12 @@ export class UserService {
 
     const confirmationCode = generateConfirmationCode();
     const existingUser = await this.userModel.findOne({ email: user.email });
-
+    const checkExistingUserByNin = await this.userModel.findOne({ nin: user.nin });
     if (existingUser) {
       return { message: "An account with this email already exists" };
+    }
+    if (checkExistingUserByNin) {
+      return { message: "An account with this NIN already exist" };
     }
 
     const isPropertyMapped = await this.propertiesService.isPropertyMappedToActiveTenant(user.propertyId)

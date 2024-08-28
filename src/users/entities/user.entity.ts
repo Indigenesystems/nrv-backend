@@ -10,10 +10,10 @@ export class User {
   @Prop()
   lastName: string;
 
-  @Prop()
+  @Prop({unique: true})
   email: string;
 
-  @Prop()
+  @Prop({unique: true})
   nin: string;
 
   @Prop()
