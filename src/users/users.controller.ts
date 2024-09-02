@@ -4,12 +4,15 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UserService } from './users.service';
 import { ConfirmUserDto } from './dto/confirm-user.dto';
 import { User } from './entities/user.entity';
-
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import { AuthService } from '../auth/auth.service';
+import * as bcrypt from 'bcryptjs';
 
 @Controller('users')
 export class UserController {
   constructor(
-    private userService: UserService
+    private userService: UserService,
+    private authService: AuthService
   ){ }
   
   @Post()
@@ -110,5 +113,33 @@ export class UserController {
   async updateUser(@Param('id') id: string, @Body() updatedUser: User): Promise<User> {
     return await this.userService.updateUser(id, updatedUser);
   }
+
+  @Post('/request-password-reset')
+async requestPasswordReset(@Body('email') email: string) {
+  const user: any = await this.userService.findUserByEmail(email);
+  if (!user) {
+    // You can either notify that the email was not found or just return a success message
+    return;
+  }
+
+  const token = this.authService.createPasswordResetToken(user._id);
+  await this.userService.savePasswordResetToken(user.email, token);
+
+  return { message: 'Password reset link sent.' };
+}
+
+@Post('reset-password')
+async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
+  const { token, newPassword } = resetPasswordDto;
+  
+
+
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
+  await this.userService.updatePassword(token, hashedPassword);
+
+  return { message: 'Password successfully reset.' };
+}
+
+
 }
 

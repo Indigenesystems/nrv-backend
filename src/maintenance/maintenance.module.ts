@@ -16,12 +16,13 @@ import { Property, PropertySchema } from '../properties/entities/property.entity
 import { Application, ApplicationSchema } from '../properties/entities/application.entity';
 import { LandlordAssignedTenant, LandlordAssignedTenantSchema } from '../properties/entities/landlord_assigned_tenant.entity';
 import { PropertiesService } from '../properties/properties.service';
+import { AuthService } from '../auth/auth.service';
 
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: Maintenance.name, schema: MaintenanceSchema }, { name: User.name, schema: UserSchema }, { name: Room.name, schema: RoomSchema }, { name: Property.name, schema: PropertySchema }, { name: Application.name, schema: ApplicationSchema }, { name: LandlordAssignedTenant.name, schema: LandlordAssignedTenantSchema }])
   ],
   controllers: [MaintenanceController, RoomsController, UserController],
-  providers: [MaintenanceService, UserService, RoomsService, CloudinaryService, JwtService, EmailService, PropertiesService],
+  providers: [MaintenanceService, UserService, RoomsService, CloudinaryService, JwtService, EmailService, PropertiesService, AuthService],
 })
 export class MaintenanceModule { }

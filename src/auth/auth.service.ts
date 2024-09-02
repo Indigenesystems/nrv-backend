@@ -49,6 +49,26 @@ export class AuthService {
     const accessToken = this.jwtService.sign(payload);
     return { user, accessToken };
   }
+
+  createPasswordResetToken(userId: string): string {
+    const payload = { sub: userId };
+    return this.jwtService.sign(payload, {
+      expiresIn: '1h', // or any desired expiration time
+    });
+  }
+
+  async validatePasswordResetToken(token: string): Promise<string> {
+    try {
+      const payload = this.jwtService.verify(token);
+      return payload.sub; // This should be the user ID
+    } catch (e) {
+      throw new UnauthorizedException('Invalid or expired reset token');
+    }
+  }
+
+  async hashPassword(password: string): Promise<string> {
+    return bcrypt.hash(password, 10);
+  }
 }
 
 

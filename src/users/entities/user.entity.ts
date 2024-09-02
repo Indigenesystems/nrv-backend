@@ -36,6 +36,12 @@ export class User {
 
   @Prop({ default: false })
   isOnboarded: boolean;
+
+  @Prop()
+  passwordResetToken?: string;
+
+  @Prop()
+  passwordResetExpires?: Date;
 }
 
 export type UserDocument = User & Document;

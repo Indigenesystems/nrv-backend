@@ -8,8 +8,6 @@ import { JwtService } from '@nestjs/jwt';
 import { EmailService } from '../email-sender/email.service';
 import { PropertiesService } from '../properties/properties.service';
 import { Application } from '../properties/entities/application.entity';
-import { CloudinaryService } from '../upload/cloudinary.service';
-import { RoomsService } from '../rooms/rooms.service';
 import { Room } from '../rooms/entities/room.entity';
 import { Property } from '../properties/entities/property.entity';
 
@@ -25,8 +23,6 @@ export class UserService {
     private jwtService: JwtService,
     private emailService: EmailService,
     private propertiesService: PropertiesService,
-    private cloudinaryService: CloudinaryService,
-    private roomService: RoomsService,
 
   ) { }
 
@@ -138,4 +134,47 @@ export class UserService {
   async updateUser(id: string, updatedUser: User): Promise<User> {
     return await this.userModel.findByIdAndUpdate(id, updatedUser, { new: true });
   }
+
+  
+  async savePasswordResetToken(email: string, token: string): Promise<void> {
+    let user:any =  await this.findUserByEmail(email)
+    const confirmationCode = generateConfirmationCode();
+   let _user = {...user, passwordResetToken: confirmationCode }
+
+    await this.userModel.findByIdAndUpdate(user._id, {
+      passwordResetToken: confirmationCode,
+      passwordResetExpires: new Date(Date.now() + 3600000), // 1 hour expiration
+    });
+
+    if (user) {
+      this.emailService.sendResetPasswordToken(_user)
+    }
+  }
+
+  async updatePassword(token: string, hashedPassword: string): Promise<void> {
+try {
+  let user:any =  await this.userModel.findOne({passwordResetToken: token})
+  if (user.passwordResetToken === token && user) {
+    await this.userModel.findByIdAndUpdate(user._id, {
+      password: hashedPassword,
+      passwordResetToken: null, // Invalidate the token
+      passwordResetExpires: null,
+    });
+  } else {
+    throw new InternalServerErrorException("Failed to update password. Please try again later.");
+  }
+} catch (error) {
+  throw new InternalServerErrorException("Failed to update password. Please try again later.");
+}
+
+  }
+
+  async invalidatePasswordResetToken(userId: string): Promise<void> {
+    await this.userModel.findByIdAndUpdate(userId, {
+      passwordResetToken: null,
+      passwordResetExpires: null,
+    });
+  }
+
+
 }

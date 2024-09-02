@@ -6,7 +6,7 @@ import { FileInterceptor, FilesInterceptor, FileFieldsInterceptor } from '@nestj
 import { LandlordAssignedTenant } from '../properties/entities/landlord_assigned_tenant.entity';
 import { Model } from 'mongoose';
 import { InjectModel } from '@nestjs/mongoose';
-import { log } from 'console';
+
 
 
 @Controller('rooms')
