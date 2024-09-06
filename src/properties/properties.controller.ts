@@ -357,9 +357,15 @@ export class PropertiesController {
   @Get('/tenant/landlord-onboarded')
   async findLandlordOnboardedTenants(
     @Query('id') id: string,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
+    @Query('status') status: string = 'activeTenant',
     @Res() res: Response
   ) {
     const tenants = await this.propertiesService.findLandlordOnboardedTenants(id);
+    const applications = await this.propertiesService.getLandlordApplications(page, limit, id, status);
+    console.log({applications});
+    
 
     if (!tenants || tenants.length === 0) {
       return res.status(HttpStatus.NOT_FOUND).json({
@@ -371,7 +377,7 @@ export class PropertiesController {
       return res.status(HttpStatus.OK).json({
         status: "success",
         message: 'Tenants fetched successfully',
-        data: tenants,
+        data: [...tenants, ...applications],
       });
     }
   }

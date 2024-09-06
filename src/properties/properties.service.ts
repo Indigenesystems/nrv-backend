@@ -367,7 +367,13 @@ export class PropertiesService {
 
       const applications = await query
         .populate('ownerId')
-        .populate('propertyId')
+        .populate({
+          path: 'propertyId',
+          populate: {
+            path: 'propertyId',
+      
+          }
+        })
         .populate('applicant')
         .sort({ createdAt: -1 })
         .skip(skip)
@@ -425,17 +431,20 @@ export class PropertiesService {
       const totalAcceptedPromise = this.applicationModel
         .countDocuments({ ownerId: id, status: 'Accepted' })
         .exec();
-      const totalActiveTenantsPromise = this.applicationModel
+      
+      const x = await this.findLandlordOnboardedTenants(id);
+      const totalActiveTenantsPromise = await this.applicationModel
         .countDocuments({ ownerId: id, status: 'activeTenant' })
         .exec();
 
+
       // Await all promises to get the results
-      const [totalNew, totalAccepted, totalActiveTenants] = await Promise.all([
+      let [totalNew, totalAccepted, totalActiveTenants] = await Promise.all([
         totalNewPromise,
         totalAcceptedPromise,
-        totalActiveTenantsPromise,
+        totalActiveTenantsPromise + x.length,
       ]);
-
+    
       // Return applications and totals
       return {
         totalNew,
