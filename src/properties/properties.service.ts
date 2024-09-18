@@ -317,18 +317,30 @@ export class PropertiesService {
   }
 
   async createApplication(body: any) {
-    const fileUrl = await this.cloudinaryService.upload(body.file[0]);
+    let fileUrl = null;
+    if (body.file != 'null' || null)  {
+      console.log("I enter here");
+      
+      fileUrl = await this.cloudinaryService.upload(body.file[0]);
+    }
+
+
+    console.log({ fileUrl });
+
     const applicationData = {
       propertyId: body.propertyId,
       ownerId: body.ownerId,
       applicant: body.applicant,
       status: body.status,
-      identificationCard: fileUrl,
+      identificationCard: fileUrl || null,
       currentEmployer: body.currentEmployer,
       reasonForLiving: body.reasonForLiving,
       currentResidence: body.currentResidence,
       monthlyIncome: body.monthlyIncome,
     };
+
+    console.log({ applicationData });
+
     try {
       const newApplication =
         await this.applicationModel.create(applicationData);
@@ -358,7 +370,7 @@ export class PropertiesService {
           path: 'propertyId',
           populate: {
             path: 'propertyId',
-      
+
           }
         })
         .populate('applicant')
@@ -375,6 +387,40 @@ export class PropertiesService {
   async findApplicationyById(id: any): Promise<any> {
     const applicant = await this.applicationModel.findOne({ _id: id });
     return applicant;
+  }
+
+  async findApplicationByTenantId(
+    page: number = 1,
+    limit: number = 10,
+    id: any,
+    status: string,
+  ): Promise<any> {
+    try {
+      const skip = (page - 1) * limit;
+      let query = this.applicationModel.find({ applicant: id });
+
+      if (status) {
+        query = query.where('status').equals(status);
+      }
+
+      const applications = await query
+        .populate('ownerId')
+        .populate({
+          path: 'propertyId',
+          populate: {
+            path: 'propertyId',
+
+          }
+        })
+        .populate('applicant')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .exec();
+      return applications;
+    } catch (error) {
+      throw new Error(`Failed to fetch landlord applications: ${error}`);
+    }
   }
 
   async updateApplicationStatusById(id: any, newStatus: string, roomId?: any): Promise<any> {
@@ -418,7 +464,7 @@ export class PropertiesService {
       const totalAcceptedPromise = this.applicationModel
         .countDocuments({ ownerId: id, status: 'Accepted' })
         .exec();
-      
+
       const x = await this.findLandlordOnboardedTenants(id);
       const totalActiveTenantsPromise = await this.applicationModel
         .countDocuments({ ownerId: id, status: 'activeTenant' })
@@ -431,7 +477,7 @@ export class PropertiesService {
         totalAcceptedPromise,
         totalActiveTenantsPromise + x.length,
       ]);
-    
+
       // Return applications and totals
       return {
         totalNew,
@@ -450,18 +496,18 @@ export class PropertiesService {
         propertyId: propertyId,
         status: 'active'
       });
-  
+
       // Check if there's an active application with the same propertyId
       const doesActiveTenantExist = await this.applicationModel.findOne({
         propertyId: propertyId,
         status: 'activeTenant'
       });
-  
+
       if (doesActiveTenantExist) {
         // Handle the case where an active tenant exists (if necessary)
         throw new BadRequestException("This property/apartment has an active tenant");
       }
-  
+
       // Return true if an active mapping exists, otherwise false
       return !!existingMapping;
     } catch (error) {
@@ -470,13 +516,13 @@ export class PropertiesService {
       throw new Error(`Failed to check property mapping: ${error.message}`);
     }
   }
-  
+
 
   async mapCreatedUserToApartment(payload: any): Promise<any> {
     try {
       const { propertyId } = payload;
       const isMapped = await this.isPropertyMappedToActiveTenant(propertyId);
-   
+
       if (isMapped) {
         throw new Error(`The propertyId ${propertyId} is already mapped to an active tenant.`);
       }
@@ -493,7 +539,7 @@ export class PropertiesService {
       path: 'propertyId',
       populate: {
         path: 'propertyId',
-  
+
       }
     }).populate('applicant');
     return tenants;
@@ -502,14 +548,14 @@ export class PropertiesService {
   async findTenantHistory(nin: any): Promise<any> {
     const user = await this.userModel.findOne({ nin: nin });
 
-    if(user){
+    if (user) {
       const userId = user._id;
 
       const tenants = await this.landlordAssignedTenantModel.find({ applicant: userId }).populate('ownerId').populate({
         path: 'propertyId',
         populate: {
           path: 'propertyId',
-    
+
         }
       }).populate('applicant');
 

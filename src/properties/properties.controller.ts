@@ -236,7 +236,11 @@ export class PropertiesController {
   async createApplication(@Body() body: any, @UploadedFiles() files: { file?: Express.Multer.File }, @Res() res: Response) {
     try {
       const createApplicationDTO = { ...body, ...files };
+      console.log({createApplicationDTO});
+      
       const createdApplication = await this.propertiesService.createApplication(createApplicationDTO);
+      console.log({createdApplication});
+      
 
       if (createdApplication.propertyId) {
         return res.status(HttpStatus.CREATED).json({
@@ -267,6 +271,31 @@ export class PropertiesController {
     @Res() res: Response
   ) {
     const applications = await this.propertiesService.getLandlordApplications(page, limit, id, status);
+
+    if (!applications || applications.length === 0) {
+      return res.status(HttpStatus.OK).json({
+        status: 'success',
+        message: 'No applications found',
+        data: null,
+      });
+    } else {
+      return res.status(HttpStatus.OK).json({
+        status: 'success',
+        message: 'Applications fetched',
+        data: applications,
+      });
+    }
+  }
+
+  @Get('/tenant-applications')
+  async getApplicantsByTenantId(
+    @Query('id') id: string,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
+    @Query('status') status: string = 'New',
+    @Res() res: Response
+  ) {
+    const applications = await this.propertiesService.findApplicationByTenantId(page, limit, id, status);
 
     if (!applications || applications.length === 0) {
       return res.status(HttpStatus.OK).json({
@@ -364,8 +393,6 @@ export class PropertiesController {
   ) {
     const tenants = await this.propertiesService.findLandlordOnboardedTenants(id);
     const applications = await this.propertiesService.getLandlordApplications(page, limit, id, status);
-    console.log({applications});
-    
 
     if (!tenants || tenants.length === 0) {
       return res.status(HttpStatus.NOT_FOUND).json({
