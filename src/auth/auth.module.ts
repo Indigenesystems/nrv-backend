@@ -15,10 +15,11 @@ import { Property, PropertySchema } from 'src/properties/entities/property.entit
 import { Application, ApplicationSchema } from '../properties/entities/application.entity';
 import { CloudinaryService } from 'src/upload/cloudinary.service';
 import { LandlordAssignedTenant, LandlordAssignedTenantSchema } from '../properties/entities/landlord_assigned_tenant.entity';
+import { NotificationSettings, NotificationSettingsSchema } from 'src/users/entities/notificationSettings.entity';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: User.name, schema: UserSchema }, { name: Room.name, schema: RoomSchema }, { name: Property.name, schema: PropertySchema },{ name: Application.name, schema: ApplicationSchema }, { name: Application.name, schema: ApplicationSchema }, { name: LandlordAssignedTenant.name, schema: LandlordAssignedTenantSchema }  ]), // Register UserSchema
+    MongooseModule.forFeature([{ name: User.name, schema: UserSchema }, { name: Room.name, schema: RoomSchema }, { name: Property.name, schema: PropertySchema },{ name: Application.name, schema: ApplicationSchema }, { name: Application.name, schema: ApplicationSchema }, { name: LandlordAssignedTenant.name, schema: LandlordAssignedTenantSchema } ,{ name: NotificationSettings.name, schema: NotificationSettingsSchema } ]), // Register UserSchema
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtService, UserService, EmailService, PropertiesService, RoomsService, CloudinaryService],

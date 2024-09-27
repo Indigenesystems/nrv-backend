@@ -9,11 +9,13 @@ import { Model } from 'mongoose';
 import { Application } from 'src/properties/entities/application.entity';
 import { Property } from 'src/properties/entities/property.entity';
 import { CloudinaryService } from 'src/upload/cloudinary.service';
+import { NotificationSettings } from '../users/entities/notificationSettings.entity';
 
 @Injectable()
 export class AuthService {
   constructor(
     @InjectModel(Property.name) private readonly propertyModel: Model<Property>,
+    @InjectModel(NotificationSettings.name) private readonly notificationSettingsModel: Model<NotificationSettings>,
     private userService: UserService,
     private jwtService: JwtService,
     private cloudinaryService: CloudinaryService,
@@ -28,9 +30,10 @@ export class AuthService {
     return null;
   }
 
-  async login(loginUserDto: LoginUserDto): Promise<{ user: User; accessToken: string }> {
+  async login(loginUserDto: LoginUserDto): Promise<{ user: User; accessToken: string; notificationSettings: NotificationSettings } | any> {
 
-    const user = await this.validateUser(loginUserDto.email, loginUserDto.password);
+    const user: any = await this.validateUser(loginUserDto.email, loginUserDto.password);
+    const notificationSettings = await this.notificationSettingsModel.findOne({userId: user._id});
 
     if (!user) {
       throw new UnauthorizedException('Invalid email or password');
@@ -40,7 +43,7 @@ export class AuthService {
     }
     const payload = { email: user.email, sub: user["_id"] };
     const accessToken = this.jwtService.sign(payload);
-    return { user, accessToken };
+    return { user, accessToken , notificationSettings};
   }
 
   async generateToken(email: string){

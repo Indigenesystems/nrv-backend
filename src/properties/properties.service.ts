@@ -85,64 +85,53 @@ export class PropertiesService {
   }
 
   async updateProperty(updatePropertyDto: any) {
-    let landlordInsurancePolicyUrls: any;
-    let utilityAndMaintenanceUrls: any;
-    let otherDocumentsUrls: any;
-    let singleProperty = await this.findPropertyById(
-      updatePropertyDto?.query?.propertyId,
-    );
-
+    
+    let landlordInsurancePolicyUrls: any = [];
+    let utilityAndMaintenanceUrls: any = [];
+    let otherDocumentsUrls: any = [];
+    
+    const singleProperty = await this.findPropertyById(updatePropertyDto?.query);
+ 
+    // Ensure properties are arrays to avoid "not iterable" errors
+    singleProperty.landlordInsurancePolicy = singleProperty.landlordInsurancePolicy || [];
+    singleProperty.utilityAndMaintenance = singleProperty.utilityAndMaintenance || [];
+    singleProperty.otherDocuments = singleProperty.otherDocuments || [];
+  
+    // Upload landlord insurance policies
     if (updatePropertyDto.landlordInsurancePolicy) {
       landlordInsurancePolicyUrls = await Promise.all(
-        updatePropertyDto.landlordInsurancePolicy.map(
-          async (file: Express.Multer.File) => {
-            return await this.cloudinaryService.upload(file);
-          },
-        ),
+        updatePropertyDto.landlordInsurancePolicy.map(async (file: Express.Multer.File) => {
+          return await this.cloudinaryService.upload(file);
+        }),
       );
-      if (singleProperty.landlordInsurancePolicy !== null) {
-        singleProperty.landlordInsurancePolicy = [
-          ...singleProperty.landlordInsurancePolicy,
-          ...landlordInsurancePolicyUrls,
-        ];
-      } else {
-        singleProperty.landlordInsurancePolicy = landlordInsurancePolicyUrls;
-      }
+
+      singleProperty.landlordInsurancePolicy.push(...landlordInsurancePolicyUrls);
+
     }
+  
+    // Upload utility and maintenance documents
     if (updatePropertyDto.utilityAndMaintenance) {
       utilityAndMaintenanceUrls = await Promise.all(
-        updatePropertyDto.utilityAndMaintenance.map(
-          async (file: Express.Multer.File) => {
-            return await this.cloudinaryService.upload(file);
-          },
-        ),
+        updatePropertyDto.utilityAndMaintenance.map(async (file: Express.Multer.File) => {
+          return await this.cloudinaryService.upload(file);
+        }),
       );
-      if (singleProperty.utilityAndMaintenance !== null) {
-        singleProperty.utilityAndMaintenance = [
-          ...singleProperty.utilityAndMaintenance,
-          ...utilityAndMaintenanceUrls,
-        ];
-      } else {
-        singleProperty.utilityAndMaintenance = utilityAndMaintenanceUrls;
-      }
+  
+      singleProperty.utilityAndMaintenance.push(...utilityAndMaintenanceUrls);
     }
+  
+    // Upload other documents
     if (updatePropertyDto.otherDocuments) {
       otherDocumentsUrls = await Promise.all(
-        updatePropertyDto.otherDocuments.map(
-          async (file: Express.Multer.File) => {
-            return await this.cloudinaryService.upload(file);
-          },
-        ),
+        updatePropertyDto.otherDocuments.map(async (file: Express.Multer.File) => {
+          return await this.cloudinaryService.upload(file);
+        }),
       );
-      if (singleProperty.otherDocuments !== null) {
-        singleProperty.otherDocuments = [
-          ...singleProperty.otherDocuments,
-          ...otherDocumentsUrls,
-        ];
-      } else {
-        singleProperty.otherDocuments = otherDocumentsUrls;
-      }
+  
+      singleProperty.otherDocuments.push(...otherDocumentsUrls);
     }
+  
+    // Update other properties
     if (updatePropertyDto.unit) {
       singleProperty.unit = updatePropertyDto.unit;
     }
@@ -161,14 +150,17 @@ export class PropertiesService {
     if (updatePropertyDto.zipCode) {
       singleProperty.zipCode = updatePropertyDto.zipCode;
     }
-
+  
+    // Update the property in the database
     const updatedProperty = await this.propertyModel.findByIdAndUpdate(
-      updatePropertyDto?.query?.propertyId,
+      updatePropertyDto?.query,
       singleProperty,
       { new: true, runValidators: true },
     );
+  
     return updatedProperty;
   }
+  
 
   async findPropertyByUserId(
     id: string,
@@ -319,14 +311,8 @@ export class PropertiesService {
   async createApplication(body: any) {
     let fileUrl = null;
     if (body.file != 'null' || null)  {
-      console.log("I enter here");
-      
       fileUrl = await this.cloudinaryService.upload(body.file[0]);
     }
-
-
-    console.log({ fileUrl });
-
     const applicationData = {
       propertyId: body.propertyId,
       ownerId: body.ownerId,
@@ -338,8 +324,6 @@ export class PropertiesService {
       currentResidence: body.currentResidence,
       monthlyIncome: body.monthlyIncome,
     };
-
-    console.log({ applicationData });
 
     try {
       const newApplication =

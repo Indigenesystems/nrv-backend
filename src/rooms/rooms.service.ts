@@ -153,8 +153,7 @@ export class RoomsService {
     }
 
     async findPropertyByIdForTenant(id: any, tenantId: any): Promise<any> {
-        console.log({id, tenantId});
-        
+
         let property: any = await this.roomModel
             .findOne({ _id: id })
             .populate({

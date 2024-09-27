@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, BadRequestException, NotFoundException, InternalServerErrorException, Put, Param } from '@nestjs/common';
+import { Controller, Post, Body, Get, BadRequestException, NotFoundException, InternalServerErrorException, Put, Param, Patch } from '@nestjs/common';
 import { createUserSchema, confirmUserSchema, createUserByLandlordSchema } from '../validations/validator';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UserService } from './users.service';
@@ -7,6 +7,7 @@ import { User } from './entities/user.entity';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { AuthService } from '../auth/auth.service';
 import * as bcrypt from 'bcryptjs';
+import { UpdateNotificationSettingsDto } from './dto/update-notificationSettings.dto';
 
 @Controller('users')
 export class UserController {
@@ -138,6 +139,15 @@ async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
   await this.userService.updatePassword(token, hashedPassword);
 
   return { message: 'Password successfully reset.' };
+}
+
+@Patch(':id/notification-settings')
+
+async updateNotificationSettings(
+  @Param('id') id: string,
+  @Body() settings: Partial<UpdateNotificationSettingsDto>,
+): Promise<any> {
+  return this.userService.updateNotificationSettings(id, settings);
 }
 
 

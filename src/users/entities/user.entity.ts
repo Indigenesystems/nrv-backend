@@ -2,7 +2,7 @@ import * as bcrypt from 'bcryptjs';
 import { Schema, Prop, SchemaFactory } from '@nestjs/mongoose';
 import { Document } from 'mongoose';
 
-@Schema()
+@Schema({ timestamps: true }) // Enable timestamps
 export class User {
   @Prop()
   firstName: string;
@@ -10,10 +10,10 @@ export class User {
   @Prop()
   lastName: string;
 
-  @Prop({unique: true})
+  @Prop({ unique: true })
   email: string;
 
-  @Prop({unique: true})
+  @Prop({ unique: true })
   nin: string;
 
   @Prop()
@@ -25,7 +25,7 @@ export class User {
   @Prop()
   password: string;
 
-  @Prop({ default: 'inactive' }) 
+  @Prop({ default: 'inactive' })
   status: string;
 
   @Prop()
@@ -42,6 +42,10 @@ export class User {
 
   @Prop()
   passwordResetExpires?: Date;
+
+  // Timestamps fields are automatically managed by Mongoose
+  // createdAt: Date;
+  // updatedAt: Date;
 }
 
 export type UserDocument = User & Document;

@@ -754,7 +754,7 @@ export class EmailService {
   }
 
   async sendResetPasswordToken(payload: any): Promise<void> {
-    console.log({payload});
+ 
     
 
     const emailTemplate = `<!DOCTYPE html>

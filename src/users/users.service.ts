@@ -10,6 +10,7 @@ import { PropertiesService } from '../properties/properties.service';
 import { Application } from '../properties/entities/application.entity';
 import { Room } from '../rooms/entities/room.entity';
 import { Property } from '../properties/entities/property.entity';
+import { NotificationSettings } from './entities/notificationSettings.entity';
 
 
 @Injectable()
@@ -19,6 +20,7 @@ export class UserService {
     @InjectModel(Property.name) private readonly propertyModel: Model<Property>,
     @InjectModel(Application.name) private readonly applicationModel: Model<Application>,
     @InjectModel(User.name) private readonly userModel: Model<User>,
+    @InjectModel(NotificationSettings.name) private readonly notificationSettingsModel: Model<NotificationSettings>,
 
     private jwtService: JwtService,
     private emailService: EmailService,
@@ -43,18 +45,18 @@ export class UserService {
   }
 
   async createUser(user: User): Promise<User | any | { message: string }> {
-
     const confirmationCode = generateConfirmationCode();
-    const existingUser = await this.userModel.findOne({ email: user.email }) 
+    const existingUser = await this.userModel.findOne({ email: user.email });
     const checkExistingUserByNin = await this.userModel.findOne({ nin: user.nin });
 
     if (existingUser) {
-      return { message: "An account with this email already exists" };
+      return { message: 'An account with this email already exists' };
     }
 
     if (checkExistingUserByNin) {
-      return { message: "An account with this NIN already exist" };
+      return { message: 'An account with this NIN already exists' };
     }
+
     user.confirmationCode = confirmationCode;
     const newUser = new this.userModel(user);
 
@@ -62,51 +64,83 @@ export class UserService {
       const createdUser = await newUser.save();
 
       if (createdUser) {
-        this.emailService.sendUserCreatedEmail(createdUser)
+        // Create notification settings for the new user
+        const notificationSettings = new this.notificationSettingsModel({
+          userId: createdUser._id,
+          platformUpdates: true, // default values
+          promotions: true,
+          weeklyOpportunities: true,
+          feedbackOpportunities: true,
+          maintenanceUpdates: true,
+          messagePreference: 'all', // default preference
+        });
+        await notificationSettings.save();
+
+        this.emailService.sendUserCreatedEmail(createdUser);
       }
       return createdUser;
     } catch (error) {
-      console.error("Error creating user:", error);
-      throw new InternalServerErrorException("Failed to create user. Please try again later.");
+      console.error('Error creating user:', error);
+      throw new InternalServerErrorException(
+        'Failed to create user. Please try again later.',
+      );
     }
   }
-  async createUserByLandlord(user: any): Promise<User | any | { message: string }> {
 
+  async createUserByLandlord(user: any): Promise<User | any | { message: string }> {
     const confirmationCode = generateConfirmationCode();
     const existingUser = await this.userModel.findOne({ email: user.email });
     const checkExistingUserByNin = await this.userModel.findOne({ nin: user.nin });
+    
     if (existingUser) {
-      return { message: "An account with this email already exists" };
+      return { message: 'An account with this email already exists' };
     }
     if (checkExistingUserByNin) {
-      return { message: "An account with this NIN already exist" };
+      return { message: 'An account with this NIN already exists' };
     }
 
-    const isPropertyMapped = await this.propertiesService.isPropertyMappedToActiveTenant(user.propertyId)
-    if(isPropertyMapped){
-      return { message: "This property has an active occupant" };
+    const isPropertyMapped = await this.propertiesService.isPropertyMappedToActiveTenant(user.propertyId);
+    if (isPropertyMapped) {
+      return { message: 'This property has an active occupant' };
     }
+
     user.confirmationCode = confirmationCode;
     user.password = generateConfirmationCode();
-    user.status = "active";
+    user.status = 'active';
     const newUser = new this.userModel(user);
 
     try {
       const createdUser: any = await newUser.save();
       if (createdUser) {
         await this.emailService.sendUserCreatedByLandlordEmail(user);
+        
+        // Create notification settings for the new user
+        const notificationSettings = new this.notificationSettingsModel({
+          userId: createdUser._id,
+          platformUpdates: true, // default values
+          promotions: true,
+          weeklyOpportunities: true,
+          feedbackOpportunities: true,
+          maintenanceUpdates: true,
+          messagePreference: 'all', // default preference
+        });
+        await notificationSettings.save();
+
         const formattedPayload = {
-          ...user, "applicant": createdUser._id
-        }
-        await this.propertiesService.mapCreatedUserToApartment(formattedPayload)
+          ...user,
+          applicant: createdUser._id,
+        };
+        await this.propertiesService.mapCreatedUserToApartment(formattedPayload);
       }
       return createdUser;
     } catch (error) {
-      console.error("Error creating user:", error);
-      throw new InternalServerErrorException("Failed to create user. Please try again later.");
+      console.error('Error creating user:', error);
+      throw new InternalServerErrorException(
+        'Failed to create user. Please try again later.',
+      );
     }
-
   }
+
   async confirmAccount(body: any): Promise<any> {
 
     const { email, confirmationCode } = body;
@@ -175,6 +209,19 @@ try {
       passwordResetExpires: null,
     });
   }
+  
+  async updateNotificationSettings(userId: string, settings: Partial<NotificationSettings>): Promise<NotificationSettings> {
+    const updatedSettings = await this.notificationSettingsModel.findOneAndUpdate(
+      { userId },
+      settings,
+      { new: true }
+    );
 
+    if (!updatedSettings) {
+      throw new NotFoundException('Notification settings not found for this user');
+    }
+
+    return updatedSettings;
+  }
 
 }

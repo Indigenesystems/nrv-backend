@@ -33,7 +33,7 @@ export class MaintenanceService {
       throw new Error(`Failed to log maintenance: ${error.message}`);
     }
   }
-
+  
   async findAll(createdBy: any, roomId: any): Promise<Maintenance[]> {
     try {
       return await this.maintenanceModel.find({createdBy, roomId}).populate("roomId").sort({createdAt: -1}).exec();
@@ -74,8 +74,6 @@ export class MaintenanceService {
     }
   }
   
-  
-
   async findOne(id: string): Promise<Maintenance | null> {
     try {
       return await this.maintenanceModel.findById(id).populate("roomId").populate('createdBy').exec();
@@ -101,6 +99,22 @@ export class MaintenanceService {
       return await this.maintenanceModel.findByIdAndDelete(id);
     } catch (error) {
       throw new Error(`Failed to delete maintenance with ID ${id}: ${error.message}`);
+    }
+  }
+
+  async findAllMaintenanceByTenantId(id: any): Promise<Maintenance[]> {
+    try {
+
+      const maintenanceRecords = await this.maintenanceModel.find({createdBy: id})
+        .populate({
+          path: 'roomId',
+          populate: { path: 'propertyId' }
+        }).sort({ createdAt: -1 }).exec();
+
+
+      return maintenanceRecords;
+    } catch (error) {
+      throw new Error(`Failed to fetch maintenance records: ${error.message}`);
     }
   }
 }

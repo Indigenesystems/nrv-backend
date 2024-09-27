@@ -111,4 +111,14 @@ export class MaintenanceController {
       throw new BadRequestException(error.message);
     }
   }
+
+  @Get('/get-tenant-maintenance/:id')
+  async findAllTenantMaintenance(@Param('id') id: any) {
+    try {
+      const data = await this.maintenanceService.findAllMaintenanceByTenantId(id);
+      return this.createSuccessResponse(data);
+    } catch (error) {
+      throw new BadRequestException(error.message);
+    }
+  }
 }

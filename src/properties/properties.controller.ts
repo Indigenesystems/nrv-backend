@@ -236,11 +236,7 @@ export class PropertiesController {
   async createApplication(@Body() body: any, @UploadedFiles() files: { file?: Express.Multer.File }, @Res() res: Response) {
     try {
       const createApplicationDTO = { ...body, ...files };
-      console.log({createApplicationDTO});
-      
       const createdApplication = await this.propertiesService.createApplication(createApplicationDTO);
-      console.log({createdApplication});
-      
 
       if (createdApplication.propertyId) {
         return res.status(HttpStatus.CREATED).json({
