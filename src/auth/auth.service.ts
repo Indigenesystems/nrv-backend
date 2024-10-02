@@ -32,8 +32,9 @@ export class AuthService {
 
   async login(loginUserDto: LoginUserDto): Promise<{ user: User; accessToken: string; notificationSettings: NotificationSettings } | any> {
 
+
     const user: any = await this.validateUser(loginUserDto.email, loginUserDto.password);
-    const notificationSettings = await this.notificationSettingsModel.findOne({userId: user._id});
+  
 
     if (!user) {
       throw new UnauthorizedException('Invalid email or password');
@@ -41,6 +42,7 @@ export class AuthService {
     if(user.status === "inactive"){
         throw new UnauthorizedException('Kindly confirm you account');
     }
+    const notificationSettings = await this.notificationSettingsModel.findOne({userId: user._id});
     const payload = { email: user.email, sub: user["_id"] };
     const accessToken = this.jwtService.sign(payload);
     return { user, accessToken , notificationSettings};
