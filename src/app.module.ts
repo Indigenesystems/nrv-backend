@@ -15,7 +15,7 @@ import { EmailService } from './email-sender/email.service';
 import { EmailServiceModule } from './email-sender/email-sender.module';
 import { PropertiesModule } from './properties/properties.module';
 import { CloudinaryService } from './upload/cloudinary.service';
-import { MyMulterModule } from './upload/multer.module';
+//import { MyMulterModule } from './upload/multer.module';
 import { PropertiesController } from './properties/properties.controller';
 import { PropertiesService } from './properties/properties.service';
 import { PropertySchema } from './properties/entities/property.entity';
@@ -30,13 +30,14 @@ import { MaintenanceService } from './maintenance/maintenance.service';
 import { MaintenanceController } from './maintenance/maintenance.controller';
 import { LandlordAssignedTenantSchema } from './properties/entities/landlord_assigned_tenant.entity';
 import { NotificationSettingsSchema } from './users/entities/notificationSettings.entity';
+import { ExpensesModule } from './expenses/expenses.module';
 
 @Module({
   imports: [
     MongodbModule,
     UsersModule,
     EmailServiceModule,
-    MyMulterModule,
+   // MyMulterModule,
     MongooseModule.forFeature([{ name: 'User', schema: UserSchema }, { name: 'NotificationSettings', schema: NotificationSettingsSchema },{ name: 'Property', schema: PropertySchema }, { name: 'Room', schema: RoomSchema },  { name: 'Application', schema:  ApplicationSchema }, { name: 'Maintenance', schema:  MaintenanceSchema }, { name: 'LandlordAssignedTenant', schema:  LandlordAssignedTenantSchema }]),
     JwtModule.register({
       secret: 'your-secret-key-here',
@@ -46,6 +47,7 @@ import { NotificationSettingsSchema } from './users/entities/notificationSetting
     PropertiesModule,
     RoomsModule,
     MaintenanceModule,
+    ExpensesModule,
   ],
   controllers: [AppController, UserController, AuthController, PropertiesController, RoomsController, UserController, MaintenanceController],
   providers: [AppService, UserService, AuthService, EmailService, CloudinaryService, PropertiesService, RoomsService, MaintenanceService], 

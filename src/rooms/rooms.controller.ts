@@ -136,7 +136,7 @@ export class RoomsController {
   }
 
   @Get('/single/tenant/:id/:tenantId')
-  async findPropertyByIdForTenant(@Param('id') id: string, @Param('tenantId') tenantId: string,) {
+  async findPropertyByIdForTenant(@Param('id') id: string, @Param('tenantId') tenantId: string) {
     const property = await this.roomsService.findPropertyByIdForTenant(id, tenantId);
     if (!property) {
       return {

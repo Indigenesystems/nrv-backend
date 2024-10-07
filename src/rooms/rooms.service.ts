@@ -20,6 +20,8 @@ export class RoomsService {
     ) { }
 
     async createRooms(createRoomDTO: any) {
+        console.log({createRoomDTO});
+        
         const latestRoom = await this.roomModel
             .findOne({}, { roomId: 1 })
             .sort({ roomId: -1 })

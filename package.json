@@ -45,6 +45,7 @@
     "nodemailer": "^6.9.13",
     "path": "^0.12.7",
     "reflect-metadata": "^0.2.0",
+    "resource": "^0.8.1",
     "rxjs": "^7.8.1"
   },
   "devDependencies": {
