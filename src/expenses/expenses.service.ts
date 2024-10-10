@@ -15,7 +15,11 @@ export class ExpensesService {
     ) {}
 
     async createExpense(createExpenseDTO: any) {
-        const fileUrl = await this.cloudinaryService.upload(createExpenseDTO.files.file[0]);
+        let fileUrl = null
+        if (!createExpenseDTO?.files ) {
+            fileUrl = await this.cloudinaryService.upload(createExpenseDTO.files.file[0]);
+        }
+        
         
         const {
             category,

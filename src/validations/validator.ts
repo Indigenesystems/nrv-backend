@@ -99,12 +99,10 @@ export const createExpenseSchema = Joi.object({
     }),
   category: Joi.string()
     .min(1)
-    .required()
     .messages({
       'string.base': 'Category must be a string.',
       'string.min': 'Category cannot be empty.',
-      'any.required': 'Category is required.',
-    }),
+    }).allow("", null),
 
   loggedBy: Joi.string()
     .min(1)

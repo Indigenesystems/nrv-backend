@@ -17,15 +17,14 @@ export class ExpensesController {
     ) {
         try {
             const validationResult = createExpenseSchema.validate(expenseData);
+            console.log({validationResult});
+            
 
             if (validationResult.error) {
                 throw new BadRequestException(validationResult.error.message);
             }
 
-            // Ensure a file is provided
-            if (!files.file || files.file.length === 0) {
-                throw new BadRequestException('File is required.');
-            }
+      
 
             const createdExpense = await this.expensesService.createExpense({
                 createExpenseDTO: validationResult.value,
