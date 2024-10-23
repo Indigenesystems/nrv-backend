@@ -14,10 +14,11 @@ import { CloudinaryService } from '../upload/cloudinary.service';
 import { RoomsService } from '../rooms/rooms.service';
 import { Room, RoomSchema } from '../rooms/entities/room.entity';
 import { NotificationSettings, NotificationSettingsSchema } from './entities/notificationSettings.entity';
+import { Maintenance, MaintenanceSchema } from '../maintenance/entities/maintenance.entity';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: User.name, schema: UserSchema }, { name: LandlordAssignedTenant.name, schema: LandlordAssignedTenantSchema }, { name: Property.name, schema: PropertySchema }, { name: Application.name, schema: ApplicationSchema }, { name: Room.name, schema: RoomSchema }, { name: NotificationSettings.name, schema: NotificationSettingsSchema }]), 
+    MongooseModule.forFeature([{ name: User.name, schema: UserSchema }, { name: Maintenance.name, schema: MaintenanceSchema }, { name: Maintenance.name, schema: MaintenanceSchema }, { name: LandlordAssignedTenant.name, schema: LandlordAssignedTenantSchema }, { name: Property.name, schema: PropertySchema }, { name: Application.name, schema: ApplicationSchema }, { name: Room.name, schema: RoomSchema }, { name: NotificationSettings.name, schema: NotificationSettingsSchema }]), 
   ],
   controllers: [UserController],
   providers: [UserService, AuthService, JwtService, EmailService, PropertiesService, CloudinaryService, RoomsService],

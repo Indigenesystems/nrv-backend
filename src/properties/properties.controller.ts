@@ -330,6 +330,28 @@ export class PropertiesController {
     }
   }
 
+  @Get('/tenant-metrics')
+  async findTenantMetrics(
+    @Query('id') id: string,
+    @Res() res: Response
+  ) {
+    const count = await this.propertiesService.getTenantMetrics(id);
+
+    if (!count) {
+      return res.status(HttpStatus.NOT_FOUND).json({
+        status: 'error',
+        message: 'Tenant metrics not loaded successfully',
+        data: null,
+      });
+    } else {
+      return res.status(HttpStatus.OK).json({
+        status: "success",
+        message: 'Tenant metrics retrieved successfukky',
+        data: count,
+      });
+    }
+  }
+
   @Get('/application/update-status')
   async updateApplicationStatus(
     @Query('id') id: string,

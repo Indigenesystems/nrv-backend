@@ -10,11 +10,13 @@ import { EmailService } from '../email-sender/email.service';
 import { LandlordAssignedTenant } from './entities/landlord_assigned_tenant.entity';
 import { Room } from '../rooms/entities/room.entity';
 import { User } from '../users/entities/user.entity';
+import { Maintenance } from 'src/maintenance/entities/maintenance.entity';
 
 @Injectable()
 export class PropertiesService {
   constructor(
     @InjectModel(Property.name) private readonly propertyModel: Model<Property>,
+    @InjectModel(Maintenance.name) private readonly maintenanceModel : Model<Maintenance>,
     @InjectModel(Application.name) private readonly applicationModel: Model<Application>,
     @InjectModel(LandlordAssignedTenant.name) private readonly landlordAssignedTenantModel: Model<LandlordAssignedTenant>,
     @InjectModel(User.name) private readonly userModel: Model<User>,
@@ -460,6 +462,46 @@ export class PropertiesService {
         totalNewPromise,
         totalAcceptedPromise,
         totalActiveTenantsPromise + x.length,
+      ]);
+
+      // Return applications and totals
+      return {
+        totalNew,
+        totalAccepted,
+        totalActiveTenants,
+      };
+    } catch (error) {
+      throw new Error(`Failed to fetch landlord applications: ${error}`);
+    }
+  }
+
+  async getTenantMetrics(
+    id: any,
+  ): Promise<{
+    totalNew: number;
+    totalAccepted: number;
+    totalActiveTenants: number;
+  } | any> {
+    try {
+      // Query to count total number of applicants for each status
+      const totalNewPromise = this.applicationModel
+        .countDocuments({ applicant: id, status: 'New' })
+        .exec();
+      const totalAcceptedPromise = this.applicationModel
+        .countDocuments({ applicant: id, status: 'activeTenant' })
+        .exec();
+
+      //const x = await this.findLandlordOnboardedTenants(id);
+      const totalActiveTenantsPromise = await this.maintenanceModel
+        .countDocuments({ createdBy: id })
+        .exec();
+
+
+      // Await all promises to get the results
+      let [totalNew, totalAccepted, totalActiveTenants] = await Promise.all([
+        totalNewPromise,
+        totalAcceptedPromise,
+        totalActiveTenantsPromise,
       ]);
 
       // Return applications and totals
