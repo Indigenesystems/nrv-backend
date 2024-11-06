@@ -314,7 +314,7 @@ export class PropertiesController {
     @Res() res: Response
   ) {
     const count = await this.propertiesService.getLandLordCount(id);
-
+  
     if (!count) {
       return res.status(HttpStatus.NOT_FOUND).json({
         status: 'error',

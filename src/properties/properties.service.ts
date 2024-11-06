@@ -441,6 +441,7 @@ export class PropertiesService {
     totalNew: number;
     totalAccepted: number;
     totalActiveTenants: number;
+    totalProperties: number;
   } | any> {
     try {
       // Query to count total number of applicants for each status
@@ -455,13 +456,17 @@ export class PropertiesService {
       const totalActiveTenantsPromise = await this.applicationModel
         .countDocuments({ ownerId: id, status: 'activeTenant' })
         .exec();
-
+       
+        const totalPropertiesPromise = await this.propertyModel
+        .countDocuments({ createdBy: id })
+        .exec();
 
       // Await all promises to get the results
-      let [totalNew, totalAccepted, totalActiveTenants] = await Promise.all([
+      let [totalNew, totalAccepted, totalActiveTenants, totalProperties] = await Promise.all([
         totalNewPromise,
         totalAcceptedPromise,
         totalActiveTenantsPromise + x.length,
+        totalPropertiesPromise
       ]);
 
       // Return applications and totals
@@ -469,6 +474,7 @@ export class PropertiesService {
         totalNew,
         totalAccepted,
         totalActiveTenants,
+        totalProperties
       };
     } catch (error) {
       throw new Error(`Failed to fetch landlord applications: ${error}`);
