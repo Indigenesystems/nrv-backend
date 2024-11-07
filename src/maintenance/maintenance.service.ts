@@ -44,24 +44,23 @@ export class MaintenanceService {
 
   async findAllByOwnerId(ownerId: any): Promise<Maintenance[]> {
     try {
-      // Fetch all maintenance records and populate related documents
       const maintenanceRecords = await this.maintenanceModel.find()
-        .populate({
-          path: 'roomId',
-          populate: { path: 'propertyId' }
-        })
-        .sort({ createdAt: -1 })
-        .exec();
-  
- 
-      // Filter the results based on the `createdBy` field in the populated `propertyId`
+      .populate({
+        path: 'roomId',  // Populate the roomId field
+        populate: {
+          path: 'propertyId', // Nested population to populate the propertyId field within roomId
+        }
+      })
+      .populate('createdBy')  // Populate the createdBy field directly
+      .sort({ createdAt: -1 })
+      .exec();
+    
       const filteredRecords = maintenanceRecords.filter(record => {
         const propertyId = record.roomId?.propertyId;
         if (propertyId && propertyId?.createdBy) {
           if (propertyId?.createdBy instanceof mongoose.Types.ObjectId) {
             return propertyId?.createdBy.equals(ownerId);
           } else {
-            // For non-ObjectId types, use direct comparison
             return propertyId?.createdBy === ownerId;
           }
         }
