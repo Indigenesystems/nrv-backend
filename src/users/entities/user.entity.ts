@@ -43,6 +43,9 @@ export class User {
   @Prop()
   passwordResetExpires?: Date;
 
+  @Prop({ type: [Object] })
+  tenantVerficationHistory?: object[];
+
   // Timestamps fields are automatically managed by Mongoose
   // createdAt: Date;
   // updatedAt: Date;

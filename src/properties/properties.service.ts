@@ -11,6 +11,7 @@ import { LandlordAssignedTenant } from './entities/landlord_assigned_tenant.enti
 import { Room } from '../rooms/entities/room.entity';
 import { User } from '../users/entities/user.entity';
 import { Maintenance } from 'src/maintenance/entities/maintenance.entity';
+import { UserService } from 'src/users/users.service';
 
 @Injectable()
 export class PropertiesService {
@@ -22,7 +23,7 @@ export class PropertiesService {
     @InjectModel(User.name) private readonly userModel: Model<User>,
     private cloudinaryService: CloudinaryService,
     private roomService: RoomsService,
-    private emailService: EmailService
+    private emailService: EmailService,
 
   ) { }
 
@@ -577,23 +578,61 @@ export class PropertiesService {
     return tenants;
   }
 
-  async findTenantHistory(nin: any): Promise<any> {
+  async findTenantHistory(nin: string, userId: any): Promise<any> {
+    // Find the user by NIN (National Identification Number)
     const user = await this.userModel.findOne({ nin: nin });
+    // If user is not found, return null
+    if (!user) {
+      return null;
+    }
+  
+    // Find the owner (landlord) by user ID
+    let owner = await this.userModel.findOne({ _id: userId });
+    console.log({owner});
+    
+  
+    if (owner) {
+      // Check if the NIN is already verified in the tenant verification history
+      const historyExists = owner.tenantVerficationHistory.some(
+        (history: any) => history.nin.includes(nin)
+      );
 
-    if (user) {
-      const userId = user._id;
 
-      const tenants = await this.landlordAssignedTenantModel.find({ applicant: userId }).populate('ownerId').populate({
-        path: 'propertyId',
-        populate: {
+
+      if (!historyExists) {
+        // Add verification history to the user's tenant verification history
+        const verificationHistory = {
+          timestamp: new Date(),
+          details: `Tenant with NIN ${nin} has been verified by ${owner.firstName} ${owner.lastName}`,
+          nin: nin, 
+        };
+  
+        // Add the new verification history entry to the tenantVerficationHistory array
+        owner.tenantVerficationHistory.push(verificationHistory);
+        console.log({x: owner});
+        
+  
+        // Save the updated user document with the new history entry
+        await owner.save();
+      } 
+  
+      // Fetch the tenants associated with the landlord (owner)
+      const tenants = await this.landlordAssignedTenantModel.find({ applicant: user._id })
+        .populate('ownerId')
+        .populate({
           path: 'propertyId',
-
-        }
-      }).populate('applicant');
-
+          populate: {
+            path: 'propertyId',
+          },
+        })
+        .populate('applicant');
+      console.log({tenants});
+      
       return tenants;
     }
+  
+    // Return null if no owner found
     return null;
   }
-
+  
 }

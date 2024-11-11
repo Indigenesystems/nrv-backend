@@ -430,9 +430,10 @@ export class PropertiesController {
   @Get('/tenant-history')
   async fetchTenantHistoryByNin(
     @Query('nin') nin: string,
+    @Query('userId') userId: string,
     @Res() res: Response
   ) {
-    const tenantHistory = await this.propertiesService.findTenantHistory(nin);
+    const tenantHistory = await this.propertiesService.findTenantHistory(nin, userId);
 
     if (!tenantHistory || tenantHistory.length === 0) {
       return res.status(HttpStatus.NOT_FOUND).json({
