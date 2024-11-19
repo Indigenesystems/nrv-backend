@@ -568,7 +568,7 @@ export class PropertiesService {
   }
 
   async findLandlordOnboardedTenants(id: any): Promise<any> {
-    const tenants = await this.landlordAssignedTenantModel.find({ ownerId: id }).populate('ownerId').populate({
+    const tenants = await this.landlordAssignedTenantModel.find({ ownerId: id, status: "active" }).populate('ownerId').populate({
       path: 'propertyId',
       populate: {
         path: 'propertyId',
@@ -587,10 +587,7 @@ export class PropertiesService {
     }
   
     // Find the owner (landlord) by user ID
-    let owner = await this.userModel.findOne({ _id: userId });
-    console.log({owner});
-    
-  
+    let owner = await this.userModel.findOne({ _id: userId });  
     if (owner) {
       // Check if the NIN is already verified in the tenant verification history
       const historyExists = owner.tenantVerficationHistory.some(
@@ -609,9 +606,6 @@ export class PropertiesService {
   
         // Add the new verification history entry to the tenantVerficationHistory array
         owner.tenantVerficationHistory.push(verificationHistory);
-        console.log({x: owner});
-        
-  
         // Save the updated user document with the new history entry
         await owner.save();
       } 
@@ -626,8 +620,6 @@ export class PropertiesService {
           },
         })
         .populate('applicant');
-      console.log({tenants});
-      
       return tenants;
     }
   

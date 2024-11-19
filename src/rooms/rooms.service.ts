@@ -8,20 +8,20 @@ import { Property } from '../properties/entities/property.entity';
 import { Application } from '../properties/entities/application.entity';
 import { CloudinaryService } from '../upload/cloudinary.service';
 import { object } from 'joi';
+import { LandlordAssignedTenant } from 'src/properties/entities/landlord_assigned_tenant.entity';
 
 @Injectable()
 export class RoomsService {
     constructor(
         @InjectModel(Room.name) private readonly roomModel: Model<Room>,
         @InjectModel(Property.name) private readonly propertyModel: Model<Property>,
+        @InjectModel(LandlordAssignedTenant.name) private readonly landlordAssignedTenantModel: Model<LandlordAssignedTenant>,
         @InjectModel(Application.name)
         private readonly applicationModel: Model<Application>,
         private cloudinaryService: CloudinaryService,
     ) { }
 
     async createRooms(createRoomDTO: any) {
-        console.log({createRoomDTO});
-        
         const latestRoom = await this.roomModel
             .findOne({}, { roomId: 1 })
             .sort({ roomId: -1 })
@@ -206,5 +206,28 @@ export class RoomsService {
             throw new NotFoundException(error);
         }
     }
+
+    async updateRentEndDate(id: string, rentEndDate: Date): Promise<LandlordAssignedTenant> {
+        return this.landlordAssignedTenantModel.findByIdAndUpdate(
+          id,
+          { rentEndDate },
+          { new: true },
+        );
+      }
+
+      async endRentTenure(id: string): Promise<LandlordAssignedTenant> {
+        // First, find the tenant by ID
+        const tenant = await this.landlordAssignedTenantModel.findById(id);
+        if (!tenant) {
+          throw new Error('LandlordAssignedTenant not found');
+        }
+    
+        // Set status to 'ended' (or any other status you want)
+        tenant.status = 'ended';
+        tenant.rentEndDate = new Date(); // Set rentEndDate to current date (or provide a custom date)
+        
+        // Save the updated tenant
+        return tenant.save();
+      }
 
 }

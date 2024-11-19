@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Param, Post, Query, UploadedFiles, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Post, Put, Query, UploadedFiles, UseInterceptors } from '@nestjs/common';
 import { CreateRoomDTO } from './dto/create-room.dto';
 import { RoomsService } from './rooms.service';
 import { createRoomSchema } from '../validations/validator';
@@ -11,7 +11,7 @@ import { InjectModel } from '@nestjs/mongoose';
 
 @Controller('rooms')
 export class RoomsController {
-  constructor(private roomsService: RoomsService, @InjectModel(LandlordAssignedTenant.name) private readonly landlordAssignedTenantModel: Model<LandlordAssignedTenant>,) { }
+  constructor(private roomsService: RoomsService, @InjectModel(LandlordAssignedTenant.name) private readonly landlordAssignedTenantModel: Model<LandlordAssignedTenant>) { }
 
   @Post('/create')
   @UseInterceptors(FileFieldsInterceptor([
@@ -167,5 +167,54 @@ export class RoomsController {
       throw new BadRequestException(error);
     }
   }
+
+  @Put(':id/extend-tenancy')
+  async updateRentEndDate(
+    @Param('id') id: string, 
+    @Body('rentEndDate') rentEndDate: Date,
+  ) {
+    try {
+      // Validate rentEndDate format (optional)
+      if (!rentEndDate || isNaN(new Date(rentEndDate).getTime())) {
+        throw new BadRequestException('Invalid rent end date');
+      }
+
+      // Update the rentEndDate
+      const updatedTenant = await this.roomsService.updateRentEndDate(id, rentEndDate);
+      
+      if (!updatedTenant) {
+        throw new BadRequestException('LandlordAssignedTenant not found');
+      }
+
+      return {
+        status: 'success',
+        message: 'Rent end date updated successfully',
+        data: updatedTenant,
+      };
+    } catch (error) {
+      throw new BadRequestException(error.message);
+    }
+  }
+
+  @Put(':id/end-tenure')
+async endRentTenure(@Param('id') id: string) {
+  try {
+    // Find the landlord assigned tenant by ID and mark the tenure as ended
+    const updatedTenant = await this.roomsService.endRentTenure(id);
+    
+    if (!updatedTenant) {
+      throw new BadRequestException('LandlordAssignedTenant not found');
+    }
+
+    return {
+      status: 'success',
+      message: 'Rent tenure ended successfully',
+      data: updatedTenant,
+    };
+  } catch (error) {
+    throw new BadRequestException(error.message);
+  }
+}
+
 
 }
