@@ -1,8 +1,7 @@
 import { BadRequestException, Body, Controller, Get, Param, Post, Put, Query, UploadedFiles, UseInterceptors } from '@nestjs/common';
-import { CreateRoomDTO } from './dto/create-room.dto';
 import { RoomsService } from './rooms.service';
 import { createRoomSchema } from '../validations/validator';
-import { FileInterceptor, FilesInterceptor, FileFieldsInterceptor } from '@nestjs/platform-express';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { LandlordAssignedTenant } from '../properties/entities/landlord_assigned_tenant.entity';
 import { Model } from 'mongoose';
 import { InjectModel } from '@nestjs/mongoose';
@@ -80,8 +79,6 @@ export class RoomsController {
       };
     }
   }
-
-
 
   @Get('/active/tenant')
   async getPropertyActiveTenant(@Query('id') id: string) {
@@ -196,6 +193,37 @@ export class RoomsController {
     }
   }
 
+  @Put(':id/assign-tenancy-date')
+  async updateRentEndAndStartDate(
+    @Param('id') id: string, 
+    @Body('rentEndDate') rentEndDate: Date,
+    @Body('rentStartDate') rentStartDate: Date,
+  ) {
+    try {
+      // Validate rentEndDate format (optional)
+      if (!rentEndDate || isNaN(new Date(rentEndDate).getTime())) {
+        throw new BadRequestException('Invalid rent end date');
+      }
+
+      // Update the rentEndDate
+      const updatedTenant = await this.roomsService.assignStartAndEndDate(id, rentEndDate, rentStartDate);
+      
+      if (!updatedTenant) {
+        throw new BadRequestException('Application not found');
+      }
+
+      return {
+        status: 'success',
+        message: 'Rent start and end date assigned successfully',
+        data: updatedTenant,
+      };
+    } catch (error) {
+      throw new BadRequestException(error.message);
+    }
+  }
+
+  assignStartAndEndDate
+
   @Put(':id/end-tenure')
 async endRentTenure(@Param('id') id: string) {
   try {
@@ -215,6 +243,5 @@ async endRentTenure(@Param('id') id: string) {
     throw new BadRequestException(error.message);
   }
 }
-
 
 }

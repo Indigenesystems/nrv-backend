@@ -35,6 +35,12 @@ export class Application {
   @Prop()
   currentResidence: string;
 
+  @Prop({ default: null })
+  rentEndDate: Date;
+
+  @Prop({ default: null })
+  rentStartDate: Date;
+
 }
 
 

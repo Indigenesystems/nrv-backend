@@ -4,14 +4,12 @@ import { Model } from 'mongoose';
 import { CloudinaryService } from '../upload/cloudinary.service';
 import { Property } from './entities/property.entity';
 import { RoomsService } from '../rooms/rooms.service';
-import { UpdatePropertyDto } from './dto/update-property.dto';
 import { Application } from './entities/application.entity';
 import { EmailService } from '../email-sender/email.service';
 import { LandlordAssignedTenant } from './entities/landlord_assigned_tenant.entity';
-import { Room } from '../rooms/entities/room.entity';
 import { User } from '../users/entities/user.entity';
 import { Maintenance } from 'src/maintenance/entities/maintenance.entity';
-import { UserService } from 'src/users/users.service';
+
 
 @Injectable()
 export class PropertiesService {
@@ -23,8 +21,7 @@ export class PropertiesService {
     @InjectModel(User.name) private readonly userModel: Model<User>,
     private cloudinaryService: CloudinaryService,
     private roomService: RoomsService,
-    private emailService: EmailService,
-
+    private emailService: EmailService, 
   ) { }
 
   async createProperty(createPropertyDto: any) {
@@ -164,7 +161,6 @@ export class PropertiesService {
     return updatedProperty;
   }
   
-
   async findPropertyByUserId(
     id: string,
     page: number = 1,
@@ -445,7 +441,6 @@ export class PropertiesService {
     totalProperties: number;
   } | any> {
     try {
-      // Query to count total number of applicants for each status
       const totalNewPromise = this.applicationModel
         .countDocuments({ ownerId: id, status: 'New' })
         .exec();
@@ -462,15 +457,12 @@ export class PropertiesService {
         .countDocuments({ createdBy: id })
         .exec();
 
-      // Await all promises to get the results
       let [totalNew, totalAccepted, totalActiveTenants, totalProperties] = await Promise.all([
         totalNewPromise,
         totalAcceptedPromise,
         totalActiveTenantsPromise + x.length,
         totalPropertiesPromise
       ]);
-
-      // Return applications and totals
       return {
         totalNew,
         totalAccepted,
@@ -490,7 +482,6 @@ export class PropertiesService {
     totalActiveTenants: number;
   } | any> {
     try {
-      // Query to count total number of applicants for each status
       const totalNewPromise = this.applicationModel
         .countDocuments({ applicant: id, status: 'New' })
         .exec();
@@ -498,20 +489,15 @@ export class PropertiesService {
         .countDocuments({ applicant: id, status: 'activeTenant' })
         .exec();
 
-      //const x = await this.findLandlordOnboardedTenants(id);
       const totalActiveTenantsPromise = await this.maintenanceModel
         .countDocuments({ createdBy: id })
         .exec();
 
-
-      // Await all promises to get the results
       let [totalNew, totalAccepted, totalActiveTenants] = await Promise.all([
         totalNewPromise,
         totalAcceptedPromise,
         totalActiveTenantsPromise,
       ]);
-
-      // Return applications and totals
       return {
         totalNew,
         totalAccepted,
@@ -524,32 +510,25 @@ export class PropertiesService {
 
   async isPropertyMappedToActiveTenant(propertyId: string): Promise<boolean> {
     try {
-      // Check if there's an active landlordAssignedTenant with the same propertyId
       const existingMapping = await this.landlordAssignedTenantModel.findOne({
         propertyId: propertyId,
         status: 'active'
       });
-
-      // Check if there's an active application with the same propertyId
       const doesActiveTenantExist = await this.applicationModel.findOne({
         propertyId: propertyId,
         status: 'activeTenant'
       });
 
       if (doesActiveTenantExist) {
-        // Handle the case where an active tenant exists (if necessary)
         throw new BadRequestException("This property/apartment has an active tenant");
       }
-
-      // Return true if an active mapping exists, otherwise false
       return !!existingMapping;
     } catch (error) {
-      // Handle the error in a way that fits your application
+
       console.error(`Failed to check property mapping: ${error.message}`);
       throw new Error(`Failed to check property mapping: ${error.message}`);
     }
   }
-
 
   async mapCreatedUserToApartment(payload: any): Promise<any> {
     try {
@@ -579,17 +558,13 @@ export class PropertiesService {
   }
 
   async findTenantHistory(nin: string, userId: any): Promise<any> {
-    // Find the user by NIN (National Identification Number)
     const user = await this.userModel.findOne({ nin: nin });
-    // If user is not found, return null
     if (!user) {
       return null;
     }
   
-    // Find the owner (landlord) by user ID
     let owner = await this.userModel.findOne({ _id: userId });  
     if (owner) {
-      // Check if the NIN is already verified in the tenant verification history
       const historyExists = owner.tenantVerficationHistory.some(
         (history: any) => history.nin.includes(nin)
       );
@@ -597,20 +572,16 @@ export class PropertiesService {
 
 
       if (!historyExists) {
-        // Add verification history to the user's tenant verification history
         const verificationHistory = {
           timestamp: new Date(),
           details: `Tenant with NIN ${nin} has been verified by ${owner.firstName} ${owner.lastName}`,
           nin: nin, 
         };
   
-        // Add the new verification history entry to the tenantVerficationHistory array
         owner.tenantVerficationHistory.push(verificationHistory);
-        // Save the updated user document with the new history entry
         await owner.save();
       } 
   
-      // Fetch the tenants associated with the landlord (owner)
       const tenants = await this.landlordAssignedTenantModel.find({ applicant: user._id })
         .populate('ownerId')
         .populate({
@@ -622,8 +593,6 @@ export class PropertiesService {
         .populate('applicant');
       return tenants;
     }
-  
-    // Return null if no owner found
     return null;
   }
   
