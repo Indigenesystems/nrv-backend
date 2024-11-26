@@ -11,6 +11,7 @@ import { Application } from '../properties/entities/application.entity';
 import { Room } from '../rooms/entities/room.entity';
 import { Property } from '../properties/entities/property.entity';
 import { NotificationSettings } from './entities/notificationSettings.entity';
+import { AgreementDocuments } from 'src/properties/entities/agreement_documents.entity';
 
 
 @Injectable()
@@ -21,7 +22,7 @@ export class UserService {
     @InjectModel(Application.name) private readonly applicationModel: Model<Application>,
     @InjectModel(User.name) private readonly userModel: Model<User>,
     @InjectModel(NotificationSettings.name) private readonly notificationSettingsModel: Model<NotificationSettings>,
-
+    @InjectModel(AgreementDocuments.name) private readonly agreementDocumentsModel: Model<AgreementDocuments>,
     private jwtService: JwtService,
     private emailService: EmailService,
     private propertiesService: PropertiesService,

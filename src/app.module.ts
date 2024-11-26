@@ -31,14 +31,15 @@ import { MaintenanceController } from './maintenance/maintenance.controller';
 import { LandlordAssignedTenantSchema } from './properties/entities/landlord_assigned_tenant.entity';
 import { NotificationSettingsSchema } from './users/entities/notificationSettings.entity';
 import { ExpensesModule } from './expenses/expenses.module';
+import { AgreementDocumentsSchema } from './properties/entities/agreement_documents.entity';
 
 @Module({
   imports: [
     MongodbModule,
     UsersModule,
     EmailServiceModule,
-   // MyMulterModule,
-    MongooseModule.forFeature([{ name: 'User', schema: UserSchema }, { name: 'NotificationSettings', schema: NotificationSettingsSchema },{ name: 'Property', schema: PropertySchema }, { name: 'Room', schema: RoomSchema },  { name: 'Application', schema:  ApplicationSchema }, { name: 'Maintenance', schema:  MaintenanceSchema }, { name: 'LandlordAssignedTenant', schema:  LandlordAssignedTenantSchema }]),
+    // MyMulterModule,
+    MongooseModule.forFeature([{ name: 'AgreementDocuments', schema: UserSchema },{ name: 'User', schema: AgreementDocumentsSchema }, { name: 'NotificationSettings', schema: NotificationSettingsSchema },{ name: 'Property', schema: PropertySchema }, { name: 'Room', schema: RoomSchema },  { name: 'Application', schema:  ApplicationSchema }, { name: 'Maintenance', schema:  MaintenanceSchema }, { name: 'LandlordAssignedTenant', schema:  LandlordAssignedTenantSchema }]),
     JwtModule.register({
       secret: 'your-secret-key-here',
       signOptions: { expiresIn: '1d' }, 

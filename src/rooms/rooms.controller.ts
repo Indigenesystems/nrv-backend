@@ -5,12 +5,13 @@ import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { LandlordAssignedTenant } from '../properties/entities/landlord_assigned_tenant.entity';
 import { Model } from 'mongoose';
 import { InjectModel } from '@nestjs/mongoose';
+import { AgreementDocuments } from 'src/properties/entities/agreement_documents.entity';
 
 
 
 @Controller('rooms')
 export class RoomsController {
-  constructor(private roomsService: RoomsService, @InjectModel(LandlordAssignedTenant.name) private readonly landlordAssignedTenantModel: Model<LandlordAssignedTenant>) { }
+  constructor(    @InjectModel(AgreementDocuments.name) private readonly agreementDocumentsModel: Model<AgreementDocuments>,private roomsService: RoomsService, @InjectModel(LandlordAssignedTenant.name) private readonly landlordAssignedTenantModel: Model<LandlordAssignedTenant>) { }
 
   @Post('/create')
   @UseInterceptors(FileFieldsInterceptor([
@@ -83,22 +84,48 @@ export class RoomsController {
   @Get('/active/tenant')
   async getPropertyActiveTenant(@Query('id') id: string) {
     try {
-      const activeTenant = await this.roomsService.findCurrentOccupantForRoom(id);
-      // Check if there's an active landlordAssignedTenant with the same propertyId
-      const existingMapping = await this.landlordAssignedTenantModel.findOne({
+      // Fetch active tenant
+      const activeTenant: any = await this.roomsService.findCurrentOccupantForRoom(id);
+  
+      // Fetch existing mapping with 'active' status
+      const existingMapping: any = await this.landlordAssignedTenantModel.findOne({
         propertyId: id,
-        status: 'active'
-      }).populate('propertyId')
-      .populate('applicant')
+        status: 'active',
+      })
+        .populate('propertyId')
+        .populate('applicant');
+
+        const finalResult: any = activeTenant || existingMapping;
+        console.log({finalResult: finalResult.applicant._id.toString()});
+        
+  
+      // Initialize agreementDocument
+      let agreementDocument = null;
+  
+      // Check if there is an applicant in the mapping
+      if (finalResult?.applicant?._id) {
+        // Fetch agreement document associated with the applicant
+        agreementDocument = await this.agreementDocumentsModel.findOne({
+          applicant: finalResult.applicant._id.toString(),
+        });
+        console.log({agreementDocument});
+        
+      }
+  
+      // Return response
       return {
-        status: "success",
-        message: "Active tenant fetched",
-        data: activeTenant || existingMapping
+        status: 'success',
+        message: 'Active tenant fetched',
+        data: {
+          activeTenant: finalResult,
+          agreementDocument,
+        },
       };
     } catch (error) {
-      throw new BadRequestException(error);
+      throw new BadRequestException(error.message);
     }
   }
+  
 
   @Get('/update/status')
   async update(@Query('id') id: string, @Query('status') status: boolean) {

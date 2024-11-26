@@ -4,11 +4,13 @@ import mongoose, { Model } from 'mongoose';
 import { CloudinaryService } from '../upload/cloudinary.service';
 import { CreateMaintenanceDTO } from './dto/create-maintenance.dto';
 import { Maintenance } from './entities/maintenance.entity';
+import { AgreementDocuments } from 'src/properties/entities/agreement_documents.entity';
 
 @Injectable()
 export class MaintenanceService {
   constructor(
     @InjectModel(Maintenance.name) private readonly maintenanceModel: Model<Maintenance>,
+    @InjectModel(AgreementDocuments.name) private readonly agreementDocumentsModel: Model<AgreementDocuments>,
     private cloudinaryService: CloudinaryService,
   ) { }
 

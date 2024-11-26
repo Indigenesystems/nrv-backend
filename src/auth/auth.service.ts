@@ -32,10 +32,7 @@ export class AuthService {
 
   async login(loginUserDto: LoginUserDto): Promise<{ user: User; accessToken: string; notificationSettings: NotificationSettings } | any> {
 
-
     const user: any = await this.validateUser(loginUserDto.email, loginUserDto.password);
-  
-
     if (!user) {
       throw new UnauthorizedException('Invalid email or password');
     }

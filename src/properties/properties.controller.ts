@@ -435,4 +435,33 @@ export class PropertiesController {
       });
     }
   }
+
+  @Post('/upload-agreement-document')
+  @UseInterceptors(FileFieldsInterceptor([
+    { name: 'unsignedDocument', maxCount: 1 },
+  ]))
+  async createAgreementDocuments(@Body() body: any, @UploadedFiles() files: { unsignedDocument?: Express.Multer.File }, @Res() res: Response) {
+    try {
+      const data = { ...body, ...files };
+      const createdApplication = await this.propertiesService.uploadAgreementDocuments(data);
+
+      if (createdApplication.propertyId) {
+        return res.status(HttpStatus.CREATED).json({
+          status: "success",
+          message: "Agreement document uploaded successfully",
+          data: createdApplication
+        });
+      } else {
+        return res.status(HttpStatus.BAD_REQUEST).json({
+          status: 'error',
+          message: 'Failed to upload agreement document',
+        });
+      }
+    } catch (error) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        status: 'error',
+        message: error.message,
+      });
+    }
+  }
 }

@@ -9,6 +9,7 @@ import { EmailService } from '../email-sender/email.service';
 import { LandlordAssignedTenant } from './entities/landlord_assigned_tenant.entity';
 import { User } from '../users/entities/user.entity';
 import { Maintenance } from 'src/maintenance/entities/maintenance.entity';
+import { AgreementDocuments } from './entities/agreement_documents.entity';
 
 
 @Injectable()
@@ -17,6 +18,7 @@ export class PropertiesService {
     @InjectModel(Property.name) private readonly propertyModel: Model<Property>,
     @InjectModel(Maintenance.name) private readonly maintenanceModel : Model<Maintenance>,
     @InjectModel(Application.name) private readonly applicationModel: Model<Application>,
+    @InjectModel(AgreementDocuments.name) private readonly agreementDocumentsModel: Model<AgreementDocuments>,
     @InjectModel(LandlordAssignedTenant.name) private readonly landlordAssignedTenantModel: Model<LandlordAssignedTenant>,
     @InjectModel(User.name) private readonly userModel: Model<User>,
     private cloudinaryService: CloudinaryService,
@@ -595,5 +597,42 @@ export class PropertiesService {
     }
     return null;
   }
+
+  async uploadAgreementDocuments(body: any) {
+    try {
+      const existingDocument = await this.agreementDocumentsModel.findOne({
+        applicant: body.applicant,
+      });
+  
+      if (existingDocument) {
+        throw new Error('An agreement document for this applicant already exists.');
+      }
+  
+      const unsignedDocument = body.unsignedDocument
+        ? await this.cloudinaryService.upload(body.unsignedDocument)
+        : null;
+  
+      const signedDocument = body.signedDocument
+        ? await this.cloudinaryService.upload(body.signedDocument)
+        : null;
+  
+      const data = {
+        propertyId: body.propertyId,
+        ownerId: body.ownerId,
+        applicant: body.applicant,
+        status: 'Unsigned',
+        unsignedDocument,
+        signedDocument,
+      };
+  
+      const newAgreementDocuments = await this.agreementDocumentsModel.create(data);
+      return newAgreementDocuments;
+    } catch (error) {
+      throw new Error(`Failed to create agreement document: ${error.message}`);
+    }
+  }
+  
+  
+  
   
 }

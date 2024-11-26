@@ -18,10 +18,11 @@ import { LandlordAssignedTenant, LandlordAssignedTenantSchema } from '../propert
 import { PropertiesService } from '../properties/properties.service';
 import { AuthService } from '../auth/auth.service';
 import { NotificationSettings, NotificationSettingsSchema } from 'src/users/entities/notificationSettings.entity';
+import { AgreementDocuments, AgreementDocumentsSchema } from 'src/properties/entities/agreement_documents.entity';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: Maintenance.name, schema: MaintenanceSchema }, { name: User.name, schema: UserSchema }, { name: Room.name, schema: RoomSchema }, { name: Property.name, schema: PropertySchema }, { name: Application.name, schema: ApplicationSchema }, { name: LandlordAssignedTenant.name, schema: LandlordAssignedTenantSchema }, { name: NotificationSettings.name, schema: NotificationSettingsSchema }])
+    MongooseModule.forFeature([{ name: Maintenance.name, schema: MaintenanceSchema },{ name: AgreementDocuments.name, schema: AgreementDocumentsSchema }, { name: User.name, schema: UserSchema }, { name: Room.name, schema: RoomSchema }, { name: Property.name, schema: PropertySchema }, { name: Application.name, schema: ApplicationSchema }, { name: LandlordAssignedTenant.name, schema: LandlordAssignedTenantSchema }, { name: NotificationSettings.name, schema: NotificationSettingsSchema }])
   ],
   controllers: [MaintenanceController, RoomsController, UserController],
   providers: [MaintenanceService, UserService, RoomsService, CloudinaryService, JwtService, EmailService, PropertiesService, AuthService],
