@@ -84,47 +84,69 @@ export class RoomsController {
   @Get('/active/tenant')
   async getPropertyActiveTenant(@Query('id') id: string) {
     try {
-      // Fetch active tenant
-      const activeTenant: any = await this.roomsService.findCurrentOccupantForRoom(id);
+      let finalResult: any = null;
   
-      // Fetch existing mapping with 'active' status
-      const existingMapping: any = await this.landlordAssignedTenantModel.findOne({
-        propertyId: id,
-        status: 'active',
-      })
-        .populate('propertyId')
-        .populate('applicant');
-
-        const finalResult: any = activeTenant || existingMapping;
-        console.log({finalResult: finalResult.applicant._id.toString()});
-        
+      // First, try to fetch the active tenant
+      const activeTenant = await this.roomsService.findCurrentOccupantForRoom(id);
   
-      // Initialize agreementDocument
-      let agreementDocument = null;
-  
-      // Check if there is an applicant in the mapping
-      if (finalResult?.applicant?._id) {
-        // Fetch agreement document associated with the applicant
-        agreementDocument = await this.agreementDocumentsModel.findOne({
-          applicant: finalResult.applicant._id.toString(),
-        });
-        console.log({agreementDocument});
-        
+      // If activeTenant is not found, fetch the existing mapping with 'active' status
+      if (activeTenant) {
+        finalResult = activeTenant;
+      } else {
+        finalResult = await this.landlordAssignedTenantModel.findOne({
+          propertyId: id,
+          status: 'active',
+        })
+          .populate('propertyId')
+          .populate('applicant')
+          .lean();
       }
   
-      // Return response
+      // If no finalResult, handle the case where neither tenant nor mapping was found
+      if (!finalResult) {
+        throw new Error('No active tenant or assignment found for the given property ID.');
+      }
+  
+      // Initialize agreementDocument as null by default
+      let agreementDocument = null;
+  
+      // Check if there is an applicant in the mapping (whether from activeTenant or landlordAssignedTenantModel)
+      if (finalResult?.applicant?._id) {
+        // Fetch the agreement document associated with the applicant
+        agreementDocument = await this.agreementDocumentsModel.findOne({
+          applicant: finalResult.applicant._id.toString(),
+        });  // Use .lean() here as well to get a plain object
+  
+        // Add agreementDocument to finalResult (using spread operator to merge)
+        finalResult = {
+          ...finalResult._doc, // Spread the original data
+          agreementDocument: agreementDocument || null, // Add the agreementDocument field
+        };
+      }
+  
+      // Log the final result to verify the data
+      console.log('Final Result with Agreement Document:', finalResult);
+  
+      // Return the response with the final result
       return {
         status: 'success',
-        message: 'Active tenant fetched',
-        data: {
-          activeTenant: finalResult,
-          agreementDocument,
-        },
+        message: 'Active tenant fetched successfully',
+        data: finalResult,
       };
     } catch (error) {
-      throw new BadRequestException(error.message);
+      // Log the error for debugging
+      console.error('Error fetching active tenant:', error);
+  
+      // Return a structured error response
+      throw new BadRequestException({
+        status: 'error',
+        message: error.message || 'An error occurred while fetching the active tenant.',
+      });
     }
   }
+  
+  
+  
   
 
   @Get('/update/status')
