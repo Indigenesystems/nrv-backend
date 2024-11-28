@@ -115,17 +115,19 @@ export class RoomsController {
         // Fetch the agreement document associated with the applicant
         agreementDocument = await this.agreementDocumentsModel.findOne({
           applicant: finalResult.applicant._id.toString(),
-        });  // Use .lean() here as well to get a plain object
+        });  
+        
+        console.log('Final Result with Agreement Document:', finalResult);// Use .lean() here as well to get a plain object
   
         // Add agreementDocument to finalResult (using spread operator to merge)
         finalResult = {
-          ...finalResult._doc, // Spread the original data
+          ...finalResult, // Spread the original data
           agreementDocument: agreementDocument || null, // Add the agreementDocument field
         };
       }
   
       // Log the final result to verify the data
-      console.log('Final Result with Agreement Document:', finalResult);
+
   
       // Return the response with the final result
       return {
