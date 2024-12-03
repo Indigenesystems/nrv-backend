@@ -439,8 +439,9 @@ export class PropertiesController {
   @Post('/upload-agreement-document')
   @UseInterceptors(FileFieldsInterceptor([
     { name: 'unsignedDocument', maxCount: 1 },
+    { name: 'signedDocument', maxCount: 1 },
   ]))
-  async createAgreementDocuments(@Body() body: any, @UploadedFiles() files: { unsignedDocument?: Express.Multer.File }, @Res() res: Response) {
+  async createAgreementDocuments(@Body() body: any, @UploadedFiles() files: { unsignedDocument?: Express.Multer.File, signedDocument?: Express.Multer.File  }, @Res() res: Response) {
     try {
       const data = { ...body, ...files };
       const createdApplication = await this.propertiesService.uploadAgreementDocuments(data);

@@ -6,6 +6,7 @@ import { Property } from '../properties/entities/property.entity';
 import { Application } from '../properties/entities/application.entity';
 import { CloudinaryService } from '../upload/cloudinary.service';
 import { LandlordAssignedTenant } from 'src/properties/entities/landlord_assigned_tenant.entity';
+import { AgreementDocuments } from 'src/properties/entities/agreement_documents.entity';
 
 @Injectable()
 export class RoomsService {
@@ -14,8 +15,8 @@ export class RoomsService {
     @InjectModel(Property.name) private readonly propertyModel: Model<Property>,
     @InjectModel(LandlordAssignedTenant.name)
     private readonly landlordAssignedTenantModel: Model<LandlordAssignedTenant>,
-    @InjectModel(Application.name)
-    private readonly applicationModel: Model<Application>,
+    @InjectModel(AgreementDocuments.name) private readonly agreementDocumentsModel: Model<AgreementDocuments>,
+    @InjectModel(Application.name) private readonly applicationModel: Model<Application>,
     private cloudinaryService: CloudinaryService,
   ) {}
 
@@ -178,11 +179,15 @@ export class RoomsService {
       propertyId: id,
     });
 
+    const agreementDocument = await this.agreementDocumentsModel.findOne({
+      applicant: tenantId,
+    });
+
     if (property && hasTenantApplied != null) {
-      return { property, hasApplied: true };
+      return { property, hasApplied: true, agreementDocument };
     }
     if (property && hasTenantApplied == null) {
-      return { property, hasApplied: false };
+      return { property, hasApplied: false , agreementDocument};
     }
     return new NotFoundException();
   }

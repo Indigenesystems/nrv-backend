@@ -117,13 +117,17 @@ export class RoomsController {
           applicant: finalResult.applicant._id.toString(),
         });  
         
-        console.log('Final Result with Agreement Document:', finalResult);// Use .lean() here as well to get a plain object
+
   
         // Add agreementDocument to finalResult (using spread operator to merge)
         finalResult = {
-          ...finalResult, // Spread the original data
+          finalResult, // Spread the original data
           agreementDocument: agreementDocument || null, // Add the agreementDocument field
         };
+        console.log('Final Result with Agreement Document:', finalResult
+          
+        );
+
       }
   
       // Log the final result to verify the data
@@ -133,7 +137,7 @@ export class RoomsController {
       return {
         status: 'success',
         message: 'Active tenant fetched successfully',
-        data: finalResult,
+        data: finalResult._doc ? finalResult._doc : finalResult,
       };
     } catch (error) {
       // Log the error for debugging

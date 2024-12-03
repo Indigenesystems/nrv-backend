@@ -12,6 +12,7 @@ import { Maintenance } from 'src/maintenance/entities/maintenance.entity';
 import { AgreementDocuments } from './entities/agreement_documents.entity';
 
 
+
 @Injectable()
 export class PropertiesService {
   constructor(
@@ -600,39 +601,66 @@ export class PropertiesService {
 
   async uploadAgreementDocuments(body: any) {
     try {
-      const existingDocument = await this.agreementDocumentsModel.findOne({
-        applicant: body.applicant,
-      });
-  
-      if (existingDocument) {
-        throw new Error('An agreement document for this applicant already exists.');
+      console.log({ body });
+      
+      // Check if an unsigned document already exists for the applicant
+      if (body.unsignedDocument && body.unsignedDocument.length > 0) {
+        const existingUnsignedDocument = await this.agreementDocumentsModel.findOne({
+          applicant: body.applicant,
+          status: 'Unsigned',
+        });
+        if (existingUnsignedDocument) {
+          throw new Error('An unsigned agreement document for this applicant already exists.');
+        }
       }
   
-      const unsignedDocument = body.unsignedDocument
-        ? await this.cloudinaryService.upload(body.unsignedDocument)
-        : null;
+      // Handle uploading of the unsigned document if present
+      let unsignedDocument = null;
+      if (body.unsignedDocument && body.unsignedDocument.length > 0) {
+        unsignedDocument = await this.cloudinaryService.upload(body.unsignedDocument[0]);
+        if (!unsignedDocument) {
+          throw new Error('Failed to upload unsigned document.');
+        }
+      }
   
-      const signedDocument = body.signedDocument
-        ? await this.cloudinaryService.upload(body.signedDocument)
-        : null;
+      // Handle uploading of the signed document if present
+      let signedDocument = null;
+      if (body.signedDocument && body.signedDocument.length > 0) {
+        signedDocument = await this.cloudinaryService.upload(body.signedDocument[0]);
+        if (!signedDocument) {
+          throw new Error('Failed to upload signed document.');
+        }
   
+        // If an existing document exists, update it with the signed document
+        const existingDocument = await this.agreementDocumentsModel.findOne({
+          applicant: body.applicant,
+        });
+  
+        if (existingDocument) {
+          // Update existing document with the signed document
+          existingDocument.signedDocument = signedDocument;
+          existingDocument.status = 'Signed'; // Update the status to 'Signed'
+          await existingDocument.save(); // Save the updated document
+          return existingDocument; // Return the updated document
+        }
+      }
+  
+      // If no signed document exists, create a new document
       const data = {
         propertyId: body.propertyId,
         ownerId: body.ownerId,
         applicant: body.applicant,
-        status: 'Unsigned',
+        status: unsignedDocument ? 'Unsigned' : 'Signed', // Set status based on document type
         unsignedDocument,
         signedDocument,
       };
   
+      // Create a new agreement document if no update was performed
       const newAgreementDocuments = await this.agreementDocumentsModel.create(data);
       return newAgreementDocuments;
     } catch (error) {
-      throw new Error(`Failed to create agreement document: ${error.message}`);
+      throw new Error(`Failed to create or update agreement document: ${error.message}`);
     }
   }
-  
-  
-  
   
 }
