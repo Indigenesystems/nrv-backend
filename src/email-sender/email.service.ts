@@ -252,11 +252,12 @@ export class EmailService {
 
     try {
       const info = await this.transporter.sendMail({
-        from: 'ojobabajide629@gmail.com',
+        from: 'hello@naijarentverify.com',
         to: payload.email,
         subject: 'Welcome onboard',
         html: resultEmailTemplate,
       });
+
 
     } catch (error) {
       console.error('Email sending error: ', error);
@@ -496,7 +497,7 @@ export class EmailService {
 
     try {
       const info = await this.transporter.sendMail({
-        from: 'ojobabajide629@gmail.com',
+        from: 'hello@naijarentverify.com',
         to: payload.email,
         subject: 'Invitation to Apply',
         html: resultEmailTemplate,
@@ -741,7 +742,7 @@ export class EmailService {
 
     try {
       const info = await this.transporter.sendMail({
-        from: 'ojobabajide629@gmail.com',
+        from: 'hello@naijarentverify.com',
         to: payload.email,
         subject: 'Your Landlord has Onboarded on NaijaRentVerify',
         html: resultEmailTemplate,
@@ -988,11 +989,13 @@ export class EmailService {
 
     try {
       const info = await this.transporter.sendMail({
-        from: 'ojobabajide629@gmail.com',
+        from: 'hello@naijarentverify.com',
         to: payload._doc.email,
         subject: 'Reset Password Code',
         html: resultEmailTemplate,
       });
+      console.log("email sent successfully");
+      
 
     } catch (error) {
       console.error('Email sending error: ', error);
