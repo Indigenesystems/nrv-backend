@@ -9,13 +9,13 @@ export class EmailService {
 
   constructor() {
     this.transporter = nodemailer.createTransport({
-      // Setup your email service configuration here
-      // For example, using SMTP transport with Gmail
-      service: 'gmail',
+      host: 'smtp.zoho.com',
+      port: 465, // or 465 for SSL/TLS
+      secure: true, // Set to true if using SSL/TLS
       auth: {
-        user: 'ojobabajide629@gmail.com',
-        pass: 'cbab fkou ppva fhxc',
-      },
+        user: "hello@naijarentverify.com",
+        pass: "Maythird1.!"
+      }
     });
   }
 
