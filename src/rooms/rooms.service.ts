@@ -128,8 +128,10 @@ export class RoomsService {
         .where('listRoom')
         .equals(true);
     }
+    console.log({search});
+    if (search !== "") {
 
-    if (search) {
+      
       const searchRegex = new RegExp(search, 'i');
       query.or([
         {
@@ -155,6 +157,9 @@ export class RoomsService {
         },
       ]);
     }
+
+    console.log({query});
+    
 
     if (minPrice !== undefined || maxPrice !== undefined) {
       query = query.where('rentAmount');

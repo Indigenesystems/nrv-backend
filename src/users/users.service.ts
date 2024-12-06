@@ -182,6 +182,8 @@ export class UserService {
     });
 
     if (user) {
+      console.log("here");
+      
       this.emailService.sendResetPasswordToken(_user)
     }
   }
