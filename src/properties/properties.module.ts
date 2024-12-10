@@ -19,6 +19,6 @@ import { AgreementDocuments, AgreementDocumentsSchema } from './entities/agreeme
     MongooseModule.forFeature([{ name: Property.name, schema: PropertySchema }, { name: AgreementDocuments.name, schema: AgreementDocumentsSchema }, { name: Maintenance.name, schema: MaintenanceSchema }, { name: Maintenance.name, schema: MaintenanceSchema },{ name: Room.name, schema: RoomSchema }, { name: Application.name, schema: ApplicationSchema }, { name: LandlordAssignedTenant.name, schema: LandlordAssignedTenantSchema }, { name: User.name, schema: UserSchema },])
   ],
   controllers: [PropertiesController],
-  providers: [PropertiesService, CloudinaryService, RoomsService, EmailService],
+  providers: [PropertiesService, CloudinaryService, RoomsService, EmailService, CloudinaryService],
 })
 export class PropertiesModule {}

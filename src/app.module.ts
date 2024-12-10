@@ -32,6 +32,10 @@ import { LandlordAssignedTenantSchema } from './properties/entities/landlord_ass
 import { NotificationSettingsSchema } from './users/entities/notificationSettings.entity';
 import { ExpensesModule } from './expenses/expenses.module';
 import { AgreementDocumentsSchema } from './properties/entities/agreement_documents.entity';
+import { MessagingController } from './messages/messages.controller';
+import { MessagingService } from './messages/messages.service';
+import { MessagesModule } from './messages/messages.module';
+import { MessageSchema } from './messages/entities/message.entity';
 
 @Module({
   imports: [
@@ -39,7 +43,7 @@ import { AgreementDocumentsSchema } from './properties/entities/agreement_docume
     UsersModule,
     EmailServiceModule,
     // MyMulterModule,
-    MongooseModule.forFeature([{ name: 'AgreementDocuments', schema: UserSchema },{ name: 'User', schema: AgreementDocumentsSchema }, { name: 'NotificationSettings', schema: NotificationSettingsSchema },{ name: 'Property', schema: PropertySchema }, { name: 'Room', schema: RoomSchema },  { name: 'Application', schema:  ApplicationSchema }, { name: 'Maintenance', schema:  MaintenanceSchema }, { name: 'LandlordAssignedTenant', schema:  LandlordAssignedTenantSchema }]),
+    MongooseModule.forFeature([{ name: 'AgreementDocuments', schema: UserSchema },{ name: 'Message', schema: MessageSchema },{ name: 'User', schema: AgreementDocumentsSchema }, { name: 'NotificationSettings', schema: NotificationSettingsSchema },{ name: 'Property', schema: PropertySchema }, { name: 'Room', schema: RoomSchema },  { name: 'Application', schema:  ApplicationSchema }, { name: 'Maintenance', schema:  MaintenanceSchema }, { name: 'LandlordAssignedTenant', schema:  LandlordAssignedTenantSchema }]),
     JwtModule.register({
       secret: 'your-secret-key-here',
       signOptions: { expiresIn: '1d' }, 
@@ -47,10 +51,11 @@ import { AgreementDocumentsSchema } from './properties/entities/agreement_docume
     AuthModule,
     PropertiesModule,
     RoomsModule,
+    MessagesModule,
     MaintenanceModule,
     ExpensesModule,
   ],
-  controllers: [AppController, UserController, AuthController, PropertiesController, RoomsController, UserController, MaintenanceController],
-  providers: [AppService, UserService, AuthService, EmailService, CloudinaryService, PropertiesService, RoomsService, MaintenanceService], 
+  controllers: [AppController, UserController, AuthController, PropertiesController, RoomsController, UserController, MaintenanceController, MessagingController],
+  providers: [AppService, UserService, AuthService, EmailService, CloudinaryService, PropertiesService, RoomsService, MaintenanceService, MessagingService], 
 })
 export class AppModule {}

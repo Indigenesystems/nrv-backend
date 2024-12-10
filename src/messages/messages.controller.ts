@@ -1,32 +1,80 @@
-import { Controller, Post, Body, Get, Param, Put } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  UseInterceptors,
+  UploadedFiles,
+  Res,
+  HttpStatus,
+} from '@nestjs/common';
 import { MessagingService } from './messages.service';
+import { CreateMessageDto } from './dto/create-message.dto';
+import { GetConversationDto } from './dto/get-conversation.dto';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
+import { Response } from 'express';
 
 @Controller('messages')
 export class MessagingController {
   constructor(private readonly messagingService: MessagingService) {}
 
-  // Send a message
-  @Post()
-  async sendMessage(@Body() createMessageDto: { conversationId: string, senderId: string, recipientId: string, content: string }) {
-    return this.messagingService.createMessage(createMessageDto.conversationId, createMessageDto.senderId, createMessageDto.recipientId, createMessageDto.content);
+  // Endpoint to send a message
+  @Post('send')
+  @UseInterceptors(FileFieldsInterceptor([{ name: 'file', maxCount: 5 }]))
+  async sendMessage(
+    @Body() createMessageDto: CreateMessageDto,
+    @UploadedFiles()
+    files: {
+      file?: Express.Multer.File;
+    },
+    @Res() res: Response,
+  ) {
+    const finalPayload ={ ...createMessageDto, ...files };
+    try {
+      const createdProperty = await this.messagingService.createMessage(finalPayload);
+      return res.status(HttpStatus.CREATED).json({
+        status: 'success',
+        message: 'message sent successfully',
+        data: createdProperty,
+      });
+    } catch (error) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        status: 'error',
+        message: error.message,
+      });
+    }
+
   }
 
-  // Get messages in a conversation
-  @Get(':conversationId')
-  async getMessages(@Param('conversationId') conversationId: string) {
-    return this.messagingService.getMessagesByConversation(conversationId);
+  // Endpoint to get all messages
+  @Get()
+  getAllMessages() {
+    return this.messagingService.getAllMessages();
   }
 
-  // Mark message as read
-  @Put('read/:messageId')
-  async markAsRead(@Param('messageId') messageId: string) {
-    return this.messagingService.markMessageAsRead(messageId);
+  // Endpoint to get messages for a specific recipient
+  @Get('recipient/:recipient')
+  getMessagesForRecipient(@Param('recipient') recipient: string) {
+    return this.messagingService.getMessagesForRecipient(recipient);
   }
 
-  // Get user conversations
-  @Get('conversations/:userId')
-  async getConversations(@Param('userId') userId: string) {
-    return this.messagingService.getConversationsByUser(userId);
+  // Endpoint to get conversation between sender and recipient
+  @Get('conversation/:sender/:recipient')
+  async getConversation(@Param() params: GetConversationDto,     @Res() res: Response) {
+    const { sender, recipient } = params;
+    try {
+      const conversation = await this.messagingService.getConversation(sender, recipient);
+      return res.status(HttpStatus.CREATED).json({
+        status: 'success',
+        message: 'conversation fetched successfully',
+        data: conversation,
+      });
+    } catch (error) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        status: 'error',
+        message: error.message,
+      });
+    }
   }
 }
-

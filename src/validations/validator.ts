@@ -134,3 +134,22 @@ export const createExpenseSchema = Joi.object({
 
 
 });
+
+export const createMessageSchema = Joi.object({
+  sender: Joi.string().max(50).required().messages({
+    'string.base': 'Sender must be a string',
+    'string.max': 'Sender name must not exceed 50 characters',
+    'any.required': 'Sender is required',
+  }),
+  recipient: Joi.string().max(50).required().messages({
+    'string.base': 'Recipient must be a string',
+    'string.max': 'Recipient name must not exceed 50 characters',
+    'any.required': 'Recipient is required',
+  }),
+  content: Joi.string().max(500).required().messages({
+    'string.base': 'Content must be a string',
+    'string.max': 'Content must not exceed 500 characters',
+    'any.required': 'Content is required',
+  }),
+});
+
