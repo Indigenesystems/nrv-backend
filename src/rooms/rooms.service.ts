@@ -101,7 +101,7 @@ export class RoomsService {
   async findAllApartments(
     page: number = 1,
     limit: number = 10,
-    search?: string,
+    search: string = "",
     minPrice?: number,
     maxPrice?: number,
     id?: any,
@@ -128,8 +128,7 @@ export class RoomsService {
         .where('listRoom')
         .equals(true);
     }
-    console.log({search});
-    if (search !== "") {
+    if (search) {
 
       
       const searchRegex = new RegExp(search, 'i');
@@ -157,9 +156,6 @@ export class RoomsService {
         },
       ]);
     }
-
-    console.log({query});
-    
 
     if (minPrice !== undefined || maxPrice !== undefined) {
       query = query.where('rentAmount');
