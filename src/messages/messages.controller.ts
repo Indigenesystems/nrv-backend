@@ -32,11 +32,11 @@ export class MessagingController {
   ) {
     const finalPayload ={ ...createMessageDto, ...files };
     try {
-      const createdProperty = await this.messagingService.createMessage(finalPayload);
+      const createdMessage = await this.messagingService.createMessage(finalPayload);
       return res.status(HttpStatus.CREATED).json({
         status: 'success',
         message: 'message sent successfully',
-        data: createdProperty,
+        data: createdMessage,
       });
     } catch (error) {
       return res.status(HttpStatus.BAD_REQUEST).json({

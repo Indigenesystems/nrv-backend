@@ -3,12 +3,14 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Message, MessageDocument } from '../messages/entities/message.entity';
 import { CloudinaryService } from 'src/upload/cloudinary.service';
+import { EmailService } from 'src/email-sender/email.service';
 
 @Injectable()
 export class MessagingService {
   constructor(
     @InjectModel(Message.name) private messageModel: Model<MessageDocument>,
     private cloudinaryService: CloudinaryService,
+    private emailService: EmailService,
   ) {}
 
   // Add a new message
@@ -17,16 +19,34 @@ export class MessagingService {
 
     if (createMessageDto.file) {
       fileUrls = await Promise.all(
-        createMessageDto.file.map(
-          async (file: Express.Multer.File) => {
-            return await this.cloudinaryService.upload(file);
-          },
-        ),
+        createMessageDto.file.map(async (file: Express.Multer.File) => {
+          return await this.cloudinaryService.upload(file);
+        }),
       );
-
     }
-    const newMessage = new this.messageModel({ sender: createMessageDto.sender, recipient: createMessageDto.recipient, content: createMessageDto.content , files: fileUrls});
-    return await newMessage.save(); // Save the message to MongoDB
+
+    const newMessage = new this.messageModel({
+      sender: createMessageDto.sender,
+      recipient: createMessageDto.recipient,
+      content: createMessageDto.content,
+      files: fileUrls,
+    });
+
+    const response = await newMessage.save();
+
+    // Populate sender and recipient details
+    const populatedResponse = await this.messageModel
+      .findById(response._id)
+      .populate('sender', 'firstName lastName email') // Replace fields with those in your schema
+      .populate('recipient', 'firstName lastName email'); // Replace fields with those in your schema
+
+    this.emailService.sendMessageNotification({
+      recipientName: populatedResponse.recipient['firstName'],
+      senderName: populatedResponse.sender['firstName'],
+      recipientEmail: populatedResponse.recipient['email'],
+      messageContent: populatedResponse.content,
+    });
+    return populatedResponse;
   }
 
   // Get all messages
@@ -53,5 +73,4 @@ export class MessagingService {
       .populate('recipient') // Populate the recipient field with user data
       .exec();
   }
-  
 }
