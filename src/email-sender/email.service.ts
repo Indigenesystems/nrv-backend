@@ -1078,18 +1078,7 @@ export class EmailService {
   </head>
   <body style="background-color: #ffffff;">
     <table border="0" cellpadding="0" cellspacing="0" width="100%">
-      <tr>
   
-      <td align="center" valign="top" style="padding: 36px 24px;">
-          <a href="https://nrv-frontend.onrender.com/" target="_blank" style="display: inline-block;">
-            <img src="https://res.cloudinary.com/dzv98o7ds/image/upload/v1734122260/nrv-logo_wzjwam.webp" 
-                 alt="Naija Rent Verify Logo" 
-                 border="0" 
-                 width="100" 
-                 style="display: block; width: 100%; max-width: 100%; height: auto;">
-          </a>
-        </td>
-      </tr>
   
       <tr>
         <td align="center" bgcolor="#e9ecef">
