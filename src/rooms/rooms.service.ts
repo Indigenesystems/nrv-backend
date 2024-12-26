@@ -15,8 +15,10 @@ export class RoomsService {
     @InjectModel(Property.name) private readonly propertyModel: Model<Property>,
     @InjectModel(LandlordAssignedTenant.name)
     private readonly landlordAssignedTenantModel: Model<LandlordAssignedTenant>,
-    @InjectModel(AgreementDocuments.name) private readonly agreementDocumentsModel: Model<AgreementDocuments>,
-    @InjectModel(Application.name) private readonly applicationModel: Model<Application>,
+    @InjectModel(AgreementDocuments.name)
+    private readonly agreementDocumentsModel: Model<AgreementDocuments>,
+    @InjectModel(Application.name)
+    private readonly applicationModel: Model<Application>,
     private cloudinaryService: CloudinaryService,
   ) {}
 
@@ -101,7 +103,7 @@ export class RoomsService {
   async findAllApartments(
     page: number = 1,
     limit: number = 10,
-    search: string = "",
+    search: string = '',
     minPrice?: number,
     maxPrice?: number,
     id?: any,
@@ -129,8 +131,6 @@ export class RoomsService {
         .equals(true);
     }
     if (search) {
-
-      
       const searchRegex = new RegExp(search, 'i');
       query.or([
         {
@@ -188,7 +188,7 @@ export class RoomsService {
       return { property, hasApplied: true, agreementDocument };
     }
     if (property && hasTenantApplied == null) {
-      return { property, hasApplied: false , agreementDocument};
+      return { property, hasApplied: false, agreementDocument };
     }
     return new NotFoundException();
   }
@@ -223,7 +223,8 @@ export class RoomsService {
             path: 'propertyId', // Populate nested field inside 'propertyId'
           },
         })
-        .populate('applicant');
+        .populate('applicant')
+        .populate('ownerId');
       return rentedApartments;
     } catch (error) {
       throw new NotFoundException(error);
@@ -236,33 +237,35 @@ export class RoomsService {
   ): Promise<LandlordAssignedTenant | null> {
     try {
       // Attempt to update the landlordAssignedTenantModel
-      const updatedTenant = await this.landlordAssignedTenantModel.findByIdAndUpdate(
-        id,
-        { rentEndDate },
-        { new: true },
-      );
-  
+      const updatedTenant =
+        await this.landlordAssignedTenantModel.findByIdAndUpdate(
+          id,
+          { rentEndDate },
+          { new: true },
+        );
+
       // If the first update succeeds, return the result
       if (updatedTenant) {
         return updatedTenant;
       }
-  
+
       // Fallback to updating the applicationModel
       const updatedApplication = await this.applicationModel.findByIdAndUpdate(
         id,
         { rentEndDate },
         { new: true },
       );
-  
+
       // Return the result of the fallback update
       return updatedApplication || null;
     } catch (error) {
       // Handle any errors
       console.error(`Error updating rent end date for ID: ${id}`, error);
-      throw new Error('Unable to update rent end date. Please try again later.');
+      throw new Error(
+        'Unable to update rent end date. Please try again later.',
+      );
     }
   }
-  
 
   async assignStartAndEndDate(
     id: string,
