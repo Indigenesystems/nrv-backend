@@ -81,14 +81,15 @@ export class MaintenanceController {
     }
   }
 
-  @Get('/resolve/:id')
+  @Get('/resolve/:status/:id')
   async update(
     @Param('id') id: string,
+    @Param('status') status: string,
   ) {
     try {
 
       // Update maintenance record using service
-      const data = await this.maintenanceService.updatetoResolved(id);
+      const data = await this.maintenanceService.updateMaintenanceStatus(id, status);
 
       return this.createSuccessResponse({
         message: "Issue marked as resolved",

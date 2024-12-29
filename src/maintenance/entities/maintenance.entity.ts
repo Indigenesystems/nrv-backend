@@ -22,8 +22,8 @@ export class Maintenance {
     @Prop({ type: Types.ObjectId, ref: 'User', validate: /^[0-9a-fA-F]{24}$/ })
     createdBy: User;
 
-    @Prop({ default: 'New', enum: ['New', 'Fixed', 'Rejected'] })
-    @IsEnum(['New', 'Fixed', 'Rejected'])
+    @Prop({ default: 'New', enum: ['New', 'Acknowledged', 'Resolved', 'Declined'] })
+    @IsEnum(['New', 'Acknowledged', 'Resolved', 'Declined'])
     status: string;
 
     @Prop()

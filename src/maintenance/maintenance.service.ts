@@ -83,10 +83,10 @@ export class MaintenanceService {
     }
   }
 
-  async updatetoResolved(id: string): Promise<Maintenance | null> {
+  async updateMaintenanceStatus(id: string, status: string): Promise<Maintenance | null> {
     try {
       const updatedMaintenance = await this.maintenanceModel.findByIdAndUpdate(id, {
-        status: "Resolved"
+        status: status
       }, { new: true });
 
       return updatedMaintenance;
