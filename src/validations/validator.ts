@@ -36,11 +36,9 @@ export const loginUserSchema = Joi.object({
 
 export const createPropertySchema = Joi.object({
   streetAddress: Joi.string().required(),
-  unit: Joi.string().required(),
   city: Joi.string().required(),
   state: Joi.string().required(),
-  zipCode: Joi.string().required(),
-  propertyType: Joi.string().required(),
+  zipCode: Joi.string().optional().allow("null", 0, ""),
   createdBy: Joi.string().required(),
   file: Joi.any(),
   landlordInsurancePolicy: Joi.any().optional(), // Assuming these fields can accept any type of data
@@ -50,11 +48,9 @@ export const createPropertySchema = Joi.object({
 
 export const updatePropertySchema = Joi.object({
   streetAddress: Joi.string().optional(),
-  unit: Joi.string().optional(),
   city: Joi.string().optional(),
   state: Joi.string().optional(),
   zipCode: Joi.string().optional(),
-  propertyType: Joi.string().optional(),
   createdBy: Joi.string().optional(),
   file: Joi.any().optional(),
   landlordInsurancePolicy: Joi.any().optional(),
@@ -65,18 +61,18 @@ export const updatePropertySchema = Joi.object({
 
 
 export const createRoomSchema = Joi.object({
-  name: Joi.string().required(),
   description: Joi.string().required(),
   propertyId: Joi.any().required(),
-  targetDeposit: Joi.string().required(),
+  propertyType: Joi.any().required(),
+  //targetDeposit: Joi.string().required(),
   rentAmountMetrics: Joi.string().required(),
   rentAmount: Joi.string().required(),
   file: Joi.any().optional(),
   noOfBaths: Joi.string().required(),
-  targetRent: Joi.string().required(),
-  noOfPools: Joi.string().required(),
+  //targetRent: Joi.string().required(),
+  noOfPools: Joi.string().optional().allow("", null),
   noOfRooms: Joi.string().required(),
-  otherAmentities: Joi.string().required(),
+  otherAmentities: Joi.string().optional().allow("", null),
 });
 
 export const createMaintenanceSchema = Joi.object({

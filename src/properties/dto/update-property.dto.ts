@@ -7,9 +7,6 @@ export class UpdatePropertyDto {
     streetAddress?: string;
 
     @IsString()
-    unit?: string;
-
-    @IsString()
     city?: string;
 
     @IsString()
@@ -17,9 +14,6 @@ export class UpdatePropertyDto {
 
     @IsString()
     zipCode?: string;
-
-    @IsString()
-    propertyType?: string;
 
     @IsString()
     createdBy: string;

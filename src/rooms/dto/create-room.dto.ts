@@ -4,15 +4,15 @@ import { IsString, IsNotEmpty } from 'class-validator';
 export class CreateRoomDTO {
     @IsString()
     @IsNotEmpty()
-    name: string;
-
-    @IsString()
-    @IsNotEmpty()
     description: string;
 
     @IsString()
     @IsNotEmpty()
     propertyId: string;
+
+    @IsString()
+    @IsNotEmpty()
+    propertyType: string;
 
     @IsString()
     @IsNotEmpty()
@@ -22,20 +22,19 @@ export class CreateRoomDTO {
     @IsNotEmpty()
     rentAmount: string;
 
-    @IsString()
-    @IsNotEmpty()
-    targetRent: string;
+    // @IsString()
+    // @IsNotEmpty()
+    // targetRent: string;
 
-    @IsString()
-    @IsNotEmpty()
-    targetDeposit: string;
+    // @IsString()
+    // @IsNotEmpty()
+    // targetDeposit: string;
 
     @IsString()
     @IsNotEmpty()
     noOfBaths: string;
 
     @IsString()
-    @IsNotEmpty()
     noOfPools: string;
     
     @IsString()
@@ -43,7 +42,6 @@ export class CreateRoomDTO {
     noOfRooms: string;
     
     @IsString()
-    @IsNotEmpty()
     otherAmentities: string;
 }
 

@@ -9,10 +9,6 @@ export class CreatePropertyDto {
 
     @IsString()
     @IsNotEmpty()
-    unit: string;
-
-    @IsString()
-    @IsNotEmpty()
     city: string;
 
     @IsString()
@@ -22,10 +18,6 @@ export class CreatePropertyDto {
     @IsString()
     @IsNotEmpty()
     zipCode: string;
-
-    @IsString()
-    @IsNotEmpty()
-    propertyType: string;
 
     @IsString()
     @IsNotEmpty()

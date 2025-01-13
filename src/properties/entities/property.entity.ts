@@ -8,9 +8,6 @@ export class Property {
   streetAddress: string;
 
   @Prop()
-  unit: string;
-
-  @Prop()
   city: string;
 
   @Prop()
@@ -18,9 +15,6 @@ export class Property {
 
   @Prop()
   zipCode: string;
-
-  @Prop()
-  propertyType: string;
 
   @Prop()
   file: string;

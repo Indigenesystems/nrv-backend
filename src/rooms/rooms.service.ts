@@ -32,11 +32,11 @@ export class RoomsService {
     const roomId = maxRoomId + 1;
 
     let {
-      name,
       description,
       propertyId,
-      targetDeposit,
-      targetRent,
+      propertyType,
+      // targetDeposit,
+      // targetRent,
       rentAmountMetrics,
       rentAmount,
       noOfRooms,
@@ -49,11 +49,11 @@ export class RoomsService {
 
     const finalPayload = {
       roomId,
-      name,
       description,
       propertyId,
-      targetDeposit,
-      targetRent,
+      propertyType,
+      // targetDeposit,
+      // targetRent,
       rentAmountMetrics,
       rentAmount: parsedrentAmount,
       noOfRooms,

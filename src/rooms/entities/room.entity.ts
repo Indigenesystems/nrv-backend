@@ -11,6 +11,9 @@ export class Room {
     name: string;
 
     @Prop()
+    propertyType: string;
+
+    @Prop()
     description: string;
 
     @Prop()
@@ -22,11 +25,11 @@ export class Room {
     @Prop()
     file: string;
 
-    @Prop()
-    targetRent: string;
+    // @Prop()
+    // targetRent: string;
 
-    @Prop()
-    targetDeposit: string;
+    // @Prop()
+    // targetDeposit: string;
 
     @Prop()
     noOfRooms: string;
