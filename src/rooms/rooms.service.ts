@@ -225,7 +225,20 @@ export class RoomsService {
         })
         .populate('applicant')
         .populate('ownerId');
-      return rentedApartments;
+
+        let x = await this.landlordAssignedTenantModel.find({
+          applicant: new mongoose.Types.ObjectId(id),
+          status: 'active',
+        })
+          .populate('propertyId')
+          .populate('applicant')
+          .populate('ownerId')
+          .lean();
+
+         
+          
+    
+      return [...rentedApartments, ...x];
     } catch (error) {
       throw new NotFoundException(error);
     }

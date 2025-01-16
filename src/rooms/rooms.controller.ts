@@ -151,9 +151,6 @@ export class RoomsController {
     }
   }
   
-  
-  
-  
 
   @Get('/update/status')
   async update(@Query('id') id: string, @Query('status') status: boolean) {

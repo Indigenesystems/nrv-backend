@@ -113,6 +113,8 @@ export class UserService {
     try {
       const createdUser: any = await newUser.save();
       if (createdUser) {
+        console.log({createdUser});
+        
         await this.emailService.sendUserCreatedByLandlordEmail(user);
         
         // Create notification settings for the new user
