@@ -9,18 +9,18 @@ export class EmailService {
 
   constructor() {
     this.transporter = nodemailer.createTransport({
-      // host: 'smtp.zoho.com',
-      // port: 465, // or 465 for SSL/TLS
-      // secure: true, // Set to true if using SSL/TLS
-      // auth: {
-      //   user: "hello@naijarentverify.com",
-      //   pass: "Maythird1.!"
-      // }
-      service: "gmail",
+      host: 'smtp.zoho.com',
+      port: 465, // or 465 for SSL/TLS
+      secure: true, // Set to true if using SSL/TLS
       auth: {
-          user: "mailto:ojobabajide629@gmail.com",
-          pass: "cbab fkou ppva fhxc",
-      },
+        user: "hello@naijarentverify.com",
+        pass: "Maythird1.!"
+      }
+      // service: "gmail",
+      // auth: {
+      //     user: "mailto:ojobabajide629@gmail.com",
+      //     pass: "cbab fkou ppva fhxc",
+      // },
     });
   }
 
@@ -192,7 +192,7 @@ export class EmailService {
             </tr>
               <tr>
                 <td align="left" bgcolor="#ffffff" style="padding: 24px; font-family: 'Source Sans Pro', Helvetica, Arial, sans-serif; font-size: 16px; line-height: 24px;">
-                    <p style="margin: 0;">If You have any questions or encounter any issues while accessing your account, please feel free to contact our support team at <a href="mailto:[supportTeamEmail]">[supportTeamEmail]</a>. We are here to assist you.</p>
+                    <p style="margin: 0;">If You have any questions or encounter any issues while accessing your account, please feel free to contact our support team at <a href="mailto:hello@naijarentverify.com">hello@naijarentverify.com</a>. We are here to assist you.</p>
                 </td>
               </tr>
 
@@ -439,7 +439,7 @@ export class EmailService {
             </tr>
               <tr>
                 <td align="left" bgcolor="#ffffff" style="padding: 24px; font-family: 'Source Sans Pro', Helvetica, Arial, sans-serif; font-size: 16px; line-height: 24px;">
-                    <p style="margin: 0;">If You have any questions or encounter any issues while accessing your account, please feel free to contact our support team at <a href="mailto:[supportTeamEmail]">support@naijarentverify.com</a>. We are here to assist you.</p>
+                    <p style="margin: 0;">If You have any questions or encounter any issues while accessing your account, please feel free to contact our support team at <a href="mailto:hello@naijarentverify.com">support@naijarentverify.com</a>. We are here to assist you.</p>
                 </td>
               </tr>
 
@@ -675,14 +675,17 @@ export class EmailService {
                   <p style="margin: 0;">Your landlord has onboarded you as a tenent. Here is your default password - [verificationToken]</p>
                 </td>
               </tr>
+                            <tr>
+                <td align="left" bgcolor="#ffffff" style="padding: 24px; font-family: 'Source Sans Pro', Helvetica, Arial, sans-serif; font-size: 16px; line-height: 24px;">
+                  <p style="margin: 0;">Kindly click the link to login : <a>https://nrv-frontend.onrender.com/sign-in</a></p>
+                </td>
+              </tr>
               <tr>
-              <td align="left" bgcolor="#ffffff" style="padding: 24px; font-family: 'Source Sans Pro', Helvetica, Arial, sans-serif; font-size: 16px; line-height: 24px;">
-                  <h1 style="margin: 0; font-size: 32px; font-weight: 700; letter-spacing: -1px; line-height: 48px;">[verificationToken]</h1>
-              </td>
+  
             </tr>
               <tr>
                 <td align="left" bgcolor="#ffffff" style="padding: 24px; font-family: 'Source Sans Pro', Helvetica, Arial, sans-serif; font-size: 16px; line-height: 24px;">
-                    <p style="margin: 0;">If You have any questions or encounter any issues while accessing your account, please feel free to contact our support team at <a href="mailto:[supportTeamEmail]">[supportTeamEmail]</a>. We are here to assist you.</p>
+                    <p style="margin: 0;">If You have any questions or encounter any issues while accessing your account, please feel free to contact our support team at <a href="mailto:hello@naijarentverify.com">hello@naijarentverify.com</a>. We are here to assist you.</p>
                 </td>
               </tr>
 
@@ -926,7 +929,7 @@ export class EmailService {
             </tr>
               <tr>
                 <td align="left" bgcolor="#ffffff" style="padding: 24px; font-family: 'Source Sans Pro', Helvetica, Arial, sans-serif; font-size: 16px; line-height: 24px;">
-                    <p style="margin: 0;">If You have any questions or encounter any issues while accessing your account, please feel free to contact our support team at <a href="mailto:[supportTeamEmail]">[supportTeamEmail]</a>. We are here to assist you.</p>
+                    <p style="margin: 0;">If You have any questions or encounter any issues while accessing your account, please feel free to contact our support team at <a href="mailto:hello@naijarentverify.com">hello@naijarentverify.com</a>. We are here to assist you.</p>
                 </td>
               </tr>
 
