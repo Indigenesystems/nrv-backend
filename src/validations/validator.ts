@@ -16,10 +16,10 @@ export const createUserSchema = Joi.object({
   firstName: Joi.string().required(),
   lastName: Joi.string().required(),
   email: Joi.string().email().required(),
-  nin: Joi.string().required(),
+  nin: Joi.string().optional().allow("", null),
   password: Joi.string().required(),
   phoneNumber: Joi.string().required(),
-  homeAddress: Joi.string().required(),
+  homeAddress: Joi.string().optional().allow("", null),
   accountType: Joi.string().valid('tenant', 'landlord').required(), // Validate accountType to be either 'landlord' or 'tenant'
 });
 

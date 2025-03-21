@@ -1,5 +1,25 @@
-import { Controller, Post, Body, Get, BadRequestException, NotFoundException, InternalServerErrorException, Put, Param, Patch } from '@nestjs/common';
-import { createUserSchema, confirmUserSchema, createUserByLandlordSchema } from '../validations/validator';
+import {
+  Controller,
+  Post,
+  Body,
+  Get,
+  BadRequestException,
+  NotFoundException,
+  InternalServerErrorException,
+  Put,
+  Param,
+  Patch,
+  UseInterceptors,
+  UploadedFiles,
+  Res,
+  HttpStatus,
+  HttpException,
+} from '@nestjs/common';
+import {
+  createUserSchema,
+  confirmUserSchema,
+  createUserByLandlordSchema,
+} from '../validations/validator';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UserService } from './users.service';
 import { ConfirmUserDto } from './dto/confirm-user.dto';
@@ -8,14 +28,16 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { AuthService } from '../auth/auth.service';
 import * as bcrypt from 'bcryptjs';
 import { UpdateNotificationSettingsDto } from './dto/update-notificationSettings.dto';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
+import { Response } from 'express';
 
 @Controller('users')
 export class UserController {
   constructor(
     private userService: UserService,
-    private authService: AuthService
-  ){ }
-  
+    private authService: AuthService,
+  ) {}
+
   @Post()
   async createUser(@Body() userData: CreateUserDto) {
     try {
@@ -29,14 +51,13 @@ export class UserController {
 
       if (createdUser.firstName) {
         return {
-          status: "success",
-          message: "User created successfully",
-          data: createdUser
+          status: 'success',
+          message: 'User created successfully',
+          data: createdUser,
         };
       } else {
         throw new BadRequestException(createdUser);
       }
-
     } catch (error) {
       throw new BadRequestException(error.message);
     }
@@ -44,7 +65,6 @@ export class UserController {
   @Post('/landlord')
   async createUserByLandLord(@Body() userData: CreateUserDto | any) {
     try {
-
       const validationResult = createUserByLandlordSchema.validate(userData);
 
       if (validationResult.error) {
@@ -55,14 +75,13 @@ export class UserController {
 
       if (createdUser.firstName) {
         return {
-          status: "success",
-          message: "User created successfully",
-          data: createdUser
+          status: 'success',
+          message: 'User created successfully',
+          data: createdUser,
         };
       } else {
         throw new BadRequestException(createdUser);
       }
-
     } catch (error) {
       throw new BadRequestException(error.message);
     }
@@ -73,15 +92,15 @@ export class UserController {
     const users = await this.userService.findAllUsers();
     if (!users) {
       return {
-        status: "success",
-        message: "No user found",
-        data: null
-      }
+        status: 'success',
+        message: 'No user found',
+        data: null,
+      };
     } else {
       return {
-        status: "success",
-        message: "All users fetched successfully",
-        data: users
+        status: 'success',
+        message: 'All users fetched successfully',
+        data: users,
       };
     }
   }
@@ -96,14 +115,16 @@ export class UserController {
       }
       const result = await this.userService.confirmAccount(body);
       if (result) {
-
-        return result
+        return result;
       } else {
-        throw new NotFoundException('User not found'); 
+        throw new NotFoundException('User not found');
       }
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof BadRequestException) {
-        throw error; 
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
       } else {
         throw new InternalServerErrorException('Failed to confirm account');
       }
@@ -111,45 +132,69 @@ export class UserController {
   }
 
   @Put(':id')
-  async updateUser(@Param('id') id: string, @Body() updatedUser: User): Promise<User> {
-    return await this.userService.updateUser(id, updatedUser);
+  @UseInterceptors(FileFieldsInterceptor([{ name: 'file', maxCount: 1 }]))
+  async updateUser(
+    @Param('id') id: string,
+    @Body() body: User,
+    @UploadedFiles()
+    files: {
+      file?: Express.Multer.File;
+    },
+    @Res() res: Response,
+  ): Promise<Partial<User | any>> {
+    try {
+      console.log({files: files.file[0]});
+      
+      const updatedUser = await this.userService.updateUser(id, {
+        ...body,
+        ...files,
+      });
+
+      console.log({updatedUser});
+      
+      return res.status(HttpStatus.OK).json({
+        status: 'success',
+        message: 'User updated successfully',
+        data: updatedUser,
+      });
+    } catch (error) {
+      console.error('Error updating user:', error);
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        status: 'error',
+        message: error.message,
+      });
+    }
   }
 
   @Post('/request-password-reset')
-async requestPasswordReset(@Body('email') email: string) {
-  const user: any = await this.userService.findUserByEmail(email);
-  if (!user) {
-    // You can either notify that the email was not found or just return a success message
-    return;
+  async requestPasswordReset(@Body('email') email: string) {
+    const user: any = await this.userService.findUserByEmail(email);
+    if (!user) {
+      // You can either notify that the email was not found or just return a success message
+      return;
+    }
+
+    const token = this.authService.createPasswordResetToken(user._id);
+    await this.userService.savePasswordResetToken(user.email, token);
+
+    return { message: 'Password reset link sent.' };
   }
 
-  const token = this.authService.createPasswordResetToken(user._id);
-  await this.userService.savePasswordResetToken(user.email, token);
+  @Post('reset-password')
+  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
+    const { token, newPassword } = resetPasswordDto;
 
-  return { message: 'Password reset link sent.' };
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await this.userService.updatePassword(token, hashedPassword);
+
+    return { message: 'Password successfully reset.' };
+  }
+
+  @Patch(':id/notification-settings')
+  async updateNotificationSettings(
+    @Param('id') id: string,
+    @Body() settings: Partial<UpdateNotificationSettingsDto>,
+  ): Promise<any> {
+    return this.userService.updateNotificationSettings(id, settings);
+  }
 }
-
-@Post('reset-password')
-async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
-  const { token, newPassword } = resetPasswordDto;
-  
-
-
-  const hashedPassword = await bcrypt.hash(newPassword, 10);
-  await this.userService.updatePassword(token, hashedPassword);
-
-  return { message: 'Password successfully reset.' };
-}
-
-@Patch(':id/notification-settings')
-
-async updateNotificationSettings(
-  @Param('id') id: string,
-  @Body() settings: Partial<UpdateNotificationSettingsDto>,
-): Promise<any> {
-  return this.userService.updateNotificationSettings(id, settings);
-}
-
-
-}
-

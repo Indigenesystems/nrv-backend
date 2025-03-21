@@ -13,7 +13,7 @@ export class User {
   @Prop({ unique: true })
   email: string;
 
-  @Prop({ unique: true })
+  @Prop({ unique: false })
   nin: string;
 
   @Prop()
@@ -46,9 +46,26 @@ export class User {
   @Prop({ type: [Object] })
   tenantVerficationHistory?: object[];
 
-  // Timestamps fields are automatically managed by Mongoose
-  // createdAt: Date;
-  // updatedAt: Date;
+  @Prop()
+  employmentStatus?: string;
+
+  @Prop()
+  currentEmployer?: string;
+
+  @Prop()
+  monthlyIncome?: string;
+
+  @Prop()
+  jobTitle?: string;
+
+  @Prop()
+  profilePicture?: string;
+
+  @Prop()
+  gender?: string;
+
+  @Prop()
+  dateOfBirth?: string;
 }
 
 export type UserDocument = User & Document;
@@ -56,7 +73,7 @@ export type UserDocument = User & Document;
 export const UserSchema = SchemaFactory.createForClass(User);
 
 // Add pre hook to hash the password before saving
-UserSchema.pre<UserDocument>('save', async function(next) {
+UserSchema.pre<UserDocument>('save', async function (next) {
   try {
     if (!this.isModified('password') || !this.password) {
       return next();

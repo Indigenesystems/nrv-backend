@@ -12,6 +12,7 @@ import { Room } from '../rooms/entities/room.entity';
 import { Property } from '../properties/entities/property.entity';
 import { NotificationSettings } from './entities/notificationSettings.entity';
 import { AgreementDocuments } from 'src/properties/entities/agreement_documents.entity';
+import { CloudinaryService } from 'src/upload/cloudinary.service';
 
 
 @Injectable()
@@ -26,6 +27,7 @@ export class UserService {
     private jwtService: JwtService,
     private emailService: EmailService,
     private propertiesService: PropertiesService,
+    private cloudinaryService: CloudinaryService,
 
   ) { }
 
@@ -54,7 +56,7 @@ export class UserService {
       return { message: 'An account with this email already exists' };
     }
 
-    if (checkExistingUserByNin) {
+    if (checkExistingUserByNin && checkExistingUserByNin.nin != "") {
       return { message: 'An account with this NIN already exists' };
     }
 
@@ -168,9 +170,22 @@ export class UserService {
     return { user, accessToken };
   }
 
-  async updateUser(id: string, updatedUser: User): Promise<User> {
-    return await this.userModel.findByIdAndUpdate(id, updatedUser, { new: true });
-  }
+  async updateUser(id: string, updatedUser: any): Promise<User> {
+
+    let fileUrl: string | undefined;
+    if (updatedUser.file && updatedUser.file.length > 0) {
+        fileUrl = await this.cloudinaryService.upload(updatedUser.file[0]);
+        console.log({fileUrl});
+        
+    }
+
+    const updateData = { ...updatedUser, profilePicture: fileUrl };
+
+    console.log({updateData});
+    
+    return await this.userModel.findByIdAndUpdate(id, updateData, { new: true });
+}
+
 
   
   async savePasswordResetToken(email: string, token: string): Promise<void> {
