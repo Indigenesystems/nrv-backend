@@ -143,15 +143,11 @@ export class UserController {
     @Res() res: Response,
   ): Promise<Partial<User | any>> {
     try {
-      console.log({files: files.file[0]});
-      
       const updatedUser = await this.userService.updateUser(id, {
         ...body,
         ...files,
       });
 
-      console.log({updatedUser});
-      
       return res.status(HttpStatus.OK).json({
         status: 'success',
         message: 'User updated successfully',

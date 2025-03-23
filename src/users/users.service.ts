@@ -179,7 +179,7 @@ export class UserService {
         
     }
 
-    const updateData = { ...updatedUser, profilePicture: fileUrl };
+    const updateData = { ...updatedUser, file: fileUrl };
 
     console.log({updateData});
     

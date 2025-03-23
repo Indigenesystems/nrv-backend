@@ -37,7 +37,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
     if(user.status === "inactive"){
-        throw new UnauthorizedException('Kindly confirm you account');
+        return {user}
     }
     const notificationSettings = await this.notificationSettingsModel.findOne({userId: user._id});
     const payload = { email: user.email, sub: user["_id"] };

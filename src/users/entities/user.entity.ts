@@ -59,7 +59,7 @@ export class User {
   jobTitle?: string;
 
   @Prop()
-  profilePicture?: string;
+  file?: string;
 
   @Prop()
   gender?: string;
