@@ -40,10 +40,18 @@ export const createPropertySchema = Joi.object({
   state: Joi.string().required(),
   zipCode: Joi.string().optional().allow("null", 0, ""),
   createdBy: Joi.string().required(),
-  file: Joi.any(),
-  landlordInsurancePolicy: Joi.any().optional(), // Assuming these fields can accept any type of data
-  // utilityAndMaintenance: Joi.any(),
-  // otherDocuments: Joi.any(),
+  file: Joi.any().optional(),
+  
+  // Optional array fields
+  landlordInsurancePolicy: Joi.array().items(Joi.string()).optional(), // Assuming array of strings
+  utilityAndMaintenance: Joi.array().items(Joi.string()).optional(), // Assuming array of strings
+  otherDocuments: Joi.array().items(Joi.string()).optional(), // Assuming array of strings
+
+  // New optional fields
+  preferredTenants: Joi.array().items(Joi.string()).optional(), // Assuming array of strings (e.g., ['Families', 'Professionals'])
+  propertyName: Joi.string().optional(), // Property name, e.g., 'Babajide Ojo'
+  propertyType: Joi.any().optional(), // Assuming this is an object with 'value' and 'label'
+  rentCollection: Joi.any().optional() // Assuming this is an object with 'value' and 'label'
 });
 
 export const updatePropertySchema = Joi.object({

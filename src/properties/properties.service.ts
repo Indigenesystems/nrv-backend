@@ -79,8 +79,12 @@ export class PropertiesService {
       landlordInsurancePolicy: landlordInsurancePolicyUrls,
       utilityAndMaintenance: utilityAndMaintenanceUrls,
       otherDocuments: otherDocumentsUrls,
+      preferredTenants: createPropertyDto.preferredTenants || [], // Defaulting to an empty array if not provided
+      propertyName: createPropertyDto.propertyName || '', // Defaulting to an empty string if not provided
+      rentCollection: createPropertyDto.rentCollection || { value: '', label: '' }, // Defaulting to an empty object if not provided
     };
-    // Save the new property to the database
+    
+ 
     const newProperty = new this.propertyModel(propertyData);
     const createdProperty = await newProperty.save();
 

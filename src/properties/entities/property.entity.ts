@@ -29,8 +29,34 @@ export class Property {
   otherDocuments: string[];
 
   @Prop({ type: Types.ObjectId, ref: 'User' })
-  createdBy: User; // Assuming you have a User schema
+  createdBy: User;
 
+  // Optional fields
+  @Prop({ required: false })
+  preferredTenants: string[]; // Optional array of strings
+
+  @Prop({ required: false })
+  propertyName: string; // Optional string
+
+  // Explicitly define the object type for propertyType
+  @Prop({
+    type: Object,
+    required: false,
+  })
+  propertyType: {
+    value: string;
+    label: string;
+  };
+
+  // Explicitly define the object type for rentCollection
+  @Prop({
+    type: Object,
+    required: false,
+  })
+  rentCollection: {
+    value: string;
+    label: string;
+  };
 }
 
 export type PropertyDocument = Property & Document;

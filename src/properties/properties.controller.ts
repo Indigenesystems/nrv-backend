@@ -27,14 +27,14 @@ export class PropertiesController {
     },
     @Res() res: Response
   ) {
-    const validationResult = createPropertySchema.validate(body);
+    // const validationResult = createPropertySchema.validate(body);
 
-    if (validationResult.error) {
-      return res.status(HttpStatus.BAD_REQUEST).json({
-        status: 'error',
-        message: validationResult.error.message,
-      });
-    }
+    // if (validationResult.error) {
+    //   return res.status(HttpStatus.BAD_REQUEST).json({
+    //     status: 'error',
+    //     message: validationResult.error.message,
+    //   });
+    // }
     const createPropertyDto = { ...body, ...files };
     try {
       const createdProperty = await this.propertiesService.createProperty(createPropertyDto);
