@@ -31,12 +31,15 @@ export class PropertiesService {
     let landlordInsurancePolicyUrls: any = null;
     let utilityAndMaintenanceUrls: any = null;
     let otherDocumentsUrls: any = null;
+    let fileUrl: any = null;
 
-    // Upload single file
-    const fileUrl = await this.cloudinaryService.upload(
+ if (createPropertyDto.file){
+     // Upload single file
+     fileUrl = await this.cloudinaryService.upload(
       createPropertyDto.file[0],
     );
 
+ }
     if (createPropertyDto.landlordInsurancePolicy) {
       landlordInsurancePolicyUrls = await Promise.all(
         createPropertyDto.landlordInsurancePolicy.map(

@@ -10,6 +10,7 @@ import { Application } from 'src/properties/entities/application.entity';
 import { Property } from 'src/properties/entities/property.entity';
 import { CloudinaryService } from 'src/upload/cloudinary.service';
 import { NotificationSettings } from '../users/entities/notificationSettings.entity';
+import { EmailService } from 'src/email-sender/email.service';
 
 @Injectable()
 export class AuthService {
@@ -19,6 +20,7 @@ export class AuthService {
     private userService: UserService,
     private jwtService: JwtService,
     private cloudinaryService: CloudinaryService,
+    private emailService: EmailService,
   ) {}
 
   async validateUser(email: string, password: string): Promise<User | null> {
@@ -36,12 +38,15 @@ export class AuthService {
     if (!user) {
       throw new UnauthorizedException('Invalid email or password');
     }
-    if(user.status === "inactive"){
-        return {user}
-    }
+
     const notificationSettings = await this.notificationSettingsModel.findOne({userId: user._id});
     const payload = { email: user.email, sub: user["_id"] };
     const accessToken = this.jwtService.sign(payload);
+
+    if(user.status === "inactive"){
+      await this.emailService.sendUserCreatedEmail(user);
+      return { user, accessToken , notificationSettings};
+    }
     return { user, accessToken , notificationSettings};
   }
 
