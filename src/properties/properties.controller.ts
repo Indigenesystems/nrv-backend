@@ -93,14 +93,16 @@ export class PropertiesController {
     }
   }
 
-  @Get('/all/:id')
+  @Get('/all/:userId')
   async findPropertiesByUserId(
-    @Param('id') id: string,
+    @Param('userId') userId: string,
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10,
     @Res() res: Response
   ) {
-    const properties = await this.propertiesService.findPropertyByUserId(id, page, limit);
+    console.log({userId});
+    
+    const properties = await this.propertiesService.findAllProperty( page, limit, userId);
 
     if (!properties || properties.length === 0) {
       return res.status(HttpStatus.OK).json({

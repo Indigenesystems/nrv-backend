@@ -47,7 +47,6 @@ export class RoomsController {
   ) {
 
     const properties = await this.roomsService.findAllApartments(page, limit, search, minPrice, maxPrice, id);
-
     if (!properties || properties.length === 0) {
       return {
         status: 'success',
@@ -85,11 +84,9 @@ export class RoomsController {
   async getPropertyActiveTenant(@Query('id') id: string) {
     try {
       let finalResult: any = null;
-  
-      // First, try to fetch the active tenant
+      let agreementDocument = null;
       const activeTenant = await this.roomsService.findCurrentOccupantForRoom(id);
   
-      // If activeTenant is not found, fetch the existing mapping with 'active' status
       if (activeTenant) {
         finalResult = activeTenant;
       } else {
@@ -101,49 +98,28 @@ export class RoomsController {
           .populate('applicant')
           .lean();
       }
-  
-      // If no finalResult, handle the case where neither tenant nor mapping was found
       if (!finalResult) {
         throw new Error('No active tenant or assignment found for the given property ID.');
       }
-  
-      // Initialize agreementDocument as null by default
-      let agreementDocument = null;
-  
-      // Check if there is an applicant in the mapping (whether from activeTenant or landlordAssignedTenantModel)
+
       if (finalResult?.applicant?._id) {
-        // Fetch the agreement document associated with the applicant
         agreementDocument = await this.agreementDocumentsModel.findOne({
           applicant: finalResult.applicant._id.toString(),
         });  
-        
-
-  
-        // Add agreementDocument to finalResult (using spread operator to merge)
         finalResult = {
-          finalResult, // Spread the original data
-          agreementDocument: agreementDocument || null, // Add the agreementDocument field
+          finalResult, 
+          agreementDocument: agreementDocument || null, 
         };
         console.log('Final Result with Agreement Document:', finalResult
-          
         );
-
       }
-  
-      // Log the final result to verify the data
-
-  
-      // Return the response with the final result
       return {
         status: 'success',
         message: 'Active tenant fetched successfully',
         data: finalResult._doc ? finalResult._doc : finalResult,
       };
     } catch (error) {
-      // Log the error for debugging
       console.error('Error fetching active tenant:', error);
-  
-      // Return a structured error response
       throw new BadRequestException({
         status: 'error',
         message: error.message || 'An error occurred while fetching the active tenant.',

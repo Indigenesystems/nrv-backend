@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import mongoose, { Model } from 'mongoose';
 import { CloudinaryService } from '../upload/cloudinary.service';
 import { Property } from './entities/property.entity';
 import { RoomsService } from '../rooms/rooms.service';
@@ -10,12 +10,14 @@ import { LandlordAssignedTenant } from './entities/landlord_assigned_tenant.enti
 import { User } from '../users/entities/user.entity';
 import { Maintenance } from 'src/maintenance/entities/maintenance.entity';
 import { AgreementDocuments } from './entities/agreement_documents.entity';
+import { Room } from 'src/rooms/entities/room.entity';
 
 
 
 @Injectable()
 export class PropertiesService {
   constructor(
+    @InjectModel(Room.name) private readonly roomModel: Model<Room>,
     @InjectModel(Property.name) private readonly propertyModel: Model<Property>,
     @InjectModel(Maintenance.name) private readonly maintenanceModel : Model<Maintenance>,
     @InjectModel(Application.name) private readonly applicationModel: Model<Application>,
@@ -189,7 +191,7 @@ export class PropertiesService {
     return properties;
   }
 
-  async findAllProperty(page: number = 1, limit: number = 10): Promise<any> {
+  async _findAllProperty(page: number = 1, limit: number = 10): Promise<any> {
     const skip = (page - 1) * limit;
     const properties = await this.propertyModel
       .find()
@@ -198,6 +200,84 @@ export class PropertiesService {
       .limit(limit);
     return properties;
   }
+  async findAllProperty(
+    page: number = 1,
+    limit: number = 10,
+    userId?: any,
+    search: string = '',
+    minPrice?: number,
+    maxPrice?: number,
+  ): Promise<any> {
+    const searchRegex = new RegExp(search, 'i');
+    const propertyQuery: any = {};
+  
+    if (userId) {
+      propertyQuery.createdBy = userId;
+    }
+  
+    if (search) {
+      propertyQuery.$or = [
+        { state: searchRegex },
+        { city: searchRegex },
+        { streetAddress: searchRegex },
+      ];
+    }
+  
+    const allProperties = await this.propertyModel
+      .find(propertyQuery)
+      .sort({ createdAt: -1 });
+  
+    const propertyIds = allProperties.map((prop) => prop._id.toString());
+  
+    const roomMatch: any = {
+      propertyId: { $in: propertyIds },
+    };
+  
+    if (minPrice !== undefined || maxPrice !== undefined) {
+      roomMatch.rentAmount = {};
+      if (minPrice !== undefined) {
+        roomMatch.rentAmount.$gte = minPrice;
+      }
+      if (maxPrice !== undefined) {
+        roomMatch.rentAmount.$lte = maxPrice;
+      }
+    }
+  
+    const rooms = await this.roomModel
+      .find(roomMatch)
+      .populate('propertyId');
+  
+    const grouped = new Map<string, any>();
+  
+    for (const property of allProperties) {
+      grouped.set(property._id.toString(), {
+        ...property.toObject(),
+        apartments: [],
+        apartmentCount: 0,
+        unitsLeft: 0, // <- NEW
+      });
+    }
+  
+    for (const room of rooms) {
+      const propId = (room.propertyId as any)._id.toString();
+      if (grouped.has(propId)) {
+        const group = grouped.get(propId);
+        group.apartments.push(room);
+        group.apartmentCount += 1;
+        if (!room.assignedToTenant) {
+          group.unitsLeft += 1; // <- Count unassigned rooms
+        }
+      }
+    }
+  
+    const result = Array.from(grouped.values());
+    const skip = (page - 1) * limit;
+    return result.slice(skip, skip + limit);
+  }
+  
+  
+  
+  
 
   async findPropertyById(id: any): Promise<any> {
     let result: any = {};
