@@ -25,12 +25,6 @@ export class Room {
     @Prop()
     file: string;
 
-    // @Prop()
-    // targetRent: string;
-
-    // @Prop()
-    // targetDeposit: string;
-
     @Prop()
     noOfRooms: string;
 
@@ -41,7 +35,13 @@ export class Room {
     noOfPools: string;
 
     @Prop()
-    otherAmentities: string;
+    paymentOption: string;
+
+    @Prop()
+    leaseTerms: string;
+
+    @Prop()
+    otherAmentities: [];
 
     @Prop({ default: false })
     listRoom: boolean;
@@ -49,7 +49,7 @@ export class Room {
     @Prop({ default: false })
     assignedToTenant: boolean;
 
-    @Prop({ type: Types.ObjectId, ref: 'Property', validate: /^[0-9a-fA-F]{24}$/ })
+    @Prop({ type: Types.ObjectId, ref: 'Property'})
     propertyId: Property;
 }
 

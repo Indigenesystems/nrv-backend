@@ -11,6 +11,7 @@ import { User } from '../users/entities/user.entity';
 import { Maintenance } from 'src/maintenance/entities/maintenance.entity';
 import { AgreementDocuments } from './entities/agreement_documents.entity';
 import { Room } from 'src/rooms/entities/room.entity';
+import { randomInt } from 'crypto';
 
 
 
@@ -34,67 +35,80 @@ export class PropertiesService {
     let utilityAndMaintenanceUrls: any = null;
     let otherDocumentsUrls: any = null;
     let fileUrl: any = null;
-
- if (createPropertyDto.file){
-     // Upload single file
-     fileUrl = await this.cloudinaryService.upload(
-      createPropertyDto.file[0],
-    );
-
- }
+  
+    // Upload main property image
+    if (createPropertyDto.file) {
+      fileUrl = await this.cloudinaryService.upload(createPropertyDto.file[0]);
+    }
+  
+    // Upload multiple files if present
     if (createPropertyDto.landlordInsurancePolicy) {
       landlordInsurancePolicyUrls = await Promise.all(
-        createPropertyDto.landlordInsurancePolicy.map(
-          async (file: Express.Multer.File) => {
-            return await this.cloudinaryService.upload(file);
-          },
+        createPropertyDto.landlordInsurancePolicy.map(async (file: Express.Multer.File) =>
+          this.cloudinaryService.upload(file),
         ),
       );
     }
-
+  
     if (createPropertyDto.utilityAndMaintenance) {
       utilityAndMaintenanceUrls = await Promise.all(
-        createPropertyDto.utilityAndMaintenance.map(
-          async (file: Express.Multer.File) => {
-            return await this.cloudinaryService.upload(file);
-          },
+        createPropertyDto.utilityAndMaintenance.map(async (file: Express.Multer.File) =>
+          this.cloudinaryService.upload(file),
         ),
       );
     }
-
+  
     if (createPropertyDto.otherDocuments) {
       otherDocumentsUrls = await Promise.all(
-        createPropertyDto.otherDocuments.map(
-          async (file: Express.Multer.File) => {
-            return await this.cloudinaryService.upload(file);
-          },
+        createPropertyDto.otherDocuments.map(async (file: Express.Multer.File) =>
+          this.cloudinaryService.upload(file),
         ),
       );
     }
-    // Construct the property data object
+  
+    // Construct and save property
     const propertyData = {
       file: fileUrl,
-      unit: createPropertyDto.unit,
       city: createPropertyDto.city,
-      propertyType: createPropertyDto.propertyType,
-      streetAddress: createPropertyDto.streetAddress,
+      streetAddress: createPropertyDto.location,
       state: createPropertyDto.state,
       zipCode: createPropertyDto.zipCode,
+      propertyType: createPropertyDto.propertyType,
       createdBy: createPropertyDto.createdBy,
       landlordInsurancePolicy: landlordInsurancePolicyUrls,
       utilityAndMaintenance: utilityAndMaintenanceUrls,
       otherDocuments: otherDocumentsUrls,
-      preferredTenants: createPropertyDto.preferredTenants || [], // Defaulting to an empty array if not provided
-      propertyName: createPropertyDto.propertyName || '', // Defaulting to an empty string if not provided
-      rentCollection: createPropertyDto.rentCollection || { value: '', label: '' }, // Defaulting to an empty object if not provided
+      preferredTenants: createPropertyDto.preferredTenants || [],
+      propertyName: createPropertyDto.propertyName || '',
+      rentCollection: createPropertyDto.rentCollection || { value: '', label: '' },
     };
-    
- 
+  
     const newProperty = new this.propertyModel(propertyData);
     const createdProperty = await newProperty.save();
 
+    console.log({x: createdProperty._id});
+    
+  
+    // 🚨 Create and link each room
+    if (createPropertyDto.units && createPropertyDto.units.length > 0) {
+      const roomDocs = await Promise.all(
+      JSON.parse(createPropertyDto.units).map((room: any) =>
+          this.roomModel.create({
+            ...room,
+            roomId: randomInt(10000000),
+            propertyId: createdProperty._id,
+          }),
+        ),
+      );
+  
+      // Update property with linked rooms
+      createdProperty.rooms = roomDocs.map((room) => room._id);
+      await createdProperty.save();
+    }
+  
     return createdProperty;
   }
+  
 
   async updateProperty(updatePropertyDto: any) {
     
@@ -200,6 +214,7 @@ export class PropertiesService {
       .limit(limit);
     return properties;
   }
+
   async findAllProperty(
     page: number = 1,
     limit: number = 10,
@@ -223,87 +238,89 @@ export class PropertiesService {
       ];
     }
   
+    // Pagination
+    const skip = (page - 1) * limit;
+  
+    // Fetch properties with rooms populated
     const allProperties = await this.propertyModel
       .find(propertyQuery)
-      .sort({ createdAt: -1 });
+      .populate({
+        path: 'rooms',
+        model: 'Room',
+      })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .exec();
+
+
+    const filteredProperties = allProperties.map((property) => {
+      const rooms = property.rooms || [];
   
-    const propertyIds = allProperties.map((prop) => prop._id.toString());
+      // Apply rent filtering if needed
+      const filteredRooms = rooms.filter((room: any) => {
+        const rent = room.rentAmount;
+        if (typeof rent !== 'number') return false;
   
-    const roomMatch: any = {
-      propertyId: { $in: propertyIds },
-    };
-  
-    if (minPrice !== undefined || maxPrice !== undefined) {
-      roomMatch.rentAmount = {};
-      if (minPrice !== undefined) {
-        roomMatch.rentAmount.$gte = minPrice;
-      }
-      if (maxPrice !== undefined) {
-        roomMatch.rentAmount.$lte = maxPrice;
-      }
-    }
-  
-    const rooms = await this.roomModel
-      .find(roomMatch)
-      .populate('propertyId');
-  
-    const grouped = new Map<string, any>();
-  
-    for (const property of allProperties) {
-      grouped.set(property._id.toString(), {
-        ...property.toObject(),
-        apartments: [],
-        apartmentCount: 0,
-        unitsLeft: 0, // <- NEW
+        if (minPrice !== undefined && rent < minPrice) return false;
+        if (maxPrice !== undefined && rent > maxPrice) return false;
+        return true;
       });
-    }
   
-    for (const room of rooms) {
-      const propId = (room.propertyId as any)._id.toString();
-      if (grouped.has(propId)) {
-        const group = grouped.get(propId);
-        group.apartments.push(room);
-        group.apartmentCount += 1;
-        if (!room.assignedToTenant) {
-          group.unitsLeft += 1; // <- Count unassigned rooms
-        }
-      }
-    }
+      // Enrich the property data
+      return {
+        ...property.toObject(),
+        apartments: filteredRooms,
+        apartmentCount: filteredRooms.length,
+        unitsLeft: filteredRooms.filter((room) => !room.assignedToTenant).length,
+      };
+    });
   
-    const result = Array.from(grouped.values());
-    const skip = (page - 1) * limit;
-    return result.slice(skip, skip + limit);
+    return filteredProperties;
   }
-  
-  
   
   
 
   async findPropertyById(id: any): Promise<any> {
-    let result: any = {};
-    let property: any = await this.propertyModel
-      .findOne({ _id: id })
-      .populate('createdBy');
-
-    if (property) {
-      const rooms = await this.roomService.roomByPropertyId(id);
-      result._id = property._id;
-      result.streetAddress = property.streetAddress;
-      result.unit = property.unit;
-      result.city = property.city;
-      result.state = property.state;
-      result.zipCode = property.zipCode;
-      result.otherDocuments = property.otherDocuments;
-      result.utilityAndMaintenance = property.utilityAndMaintenance;
-      result.landlordInsurancePolicy = property.landlordInsurancePolicy;
-      result.propertyType = property.propertyType;
-      result.file = property.file;
-      result.createdBy = property.createdBy;
-      result.rooms = rooms;
-      return result;
+    const property = await this.propertyModel
+      .findById(id)
+      .populate('createdBy')
+      .populate({
+        path: 'rooms',
+        model: 'Room',
+      })
+      .exec();
+  
+    if (!property) {
+      throw new NotFoundException('Property not found');
     }
-    return new NotFoundException();
+  
+    // Extract and filter rooms if necessary
+    const rooms = property.rooms || [];
+  
+    return {
+      _id: property._id,
+      streetAddress: property.streetAddress,
+      city: property.city,
+      state: property.state,
+      zipCode: property.zipCode,
+      otherDocuments: property.otherDocuments,
+      utilityAndMaintenance: property.utilityAndMaintenance,
+      landlordInsurancePolicy: property.landlordInsurancePolicy,
+      propertyType: property.propertyType,
+      file: property.file,
+      createdBy: property.createdBy,
+      preferredTenants: property.preferredTenants || [],
+      propertyName: property.propertyName || '',
+      rentCollection: property.rentCollection || { value: '', label: '' },
+      rooms,
+      apartments: rooms,
+      apartmentCount: rooms.length,
+      //propertyId: property.propertyId,
+      unitsLeft: rooms.filter((room: any) => !room.assignedToTenant).length,
+    };
   }
+  
 
   async findPropertyByIdForTenant(id: any, tenantId: any): Promise<any> {
     let result: any = {};

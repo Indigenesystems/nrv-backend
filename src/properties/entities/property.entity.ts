@@ -1,6 +1,7 @@
 import { Schema, Prop, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { User } from '../../users/entities/user.entity';
+import { Room } from 'src/rooms/entities/room.entity';
 
 @Schema({ timestamps: true })
 export class Property {
@@ -57,6 +58,9 @@ export class Property {
     value: string;
     label: string;
   };
+
+  @Prop({ type: [{ type: Types.ObjectId, ref: 'Room' }] })
+  rooms: Room[];
 }
 
 export type PropertyDocument = Property & Document;
