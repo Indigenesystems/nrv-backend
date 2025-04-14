@@ -4,57 +4,58 @@ import { Property } from '../../properties/entities/property.entity';
 
 @Schema({ timestamps: true })
 export class Room {
-    @Prop({ unique: true })
-    roomId: number;
+  @Prop({ unique: true })
+  roomId: number;
 
-    @Prop()
-    name: string;
+  @Prop()
+  name: string;
 
-    @Prop()
-    propertyType: string;
+  @Prop()
+  apartmentType: string;
 
-    @Prop()
-    description: string;
+  @Prop()
+  description: string;
 
-    @Prop()
-    rentAmountMetrics: string;
+  @Prop()
+  rentAmountMetrics: string;
 
-    @Prop()
-    rentAmount: number;
+  @Prop()
+  rentAmount: number;
 
-    @Prop()
-    file: string;
+  @Prop()
+  file: string;
 
-    @Prop()
-    noOfRooms: string;
+  @Prop()
+  noOfRooms: string;
 
-    @Prop()
-    noOfBaths: string;
+  @Prop()
+  noOfBaths: string;
 
-    @Prop()
-    noOfPools: string;
+  @Prop()
+  noOfPools: string;
 
-    @Prop()
-    paymentOption: string;
+  @Prop()
+  apartmentStyle: string;
 
-    @Prop()
-    leaseTerms: string;
+  @Prop()
+  leaseTerms: string;
 
-    @Prop()
-    otherAmentities: [];
+  @Prop()
+  paymentOption: string;
 
-    @Prop({ default: false })
-    listRoom: boolean;
+  @Prop({ type: [] })
+  otherAmentities: string[];
 
-    @Prop({ default: false })
-    assignedToTenant: boolean;
+  @Prop({ default: false })
+  listRoom: boolean;
 
-    @Prop({ type: Types.ObjectId, ref: 'Property'})
-    propertyId: Property;
+  @Prop({ default: false })
+  assignedToTenant: boolean;
+
+  @Prop({ type: Types.ObjectId, ref: 'Property' })
+  propertyId: Property;
 }
 
 export type RoomDocument = Room & Document;
 
 export const RoomSchema = SchemaFactory.createForClass(Room);
-
-

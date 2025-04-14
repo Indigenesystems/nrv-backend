@@ -86,10 +86,6 @@ export class PropertiesService {
     const newProperty = new this.propertyModel(propertyData);
     const createdProperty = await newProperty.save();
 
-    console.log({x: createdProperty._id});
-    
-  
-    // 🚨 Create and link each room
     if (createPropertyDto.units && createPropertyDto.units.length > 0) {
       const roomDocs = await Promise.all(
       JSON.parse(createPropertyDto.units).map((room: any) =>
@@ -288,6 +284,7 @@ export class PropertiesService {
       .populate({
         path: 'rooms',
         model: 'Room',
+        options: { sort: { createdAt: -1 } }, 
       })
       .exec();
   

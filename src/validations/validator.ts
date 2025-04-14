@@ -71,17 +71,19 @@ export const updatePropertySchema = Joi.object({
 export const createRoomSchema = Joi.object({
   description: Joi.string().required(),
   propertyId: Joi.any().required(),
-  propertyType: Joi.any().required(),
-  //targetDeposit: Joi.string().required(),
+  apartmentType: Joi.string().required(),
   rentAmountMetrics: Joi.string().required(),
   rentAmount: Joi.string().required(),
   file: Joi.any().optional(),
   noOfBaths: Joi.string().required(),
-  //targetRent: Joi.string().required(),
-  noOfPools: Joi.string().optional().allow("", null),
   noOfRooms: Joi.string().required(),
-  otherAmentities: Joi.string().optional().allow("", null),
+  noOfPools: Joi.string().optional().allow("", null),
+  apartmentStyle: Joi.string().required(),
+  leaseTerms: Joi.string().required(),
+  paymentOption: Joi.string().required(),
+  otherAmentities: Joi.any().optional().allow("", null), // usually comes as JSON string from FormData
 });
+
 
 export const createMaintenanceSchema = Joi.object({
   title: Joi.string().required(),

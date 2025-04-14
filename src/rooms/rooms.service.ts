@@ -7,6 +7,7 @@ import { Application } from '../properties/entities/application.entity';
 import { CloudinaryService } from '../upload/cloudinary.service';
 import { LandlordAssignedTenant } from 'src/properties/entities/landlord_assigned_tenant.entity';
 import { AgreementDocuments } from 'src/properties/entities/agreement_documents.entity';
+import { randomInt } from 'crypto';
 
 @Injectable()
 export class RoomsService {
@@ -23,53 +24,60 @@ export class RoomsService {
   ) {}
 
   async createRooms(createRoomDTO: any) {
-    const latestRoom = await this.roomModel
-      .findOne({}, { roomId: 1 })
-      .sort({ roomId: -1 })
-      .limit(1);
-    const maxRoomId = latestRoom ? latestRoom.roomId : 0;
-    const fileUrl = await this.cloudinaryService.upload(createRoomDTO.file[0]);
-    const roomId = maxRoomId + 1;
-
+ //const fileUrl = await this.cloudinaryService.upload(createRoomDTO.file[0]);
+  
     let {
       description,
       propertyId,
-      propertyType,
-      // targetDeposit,
-      // targetRent,
+      apartmentType,
       rentAmountMetrics,
       rentAmount,
       noOfRooms,
       noOfBaths,
       noOfPools,
+      apartmentStyle,
+      leaseTerms,
+      paymentOption,
       otherAmentities,
     } = createRoomDTO;
+  
+    const parsedRentAmount = parseInt(rentAmount);
 
-    let parsedrentAmount = parseInt(rentAmount);
-
+    if (typeof otherAmentities === 'string') {
+      otherAmentities = JSON.parse(otherAmentities);
+    }
+  
     const finalPayload = {
-      roomId,
+      roomId: randomInt(10000000),
       description,
       propertyId,
-      propertyType,
-      // targetDeposit,
-      // targetRent,
+      apartmentType,
       rentAmountMetrics,
-      rentAmount: parsedrentAmount,
+      rentAmount: parsedRentAmount,
       noOfRooms,
       noOfBaths,
       noOfPools,
+      apartmentStyle,
+      leaseTerms,
+      paymentOption,
       otherAmentities,
-      file: fileUrl,
     };
-
+  
     try {
       const newRoom = await this.roomModel.create(finalPayload);
+
+    // 🧩 Update the related property's rooms array with the new room's ID
+    await this.propertyModel.findByIdAndUpdate(
+      propertyId,
+      { $push: { rooms: newRoom._id } },
+      { new: true }
+    );
       return newRoom;
     } catch (error) {
-      throw new Error(`Failed to create rooms: ${error.message}`);
+      throw new Error(`Failed to create room: ${error.message}`);
     }
   }
+  
 
   async roomByPropertyId(id: any): Promise<any> {
     return await this.roomModel.find({ propertyId: id });

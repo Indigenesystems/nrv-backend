@@ -42,7 +42,7 @@ export class CreateRoomDTO {
     noOfRooms: string;
     
     @IsString()
-    otherAmentities: string;
+    otherAmentities: string[];
 }
 
 
