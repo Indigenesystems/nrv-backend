@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UploadedFiles, BadRequestException, UseInterceptors } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UploadedFiles, BadRequestException, UseInterceptors, Query } from '@nestjs/common';
 import { MaintenanceService } from './maintenance.service';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { createMaintenanceSchema } from '../validations/validator'; // Assuming you have Joi validation schema defined
@@ -61,15 +61,25 @@ export class MaintenanceController {
     }
   }
 
-  @Get('/get-landlord-maintenance/:ownerId')
-  async findAllByOwnerId(@Param('ownerId') ownerId: any) {
-    try {
-      const data = await this.maintenanceService.findAllByOwnerId(ownerId);
-      return this.createSuccessResponse(data);
-    } catch (error) {
-      throw new BadRequestException(error.message);
-    }
+// maintenance.controller.ts
+@Get('/get-landlord-maintenance/:ownerId')
+async findAllByOwnerId(
+  @Param('ownerId') ownerId: string,
+  @Query('page') page: string = '1',
+  @Query('limit') limit: string = '10',
+) {
+  try {
+    const result = await this.maintenanceService.findAllByOwnerId(
+      ownerId,
+      Number(page),
+      Number(limit),
+    );
+    return this.createSuccessResponse(result);
+  } catch (error) {
+    throw new BadRequestException(error.message);
   }
+}
+
 
   @Get('/single/:id')
   async findOne(@Param('id') id: string) {

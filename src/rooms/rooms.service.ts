@@ -66,7 +66,7 @@ export class RoomsService {
     try {
       const newRoom = await this.roomModel.create(finalPayload);
 
-    // 🧩 Update the related property's rooms array with the new room's ID
+    //  Update the related property's rooms array with the new room's ID
     await this.propertyModel.findByIdAndUpdate(
       propertyId,
       { $push: { rooms: newRoom._id } },

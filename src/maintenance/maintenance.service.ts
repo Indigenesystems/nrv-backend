@@ -43,37 +43,74 @@ export class MaintenanceService {
       throw new Error(`Failed to fetch maintenance records: ${error.message}`);
     }
   }
-
-  async findAllByOwnerId(ownerId: any): Promise<Maintenance[]> {
-    try {
-      const maintenanceRecords = await this.maintenanceModel.find()
+// maintenance.service.ts
+async findAllByOwnerId(ownerId: string, page = 1, limit = 10) {
+  try {
+    const allRecords = await this.maintenanceModel
+      .find()
       .populate({
-        path: 'roomId',  // Populate the roomId field
+        path: 'roomId',
         populate: {
-          path: 'propertyId', // Nested population to populate the propertyId field within roomId
-        }
+          path: 'propertyId',
+        },
       })
-      .populate('createdBy')  // Populate the createdBy field directly
+      .populate('createdBy')
       .sort({ createdAt: -1 })
       .exec();
-    
-      const filteredRecords = maintenanceRecords.filter(record => {
-        const propertyId = record.roomId?.propertyId;
-        if (propertyId && propertyId?.createdBy) {
-          if (propertyId?.createdBy instanceof mongoose.Types.ObjectId) {
-            return propertyId?.createdBy.equals(ownerId);
-          } else {
-            return propertyId?.createdBy === ownerId;
-          }
+
+    // Filter by landlord
+    const filtered = allRecords.filter((record) => {
+      const property: any = record.roomId?.propertyId;
+      if (!property || !property.createdBy) return false;
+      if (property && property?.createdBy) {
+        if (property.createdBy instanceof mongoose.Types.ObjectId) {
+          return property.createdBy.equals(ownerId);
+        } else {
+          return property.createdBy === ownerId;
         }
-        return false;
-      });
-  
-      return filteredRecords;
-    } catch (error) {
-      throw new Error(`Failed to fetch maintenance records: ${error.message}`);
-    }
+      }
+    });
+
+    // Summary calculation
+    const summary = {
+      openTickets: 0,
+      completed: 0,
+      inProgress: 0,
+      emergency: 0,
+    };
+
+    filtered.forEach((item) => {
+      const status = item.status?.toLowerCase();
+      if (status === 'completed') summary.completed += 1;
+      else if (status === 'in progress') summary.inProgress += 1;
+      else if (status === 'emergency') summary.emergency += 1;
+      else summary.openTickets += 1;
+    });
+
+    // Pagination logic
+    const total = filtered.length;
+    const totalPages = Math.ceil(total / limit);
+    const paginatedItems = filtered.slice((page - 1) * limit, page * limit);
+
+    return {
+      data: paginatedItems,
+      summary,
+      pagination: {
+        total,
+        totalPages,
+        currentPage: page,
+        perPage: limit,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
+    };
+  } catch (error) {
+    throw new Error(`Failed to fetch records: ${error.message}`);
   }
+}
+
+  
+  
   
   async findOne(id: string): Promise<Maintenance | null> {
     try {
