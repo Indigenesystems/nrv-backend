@@ -14,12 +14,7 @@ export class MaintenanceController {
     };
   }
 
-  private createErrorResponse(message: string) {
-    return {
-      status: "error",
-      message: message
-    };
-  }
+
 
   @Post('/create')
   @UseInterceptors(FileFieldsInterceptor([
@@ -60,25 +55,34 @@ export class MaintenanceController {
       throw new BadRequestException(error.message);
     }
   }
+  @Get('/get-apartment-maintenance/:roomId')
+  async findApartmentMaintenance(@Param('roomId') roomId: any,   @Query('page') page = 1,
+  @Query('limit') limit = 10,
+  @Query('status') status?: string,
+  @Query('search') search?: string,) {
+    try {
+      const data = await this.maintenanceService.findMaintenancePerApartment( roomId,  +page, +limit, status, search);
+      return data;
+    } catch (error) {
+      throw new BadRequestException(error.message);
+    }
+  }
+
+
 
 // maintenance.controller.ts
-@Get('/get-landlord-maintenance/:ownerId')
-async findAllByOwnerId(
+@Get('get-landlord-maintenance/:ownerId')
+async getByOwnerId(
   @Param('ownerId') ownerId: string,
-  @Query('page') page: string = '1',
-  @Query('limit') limit: string = '10',
+  @Query('page') page = 1,
+  @Query('limit') limit = 10,
+  @Query('status') status?: string,
+  @Query('search') search?: string,
 ) {
-  try {
-    const result = await this.maintenanceService.findAllByOwnerId(
-      ownerId,
-      Number(page),
-      Number(limit),
-    );
-    return this.createSuccessResponse(result);
-  } catch (error) {
-    throw new BadRequestException(error.message);
-  }
+
+  return this.maintenanceService.findAllByOwnerId(ownerId, +page, +limit, status, search);
 }
+
 
 
   @Get('/single/:id')
