@@ -45,7 +45,37 @@ export class MaintenanceService {
       throw new Error(`Failed to log maintenance: ${error.message}`);
     }
   }
-
+  
+  async update(id: string, updateMaintenanceDto: any): Promise<Maintenance> {
+    try {
+      const updateData: any = {};
+  
+      // Dynamically copy properties from updateMaintenanceDto that are not null/undefined
+      Object.keys(updateMaintenanceDto).forEach(key => {
+        if (updateMaintenanceDto[key] !== undefined && updateMaintenanceDto[key] !== null) {
+          updateData[key] = updateMaintenanceDto[key];
+        }
+      });
+  
+      // Handle file upload separately if it's provided
+      if (updateMaintenanceDto.file && updateMaintenanceDto.file.length > 0) {
+        const fileUrl = await this.cloudinaryService.upload(updateMaintenanceDto.file[0]);
+        updateData.file = fileUrl;
+      }
+  
+      // Update the maintenance entry
+      const updatedMaintenance = await this.maintenanceModel.findByIdAndUpdate(id, updateData, { new: true });
+  
+      if (!updatedMaintenance) {
+        throw new Error('Maintenance not found');
+      }
+  
+      return updatedMaintenance;
+    } catch (error) {
+      throw new Error(`Failed to update maintenance: ${error.message}`);
+    }
+  }
+  
   async findAll(createdBy: any, roomId: any): Promise<Maintenance[]> {
     try {
       return await this.maintenanceModel
