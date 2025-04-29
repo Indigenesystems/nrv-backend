@@ -131,11 +131,13 @@ export class MaintenanceService {
             item.roomId?.propertyId?.streetAddress?.toLowerCase() || '';
           const title = item.title?.toLowerCase() || '';
           const description = item.description?.toLowerCase() || '';
+          const maintenanceId = item.maintenanceId?.toString() || '';
           return (
             apartmentType.includes(keyword) ||
             address.includes(keyword) ||
             title.includes(keyword) ||
-            description.includes(keyword)
+            description.includes(keyword) ||
+            maintenanceId.includes(keyword)
           );
         });
       }
@@ -187,25 +189,25 @@ export class MaintenanceService {
         : allRecords;
 
         if (search) {
-          console.log({hello: "x"});
-          
           const keyword = search.toLowerCase();
           filtered = allRecords.filter((item) => {
             const apartmentType = item.roomId?.apartmentType?.toLowerCase() || '';
             const address =
               item.roomId?.propertyId?.streetAddress?.toLowerCase() || '';
             const title = item.title?.toLowerCase() || '';
+            const maintenanceId =  item.maintenanceId.toString() || '';
             const description = item.description?.toLowerCase() || '';
             return (
               apartmentType.includes(keyword) ||
               address.includes(keyword) ||
               title.includes(keyword) ||
-              description.includes(keyword)
+              description.includes(keyword) ||
+              maintenanceId.includes(keyword)
             );
           });
         }
 
-      return paginateAndSummarize(allRecords, page, limit, [
+      return paginateAndSummarize(filtered, page, limit, [
         'New',
         'In Progress',
         'Completed',
