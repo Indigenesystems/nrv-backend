@@ -8,6 +8,7 @@ import { CloudinaryService } from '../upload/cloudinary.service';
 import { LandlordAssignedTenant } from 'src/properties/entities/landlord_assigned_tenant.entity';
 import { AgreementDocuments } from 'src/properties/entities/agreement_documents.entity';
 import { randomInt } from 'crypto';
+import { ApiProperty } from '@nestjs/swagger';
 
 @Injectable()
 export class RoomsService {
@@ -24,8 +25,8 @@ export class RoomsService {
   ) {}
 
   async createRooms(createRoomDTO: any) {
- //const fileUrl = await this.cloudinaryService.upload(createRoomDTO.file[0]);
-  
+    //const fileUrl = await this.cloudinaryService.upload(createRoomDTO.file[0]);
+
     let {
       description,
       propertyId,
@@ -39,14 +40,14 @@ export class RoomsService {
       leaseTerms,
       paymentOption,
       otherAmentities,
-    } = createRoomDTO;
-  
+    }: any = createRoomDTO;
+
     const parsedRentAmount = parseInt(rentAmount);
 
     if (typeof otherAmentities === 'string') {
       otherAmentities = JSON.parse(otherAmentities);
     }
-  
+
     const finalPayload = {
       roomId: randomInt(10000000),
       description,
@@ -62,22 +63,21 @@ export class RoomsService {
       paymentOption,
       otherAmentities,
     };
-  
+
     try {
       const newRoom = await this.roomModel.create(finalPayload);
 
-    //  Update the related property's rooms array with the new room's ID
-    await this.propertyModel.findByIdAndUpdate(
-      propertyId,
-      { $push: { rooms: newRoom._id } },
-      { new: true }
-    );
+      //  Update the related property's rooms array with the new room's ID
+      await this.propertyModel.findByIdAndUpdate(
+        propertyId,
+        { $push: { rooms: newRoom._id } },
+        { new: true },
+      );
       return newRoom;
     } catch (error) {
       throw new Error(`Failed to create room: ${error.message}`);
     }
   }
-  
 
   async roomByPropertyId(id: any): Promise<any> {
     return await this.roomModel.find({ propertyId: id });
@@ -91,15 +91,15 @@ export class RoomsService {
   }
 
   async singlePropertyById(id: any): Promise<any> {
-    let room = await this.roomModel.findOne({ _id: id });
-    let property = await this.propertyModel.findOne({ _id: room.propertyId });
+    const room = await this.roomModel.findOne({ _id: id });
+    const property = await this.propertyModel.findOne({ _id: room.propertyId });
     room.propertyId = property;
     return room;
   }
 
   async updateSubPropertyStatus(id: any, newStatus: boolean): Promise<any> {
     try {
-      let room: any = await this.roomModel.findOne({ _id: id });
+      const room: any = await this.roomModel.findOne({ _id: id });
       room.propertyId = room.propertyId;
       room.listRoom = newStatus;
       return room.save();
@@ -179,11 +179,11 @@ export class RoomsService {
   }
 
   async findPropertyByIdForTenant(id: any, tenantId: any): Promise<any> {
-    let property: any = await this.roomModel.findOne({ _id: id }).populate({
+    const property: any = await this.roomModel.findOne({ _id: id }).populate({
       path: 'propertyId',
       populate: { path: 'createdBy' },
     });
-    let hasTenantApplied: any = await this.applicationModel.findOne({
+    const hasTenantApplied: any = await this.applicationModel.findOne({
       applicant: tenantId,
       propertyId: id,
     });
@@ -203,7 +203,7 @@ export class RoomsService {
 
   async findCurrentOccupantForRoom(id: any): Promise<any> {
     try {
-      let iactiveTenant: any = await this.applicationModel
+      const iactiveTenant: any = await this.applicationModel
         .findOne({
           propertyId: id,
         })
@@ -219,7 +219,7 @@ export class RoomsService {
 
   async findRentedApartments(id: any): Promise<any> {
     try {
-      let rentedApartments: any = await this.applicationModel
+      const rentedApartments: any = await this.applicationModel
         .find({
           applicant: id,
         })
@@ -234,18 +234,16 @@ export class RoomsService {
         .populate('applicant')
         .populate('ownerId');
 
-        let x = await this.landlordAssignedTenantModel.find({
+      const x = await this.landlordAssignedTenantModel
+        .find({
           applicant: new mongoose.Types.ObjectId(id),
           status: 'active',
         })
-          .populate('propertyId')
-          .populate('applicant')
-          .populate('ownerId')
-          .lean();
+        .populate('propertyId')
+        .populate('applicant')
+        .populate('ownerId')
+        .lean();
 
-         
-          
-    
       return [...rentedApartments, ...x];
     } catch (error) {
       throw new NotFoundException(error);

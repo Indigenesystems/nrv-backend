@@ -30,6 +30,7 @@ import * as bcrypt from 'bcryptjs';
 import { UpdateNotificationSettingsDto } from './dto/update-notificationSettings.dto';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
+import { ApiProperty } from '@nestjs/swagger';
 
 @Controller('users')
 export class UserController {
@@ -171,7 +172,7 @@ export class UserController {
     }
 
     const token = this.authService.createPasswordResetToken(user._id);
-    await this.userService.savePasswordResetToken(user.email, token);
+    await this.userService.savePasswordResetToken(user.email);
 
     return { message: 'Password reset link sent.' };
   }

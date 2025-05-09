@@ -14,6 +14,7 @@ import { CreateMessageDto } from './dto/create-message.dto';
 import { GetConversationDto } from './dto/get-conversation.dto';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
+import { ApiProperty } from '@nestjs/swagger';
 
 @Controller('messages')
 export class MessagingController {
@@ -30,9 +31,10 @@ export class MessagingController {
     },
     @Res() res: Response,
   ) {
-    const finalPayload ={ ...createMessageDto, ...files };
+    const finalPayload = { ...createMessageDto, ...files };
     try {
-      const createdMessage = await this.messagingService.createMessage(finalPayload);
+      const createdMessage =
+        await this.messagingService.createMessage(finalPayload);
       return res.status(HttpStatus.CREATED).json({
         status: 'success',
         message: 'message sent successfully',
@@ -44,7 +46,6 @@ export class MessagingController {
         message: error.message,
       });
     }
-
   }
 
   // Endpoint to get all messages
@@ -61,10 +62,16 @@ export class MessagingController {
 
   // Endpoint to get conversation between sender and recipient
   @Get('conversation/:sender/:recipient')
-  async getConversation(@Param() params: GetConversationDto,     @Res() res: Response) {
+  async getConversation(
+    @Param() params: GetConversationDto,
+    @Res() res: Response,
+  ) {
     const { sender, recipient } = params;
     try {
-      const conversation = await this.messagingService.getConversation(sender, recipient);
+      const conversation = await this.messagingService.getConversation(
+        sender,
+        recipient,
+      );
       return res.status(HttpStatus.CREATED).json({
         status: 'success',
         message: 'conversation fetched successfully',

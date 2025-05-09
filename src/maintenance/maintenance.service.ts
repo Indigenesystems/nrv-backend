@@ -6,6 +6,7 @@ import { CreateMaintenanceDTO } from './dto/create-maintenance.dto';
 import { Maintenance } from './entities/maintenance.entity';
 import { AgreementDocuments } from 'src/properties/entities/agreement_documents.entity';
 import { paginateAndSummarize } from 'src/helper/pagination.helper';
+import { ApiProperty } from '@nestjs/swagger';
 
 @Injectable()
 export class MaintenanceService {
@@ -45,37 +46,46 @@ export class MaintenanceService {
       throw new Error(`Failed to log maintenance: ${error.message}`);
     }
   }
-  
+
   async update(id: string, updateMaintenanceDto: any): Promise<Maintenance> {
     try {
       const updateData: any = {};
-  
+
       // Dynamically copy properties from updateMaintenanceDto that are not null/undefined
-      Object.keys(updateMaintenanceDto).forEach(key => {
-        if (updateMaintenanceDto[key] !== undefined && updateMaintenanceDto[key] !== null) {
+      Object.keys(updateMaintenanceDto).forEach((key) => {
+        if (
+          updateMaintenanceDto[key] !== undefined &&
+          updateMaintenanceDto[key] !== null
+        ) {
           updateData[key] = updateMaintenanceDto[key];
         }
       });
-  
+
       // Handle file upload separately if it's provided
       if (updateMaintenanceDto.file && updateMaintenanceDto.file.length > 0) {
-        const fileUrl = await this.cloudinaryService.upload(updateMaintenanceDto.file[0]);
+        const fileUrl = await this.cloudinaryService.upload(
+          updateMaintenanceDto.file[0],
+        );
         updateData.file = fileUrl;
       }
-  
+
       // Update the maintenance entry
-      const updatedMaintenance = await this.maintenanceModel.findByIdAndUpdate(id, updateData, { new: true });
-  
+      const updatedMaintenance = await this.maintenanceModel.findByIdAndUpdate(
+        id,
+        updateData,
+        { new: true },
+      );
+
       if (!updatedMaintenance) {
         throw new Error('Maintenance not found');
       }
-  
+
       return updatedMaintenance;
     } catch (error) {
       throw new Error(`Failed to update maintenance: ${error.message}`);
     }
   }
-  
+
   async findAll(createdBy: any, roomId: any): Promise<Maintenance[]> {
     try {
       return await this.maintenanceModel
@@ -181,31 +191,30 @@ export class MaintenanceService {
         .sort({ createdAt: -1 })
         .exec();
 
-
-        let filtered = status
+      let filtered = status
         ? allRecords.filter(
             (item) => item.status?.toLowerCase() === status.toLowerCase(),
           )
         : allRecords;
 
-        if (search) {
-          const keyword = search.toLowerCase();
-          filtered = allRecords.filter((item) => {
-            const apartmentType = item.roomId?.apartmentType?.toLowerCase() || '';
-            const address =
-              item.roomId?.propertyId?.streetAddress?.toLowerCase() || '';
-            const title = item.title?.toLowerCase() || '';
-            const maintenanceId =  item.maintenanceId.toString() || '';
-            const description = item.description?.toLowerCase() || '';
-            return (
-              apartmentType.includes(keyword) ||
-              address.includes(keyword) ||
-              title.includes(keyword) ||
-              description.includes(keyword) ||
-              maintenanceId.includes(keyword)
-            );
-          });
-        }
+      if (search) {
+        const keyword = search.toLowerCase();
+        filtered = allRecords.filter((item) => {
+          const apartmentType = item.roomId?.apartmentType?.toLowerCase() || '';
+          const address =
+            item.roomId?.propertyId?.streetAddress?.toLowerCase() || '';
+          const title = item.title?.toLowerCase() || '';
+          const maintenanceId = item.maintenanceId.toString() || '';
+          const description = item.description?.toLowerCase() || '';
+          return (
+            apartmentType.includes(keyword) ||
+            address.includes(keyword) ||
+            title.includes(keyword) ||
+            description.includes(keyword) ||
+            maintenanceId.includes(keyword)
+          );
+        });
+      }
 
       return paginateAndSummarize(filtered, page, limit, [
         'New',
@@ -226,8 +235,7 @@ export class MaintenanceService {
           path: 'roomId',
           populate: {
             path: 'propertyId',
-
-          }
+          },
         })
         .populate('createdBy')
         .exec();

@@ -5,10 +5,14 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { Expense, ExpenseSchema } from './entities/expense.entity';
 import { Room, RoomSchema } from 'src/rooms/entities/room.entity';
 import { CloudinaryService } from 'src/upload/cloudinary.service';
+import { ApiProperty } from '@nestjs/swagger';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: Room.name, schema: RoomSchema }, { name: Expense.name, schema: ExpenseSchema }]),
+    MongooseModule.forFeature([
+      { name: Room.name, schema: RoomSchema },
+      { name: Expense.name, schema: ExpenseSchema },
+    ]),
   ],
   controllers: [ExpensesController],
   providers: [ExpensesService, CloudinaryService],

@@ -1,28 +1,46 @@
-import { IsString, IsEmail, IsNotEmpty, IsNumberString, Length, IsEnum, IsBoolean } from 'class-validator';
+import {
+  IsString,
+  IsEmail,
+  IsNotEmpty,
+  IsNumberString,
+  Length,
+  IsEnum,
+  IsBoolean,
+} from 'class-validator';
 import { UploadedFile } from '@nestjs/common';
 import { Express } from 'express';
+import { ApiProperty } from '@nestjs/swagger';
 
 export class UpdatePropertyDto {
-    @IsString()
-    streetAddress?: string;
+  @IsString()
+  @ApiProperty()
+  streetAddress?: string;
 
-    @IsString()
-    city?: string;
+  @IsString()
+  @ApiProperty()
+  city?: string;
 
-    @IsString()
-    state?: string;
+  @IsString()
+  @ApiProperty()
+  state?: string;
 
-    @IsString()
-    zipCode?: string;
+  @IsString()
+  @ApiProperty()
+  zipCode?: string;
 
-    @IsString()
-    createdBy: string;
+  @IsString()
+  @ApiProperty()
+  createdBy: string;
 
-    file?: Express.Multer.File;
+  @ApiProperty()
+  file?: Express.Multer.File;
 
-    landlordInsurancePolicy?: Express.Multer.File;
+  @ApiProperty()
+  landlordInsurancePolicy?: Express.Multer.File;
 
-    utilityAndMaintenance?: Express.Multer.File;
+  @ApiProperty()
+  utilityAndMaintenance?: Express.Multer.File;
 
-    otherDocuments?: Express.Multer.File;
+  @ApiProperty()
+  otherDocuments?: Express.Multer.File;
 }

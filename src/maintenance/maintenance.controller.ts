@@ -16,6 +16,7 @@ import { MaintenanceService } from './maintenance.service';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { createMaintenanceSchema } from '../validations/validator'; // Assuming you have Joi validation schema defined
 import { Maintenance } from './entities/maintenance.entity';
+import { ApiProperty } from '@nestjs/swagger';
 
 @Controller('maintenance')
 export class MaintenanceController {

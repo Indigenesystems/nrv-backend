@@ -1,9 +1,13 @@
-import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { User } from './entities/user.entity';
 import { Model } from 'mongoose';
 import { generateConfirmationCode } from '../helper/utils';
-import { AuthService } from '../auth/auth.service';
 import { JwtService } from '@nestjs/jwt';
 import { EmailService } from '../email-sender/email.service';
 import { PropertiesService } from '../properties/properties.service';
@@ -13,23 +17,25 @@ import { Property } from '../properties/entities/property.entity';
 import { NotificationSettings } from './entities/notificationSettings.entity';
 import { AgreementDocuments } from 'src/properties/entities/agreement_documents.entity';
 import { CloudinaryService } from 'src/upload/cloudinary.service';
-
+import { ApiProperty } from '@nestjs/swagger';
 
 @Injectable()
 export class UserService {
   constructor(
     @InjectModel(Room.name) private readonly roomModel: Model<Room>,
     @InjectModel(Property.name) private readonly propertyModel: Model<Property>,
-    @InjectModel(Application.name) private readonly applicationModel: Model<Application>,
+    @InjectModel(Application.name)
+    private readonly applicationModel: Model<Application>,
     @InjectModel(User.name) private readonly userModel: Model<User>,
-    @InjectModel(NotificationSettings.name) private readonly notificationSettingsModel: Model<NotificationSettings>,
-    @InjectModel(AgreementDocuments.name) private readonly agreementDocumentsModel: Model<AgreementDocuments>,
+    @InjectModel(NotificationSettings.name)
+    private readonly notificationSettingsModel: Model<NotificationSettings>,
+    @InjectModel(AgreementDocuments.name)
+    private readonly agreementDocumentsModel: Model<AgreementDocuments>,
     private jwtService: JwtService,
     private emailService: EmailService,
     private propertiesService: PropertiesService,
     private cloudinaryService: CloudinaryService,
-
-  ) { }
+  ) {}
 
   async findAllUsers(): Promise<User[]> {
     return await this.userModel.find();
@@ -50,13 +56,15 @@ export class UserService {
   async createUser(user: User): Promise<User | any | { message: string }> {
     const confirmationCode = generateConfirmationCode();
     const existingUser = await this.userModel.findOne({ email: user.email });
-    const checkExistingUserByNin = await this.userModel.findOne({ nin: user.nin });
+    const checkExistingUserByNin = await this.userModel.findOne({
+      nin: user.nin,
+    });
 
     if (existingUser) {
       return { message: 'An account with this email already exists' };
     }
 
-    if (checkExistingUserByNin && checkExistingUserByNin.nin != "") {
+    if (checkExistingUserByNin && checkExistingUserByNin.nin != '') {
       return { message: 'An account with this NIN already exists' };
     }
 
@@ -90,11 +98,15 @@ export class UserService {
     }
   }
 
-  async createUserByLandlord(user: any): Promise<User | any | { message: string }> {
+  async createUserByLandlord(
+    user: any,
+  ): Promise<User | any | { message: string }> {
     const confirmationCode = generateConfirmationCode();
     const existingUser = await this.userModel.findOne({ email: user.email });
-    const checkExistingUserByNin = await this.userModel.findOne({ nin: user.nin });
-    
+    const checkExistingUserByNin = await this.userModel.findOne({
+      nin: user.nin,
+    });
+
     if (existingUser) {
       return { message: 'An account with this email already exists' };
     }
@@ -102,7 +114,10 @@ export class UserService {
       return { message: 'An account with this NIN already exists' };
     }
 
-    const isPropertyMapped = await this.propertiesService.isPropertyMappedToActiveTenant(user.propertyId);
+    const isPropertyMapped =
+      await this.propertiesService.isPropertyMappedToActiveTenant(
+        user.propertyId,
+      );
     if (isPropertyMapped) {
       return { message: 'This property has an active occupant' };
     }
@@ -115,10 +130,10 @@ export class UserService {
     try {
       const createdUser: any = await newUser.save();
       if (createdUser) {
-        console.log({createdUser});
-        
+        console.log({ createdUser });
+
         await this.emailService.sendUserCreatedByLandlordEmail(user);
-        
+
         // Create notification settings for the new user
         const notificationSettings = new this.notificationSettingsModel({
           userId: createdUser._id,
@@ -135,7 +150,9 @@ export class UserService {
           ...user,
           applicant: createdUser._id,
         };
-        await this.propertiesService.mapCreatedUserToApartment(formattedPayload);
+        await this.propertiesService.mapCreatedUserToApartment(
+          formattedPayload,
+        );
       }
       return createdUser;
     } catch (error) {
@@ -147,7 +164,6 @@ export class UserService {
   }
 
   async confirmAccount(body: any): Promise<any> {
-
     const { email, confirmationCode } = body;
     const user = await this.userModel.findOne({ email });
 
@@ -162,7 +178,7 @@ export class UserService {
     if (user.confirmationCode != confirmationCode) {
       throw new BadRequestException('Incorrect confirmation code');
     }
-    const payload = { email: user.email, sub: user["_id"] };
+    const payload = { email: user.email, sub: user['_id'] };
     const accessToken = this.jwtService.sign(payload);
     user.status = 'active';
     user.isOnboarded = false;
@@ -171,27 +187,25 @@ export class UserService {
   }
 
   async updateUser(id: string, updatedUser: any): Promise<User> {
-
     let fileUrl: string | undefined;
     if (updatedUser.file && updatedUser.file.length > 0) {
-        fileUrl = await this.cloudinaryService.upload(updatedUser.file[0]);
-        console.log({fileUrl});
-        
+      fileUrl = await this.cloudinaryService.upload(updatedUser.file[0]);
+      console.log({ fileUrl });
     }
 
     const updateData = { ...updatedUser, file: fileUrl };
 
-    console.log({updateData});
-    
-    return await this.userModel.findByIdAndUpdate(id, updateData, { new: true });
-}
+    console.log({ updateData });
 
+    return await this.userModel.findByIdAndUpdate(id, updateData, {
+      new: true,
+    });
+  }
 
-  
-  async savePasswordResetToken(email: string, token: string): Promise<void> {
-    let user:any =  await this.findUserByEmail(email)
+  async savePasswordResetToken(email: string): Promise<void> {
+    const user: any = await this.findUserByEmail(email);
     const confirmationCode = generateConfirmationCode();
-   let _user = {...user, passwordResetToken: confirmationCode }
+    const _user = { ...user, passwordResetToken: confirmationCode };
 
     await this.userModel.findByIdAndUpdate(user._id, {
       passwordResetToken: confirmationCode,
@@ -199,28 +213,33 @@ export class UserService {
     });
 
     if (user) {
-      console.log("here");
-      
-      this.emailService.sendResetPasswordToken(_user)
+      console.log('here');
+
+      this.emailService.sendResetPasswordToken(_user);
     }
   }
 
   async updatePassword(token: string, hashedPassword: string): Promise<void> {
-try {
-  let user:any =  await this.userModel.findOne({passwordResetToken: token})
-  if (user.passwordResetToken === token && user) {
-    await this.userModel.findByIdAndUpdate(user._id, {
-      password: hashedPassword,
-      passwordResetToken: null, // Invalidate the token
-      passwordResetExpires: null,
-    });
-  } else {
-    throw new InternalServerErrorException("Failed to update password. Please try again later.");
-  }
-} catch (error) {
-  throw new InternalServerErrorException("Failed to update password. Please try again later.");
-}
-
+    try {
+      const user: any = await this.userModel.findOne({
+        passwordResetToken: token,
+      });
+      if (user.passwordResetToken === token && user) {
+        await this.userModel.findByIdAndUpdate(user._id, {
+          password: hashedPassword,
+          passwordResetToken: null, // Invalidate the token
+          passwordResetExpires: null,
+        });
+      } else {
+        throw new InternalServerErrorException(
+          'Failed to update password. Please try again later.',
+        );
+      }
+    } catch (error) {
+      throw new InternalServerErrorException(
+        'Failed to update password. Please try again later.',
+      );
+    }
   }
 
   async invalidatePasswordResetToken(userId: string): Promise<void> {
@@ -229,19 +248,24 @@ try {
       passwordResetExpires: null,
     });
   }
-  
-  async updateNotificationSettings(userId: string, settings: Partial<NotificationSettings>): Promise<NotificationSettings> {
-    const updatedSettings = await this.notificationSettingsModel.findOneAndUpdate(
-      { userId },
-      settings,
-      { new: true }
-    );
+
+  async updateNotificationSettings(
+    userId: string,
+    settings: Partial<NotificationSettings>,
+  ): Promise<NotificationSettings> {
+    const updatedSettings =
+      await this.notificationSettingsModel.findOneAndUpdate(
+        { userId },
+        settings,
+        { new: true },
+      );
 
     if (!updatedSettings) {
-      throw new NotFoundException('Notification settings not found for this user');
+      throw new NotFoundException(
+        'Notification settings not found for this user',
+      );
     }
 
     return updatedSettings;
   }
-
 }

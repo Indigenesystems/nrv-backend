@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import mongoose, { Model } from 'mongoose';
 import { CloudinaryService } from '../upload/cloudinary.service';
@@ -12,60 +16,66 @@ import { Maintenance } from 'src/maintenance/entities/maintenance.entity';
 import { AgreementDocuments } from './entities/agreement_documents.entity';
 import { Room } from 'src/rooms/entities/room.entity';
 import { randomInt } from 'crypto';
-
-
+import { ApiProperty } from '@nestjs/swagger';
 
 @Injectable()
 export class PropertiesService {
   constructor(
     @InjectModel(Room.name) private readonly roomModel: Model<Room>,
     @InjectModel(Property.name) private readonly propertyModel: Model<Property>,
-    @InjectModel(Maintenance.name) private readonly maintenanceModel : Model<Maintenance>,
-    @InjectModel(Application.name) private readonly applicationModel: Model<Application>,
-    @InjectModel(AgreementDocuments.name) private readonly agreementDocumentsModel: Model<AgreementDocuments>,
-    @InjectModel(LandlordAssignedTenant.name) private readonly landlordAssignedTenantModel: Model<LandlordAssignedTenant>,
+    @InjectModel(Maintenance.name)
+    private readonly maintenanceModel: Model<Maintenance>,
+    @InjectModel(Application.name)
+    private readonly applicationModel: Model<Application>,
+    @InjectModel(AgreementDocuments.name)
+    private readonly agreementDocumentsModel: Model<AgreementDocuments>,
+    @InjectModel(LandlordAssignedTenant.name)
+    private readonly landlordAssignedTenantModel: Model<LandlordAssignedTenant>,
     @InjectModel(User.name) private readonly userModel: Model<User>,
     private cloudinaryService: CloudinaryService,
     private roomService: RoomsService,
-    private emailService: EmailService, 
-  ) { }
+    private emailService: EmailService,
+  ) {}
 
   async createProperty(createPropertyDto: any) {
     let landlordInsurancePolicyUrls: any = null;
     let utilityAndMaintenanceUrls: any = null;
     let otherDocumentsUrls: any = null;
     let fileUrl: any = null;
-  
+
     // Upload main property image
     if (createPropertyDto.file) {
       fileUrl = await this.cloudinaryService.upload(createPropertyDto.file[0]);
     }
-  
+
     // Upload multiple files if present
     if (createPropertyDto.landlordInsurancePolicy) {
       landlordInsurancePolicyUrls = await Promise.all(
-        createPropertyDto.landlordInsurancePolicy.map(async (file: Express.Multer.File) =>
-          this.cloudinaryService.upload(file),
+        createPropertyDto.landlordInsurancePolicy.map(
+          async (file: Express.Multer.File) =>
+            this.cloudinaryService.upload(file),
         ),
       );
     }
-  
+
     if (createPropertyDto.utilityAndMaintenance) {
       utilityAndMaintenanceUrls = await Promise.all(
-        createPropertyDto.utilityAndMaintenance.map(async (file: Express.Multer.File) =>
-          this.cloudinaryService.upload(file),
+        createPropertyDto.utilityAndMaintenance.map(
+          async (file: Express.Multer.File) =>
+            this.cloudinaryService.upload(file),
         ),
       );
     }
-  
+
     if (createPropertyDto.otherDocuments) {
       otherDocumentsUrls = await Promise.all(
-        createPropertyDto.otherDocuments.map(async (file: Express.Multer.File) =>
-          this.cloudinaryService.upload(file),
+        createPropertyDto.otherDocuments.map(
+          async (file: Express.Multer.File) =>
+            this.cloudinaryService.upload(file),
         ),
       );
     }
-  
+
     // Construct and save property
     const propertyData = {
       file: fileUrl,
@@ -80,15 +90,18 @@ export class PropertiesService {
       otherDocuments: otherDocumentsUrls,
       preferredTenants: createPropertyDto.preferredTenants || [],
       propertyName: createPropertyDto.propertyName || '',
-      rentCollection: createPropertyDto.rentCollection || { value: '', label: '' },
+      rentCollection: createPropertyDto.rentCollection || {
+        value: '',
+        label: '',
+      },
     };
-  
+
     const newProperty = new this.propertyModel(propertyData);
     const createdProperty = await newProperty.save();
 
     if (createPropertyDto.units && createPropertyDto.units.length > 0) {
       const roomDocs = await Promise.all(
-      JSON.parse(createPropertyDto.units).map((room: any) =>
+        JSON.parse(createPropertyDto.units).map((room: any) =>
           this.roomModel.create({
             ...room,
             roomId: randomInt(10000000),
@@ -96,63 +109,72 @@ export class PropertiesService {
           }),
         ),
       );
-  
+
       // Update property with linked rooms
       createdProperty.rooms = roomDocs.map((room) => room._id);
       await createdProperty.save();
     }
-  
+
     return createdProperty;
   }
-  
 
   async updateProperty(updatePropertyDto: any) {
-    
     let landlordInsurancePolicyUrls: any = [];
     let utilityAndMaintenanceUrls: any = [];
     let otherDocumentsUrls: any = [];
-    
-    const singleProperty = await this.findPropertyById(updatePropertyDto?.query);
- 
+
+    const singleProperty = await this.findPropertyById(
+      updatePropertyDto?.query,
+    );
+
     // Ensure properties are arrays to avoid "not iterable" errors
-    singleProperty.landlordInsurancePolicy = singleProperty.landlordInsurancePolicy || [];
-    singleProperty.utilityAndMaintenance = singleProperty.utilityAndMaintenance || [];
+    singleProperty.landlordInsurancePolicy =
+      singleProperty.landlordInsurancePolicy || [];
+    singleProperty.utilityAndMaintenance =
+      singleProperty.utilityAndMaintenance || [];
     singleProperty.otherDocuments = singleProperty.otherDocuments || [];
-  
+
     // Upload landlord insurance policies
     if (updatePropertyDto.landlordInsurancePolicy) {
       landlordInsurancePolicyUrls = await Promise.all(
-        updatePropertyDto.landlordInsurancePolicy.map(async (file: Express.Multer.File) => {
-          return await this.cloudinaryService.upload(file);
-        }),
+        updatePropertyDto.landlordInsurancePolicy.map(
+          async (file: Express.Multer.File) => {
+            return await this.cloudinaryService.upload(file);
+          },
+        ),
       );
 
-      singleProperty.landlordInsurancePolicy.push(...landlordInsurancePolicyUrls);
-
+      singleProperty.landlordInsurancePolicy.push(
+        ...landlordInsurancePolicyUrls,
+      );
     }
-  
+
     // Upload utility and maintenance documents
     if (updatePropertyDto.utilityAndMaintenance) {
       utilityAndMaintenanceUrls = await Promise.all(
-        updatePropertyDto.utilityAndMaintenance.map(async (file: Express.Multer.File) => {
-          return await this.cloudinaryService.upload(file);
-        }),
+        updatePropertyDto.utilityAndMaintenance.map(
+          async (file: Express.Multer.File) => {
+            return await this.cloudinaryService.upload(file);
+          },
+        ),
       );
-  
+
       singleProperty.utilityAndMaintenance.push(...utilityAndMaintenanceUrls);
     }
-  
+
     // Upload other documents
     if (updatePropertyDto.otherDocuments) {
       otherDocumentsUrls = await Promise.all(
-        updatePropertyDto.otherDocuments.map(async (file: Express.Multer.File) => {
-          return await this.cloudinaryService.upload(file);
-        }),
+        updatePropertyDto.otherDocuments.map(
+          async (file: Express.Multer.File) => {
+            return await this.cloudinaryService.upload(file);
+          },
+        ),
       );
-  
+
       singleProperty.otherDocuments.push(...otherDocumentsUrls);
     }
-  
+
     // Update other properties
     if (updatePropertyDto.unit) {
       singleProperty.unit = updatePropertyDto.unit;
@@ -172,17 +194,17 @@ export class PropertiesService {
     if (updatePropertyDto.zipCode) {
       singleProperty.zipCode = updatePropertyDto.zipCode;
     }
-  
+
     // Update the property in the database
     const updatedProperty = await this.propertyModel.findByIdAndUpdate(
       updatePropertyDto?.query,
       singleProperty,
       { new: true, runValidators: true },
     );
-  
+
     return updatedProperty;
   }
-  
+
   async findPropertyByUserId(
     id: string,
     page: number = 1,
@@ -221,11 +243,11 @@ export class PropertiesService {
   ): Promise<any> {
     const searchRegex = new RegExp(search, 'i');
     const propertyQuery: any = {};
-  
+
     if (userId) {
       propertyQuery.createdBy = userId;
     }
-  
+
     if (search) {
       propertyQuery.$or = [
         { state: searchRegex },
@@ -233,10 +255,10 @@ export class PropertiesService {
         { streetAddress: searchRegex },
       ];
     }
-  
+
     // Pagination
     const skip = (page - 1) * limit;
-  
+
     // Fetch properties with rooms populated
     const allProperties = await this.propertyModel
       .find(propertyQuery)
@@ -249,33 +271,31 @@ export class PropertiesService {
       .limit(limit)
       .exec();
 
-
     const filteredProperties = allProperties.map((property) => {
       const rooms = property.rooms || [];
-  
+
       // Apply rent filtering if needed
       const filteredRooms = rooms.filter((room: any) => {
         const rent = room.rentAmount;
         if (typeof rent !== 'number') return false;
-  
+
         if (minPrice !== undefined && rent < minPrice) return false;
         if (maxPrice !== undefined && rent > maxPrice) return false;
         return true;
       });
-  
+
       // Enrich the property data
       return {
         ...property.toObject(),
         apartments: filteredRooms,
         apartmentCount: filteredRooms.length,
-        unitsLeft: filteredRooms.filter((room) => !room.assignedToTenant).length,
+        unitsLeft: filteredRooms.filter((room) => !room.assignedToTenant)
+          .length,
       };
     });
-  
+
     return filteredProperties;
   }
-  
-  
 
   async findPropertyById(id: any): Promise<any> {
     const property = await this.propertyModel
@@ -284,17 +304,17 @@ export class PropertiesService {
       .populate({
         path: 'rooms',
         model: 'Room',
-        options: { sort: { createdAt: -1 } }, 
+        options: { sort: { createdAt: -1 } },
       })
       .exec();
-  
+
     if (!property) {
       throw new NotFoundException('Property not found');
     }
-  
+
     // Extract and filter rooms if necessary
     const rooms = property.rooms || [];
-  
+
     return {
       _id: property._id,
       streetAddress: property.streetAddress,
@@ -317,14 +337,13 @@ export class PropertiesService {
       unitsLeft: rooms.filter((room: any) => !room.assignedToTenant).length,
     };
   }
-  
 
   async findPropertyByIdForTenant(id: any, tenantId: any): Promise<any> {
-    let result: any = {};
-    let property: any = await this.propertyModel
+    const result: any = {};
+    const property: any = await this.propertyModel
       .findOne({ _id: id })
       .populate('createdBy');
-    let hasTenantApplied: any = await this.applicationModel.findOne({
+    const hasTenantApplied: any = await this.applicationModel.findOne({
       applicant: tenantId,
       propertyId: id,
     });
@@ -413,7 +432,7 @@ export class PropertiesService {
 
   async createApplication(body: any) {
     let fileUrl = null;
-    if (body.file != 'null' || null)  {
+    if (body.file != 'null' || null) {
       fileUrl = await this.cloudinaryService.upload(body.file[0]);
     }
     const applicationData = {
@@ -457,8 +476,7 @@ export class PropertiesService {
           path: 'propertyId',
           populate: {
             path: 'propertyId',
-
-          }
+          },
         })
         .populate('applicant')
         .sort({ createdAt: -1 })
@@ -496,8 +514,7 @@ export class PropertiesService {
           path: 'propertyId',
           populate: {
             path: 'propertyId',
-
-          }
+          },
         })
         .populate('applicant')
         .sort({ createdAt: -1 })
@@ -510,12 +527,21 @@ export class PropertiesService {
     }
   }
 
-  async updateApplicationStatusById(id: any, newStatus: string, roomId?: any): Promise<any> {
-
+  async updateApplicationStatusById(
+    id: any,
+    newStatus: string,
+    roomId?: any,
+  ): Promise<any> {
     try {
-      if (newStatus === "activeTenant") {
-        const doesActiveTenantExists = await this.applicationModel.findOne({ propertyId: roomId }).where("status").equals("activeTenant");
-        if (doesActiveTenantExists) return new BadRequestException("This property/apartment has an active tenant")
+      if (newStatus === 'activeTenant') {
+        const doesActiveTenantExists = await this.applicationModel
+          .findOne({ propertyId: roomId })
+          .where('status')
+          .equals('activeTenant');
+        if (doesActiveTenantExists)
+          return new BadRequestException(
+            'This property/apartment has an active tenant',
+          );
       }
       const updatedApplication = await this.findApplicationyById(id);
 
@@ -536,14 +562,15 @@ export class PropertiesService {
     }
   }
 
-  async getLandLordCount(
-    id: any,
-  ): Promise<{
-    totalNew: number;
-    totalAccepted: number;
-    totalActiveTenants: number;
-    totalProperties: number;
-  } | any> {
+  async getLandLordCount(id: any): Promise<
+    | {
+        totalNew: number;
+        totalAccepted: number;
+        totalActiveTenants: number;
+        totalProperties: number;
+      }
+    | any
+  > {
     try {
       const totalNewPromise = this.applicationModel
         .countDocuments({ ownerId: id, status: 'New' })
@@ -556,35 +583,37 @@ export class PropertiesService {
       const totalActiveTenantsPromise = await this.applicationModel
         .countDocuments({ ownerId: id, status: 'activeTenant' })
         .exec();
-       
-        const totalPropertiesPromise = await this.propertyModel
+
+      const totalPropertiesPromise = await this.propertyModel
         .countDocuments({ createdBy: id })
         .exec();
 
-      let [totalNew, totalAccepted, totalActiveTenants, totalProperties] = await Promise.all([
-        totalNewPromise,
-        totalAcceptedPromise,
-        totalActiveTenantsPromise + x.length,
-        totalPropertiesPromise
-      ]);
+      const [totalNew, totalAccepted, totalActiveTenants, totalProperties] =
+        await Promise.all([
+          totalNewPromise,
+          totalAcceptedPromise,
+          totalActiveTenantsPromise + x.length,
+          totalPropertiesPromise,
+        ]);
       return {
         totalNew,
         totalAccepted,
         totalActiveTenants,
-        totalProperties
+        totalProperties,
       };
     } catch (error) {
       throw new Error(`Failed to fetch landlord applications: ${error}`);
     }
   }
 
-  async getTenantMetrics(
-    id: any,
-  ): Promise<{
-    totalNew: number;
-    totalAccepted: number;
-    totalActiveTenants: number;
-  } | any> {
+  async getTenantMetrics(id: any): Promise<
+    | {
+        totalNew: number;
+        totalAccepted: number;
+        totalActiveTenants: number;
+      }
+    | any
+  > {
     try {
       const totalNewPromise = this.applicationModel
         .countDocuments({ applicant: id, status: 'New' })
@@ -597,7 +626,7 @@ export class PropertiesService {
         .countDocuments({ createdBy: id })
         .exec();
 
-      let [totalNew, totalAccepted, totalActiveTenants] = await Promise.all([
+      const [totalNew, totalAccepted, totalActiveTenants] = await Promise.all([
         totalNewPromise,
         totalAcceptedPromise,
         totalActiveTenantsPromise,
@@ -616,19 +645,20 @@ export class PropertiesService {
     try {
       const existingMapping = await this.landlordAssignedTenantModel.findOne({
         propertyId: propertyId,
-        status: 'active'
+        status: 'active',
       });
       const doesActiveTenantExist = await this.applicationModel.findOne({
         propertyId: propertyId,
-        status: 'activeTenant'
+        status: 'activeTenant',
       });
 
       if (doesActiveTenantExist) {
-        throw new BadRequestException("This property/apartment has an active tenant");
+        throw new BadRequestException(
+          'This property/apartment has an active tenant',
+        );
       }
       return !!existingMapping;
     } catch (error) {
-
       console.error(`Failed to check property mapping: ${error.message}`);
       throw new Error(`Failed to check property mapping: ${error.message}`);
     }
@@ -640,24 +670,29 @@ export class PropertiesService {
       const isMapped = await this.isPropertyMappedToActiveTenant(propertyId);
 
       if (isMapped) {
-        throw new Error(`The propertyId ${propertyId} is already mapped to an active tenant.`);
+        throw new Error(
+          `The propertyId ${propertyId} is already mapped to an active tenant.`,
+        );
       }
-      const newApplication = await this.landlordAssignedTenantModel.create(payload);
+      const newApplication =
+        await this.landlordAssignedTenantModel.create(payload);
       return newApplication;
-
     } catch (error) {
       throw new Error(`Failed to map user to this apartment: ${error.message}`);
     }
   }
 
   async findLandlordOnboardedTenants(id: any): Promise<any> {
-    const tenants = await this.landlordAssignedTenantModel.find({ ownerId: id, status: "active" }).populate('ownerId').populate({
-      path: 'propertyId',
-      populate: {
+    const tenants = await this.landlordAssignedTenantModel
+      .find({ ownerId: id, status: 'active' })
+      .populate('ownerId')
+      .populate({
         path: 'propertyId',
-
-      }
-    }).populate('applicant');
+        populate: {
+          path: 'propertyId',
+        },
+      })
+      .populate('applicant');
     return tenants;
   }
 
@@ -666,27 +701,26 @@ export class PropertiesService {
     if (!user) {
       return null;
     }
-  
-    let owner = await this.userModel.findOne({ _id: userId });  
+
+    const owner = await this.userModel.findOne({ _id: userId });
     if (owner) {
       const historyExists = owner.tenantVerficationHistory.some(
-        (history: any) => history.nin.includes(nin)
+        (history: any) => history.nin.includes(nin),
       );
-
-
 
       if (!historyExists) {
         const verificationHistory = {
           timestamp: new Date(),
           details: `Tenant with NIN ${nin} has been verified by ${owner.firstName} ${owner.lastName}`,
-          nin: nin, 
+          nin: nin,
         };
-  
+
         owner.tenantVerficationHistory.push(verificationHistory);
         await owner.save();
-      } 
-  
-      const tenants = await this.landlordAssignedTenantModel.find({ applicant: user._id })
+      }
+
+      const tenants = await this.landlordAssignedTenantModel
+        .find({ applicant: user._id })
         .populate('ownerId')
         .populate({
           path: 'propertyId',
@@ -703,40 +737,47 @@ export class PropertiesService {
   async uploadAgreementDocuments(body: any) {
     try {
       console.log({ body });
-      
+
       // Check if an unsigned document already exists for the applicant
       if (body.unsignedDocument && body.unsignedDocument.length > 0) {
-        const existingUnsignedDocument = await this.agreementDocumentsModel.findOne({
-          applicant: body.applicant,
-          status: 'Unsigned',
-        });
+        const existingUnsignedDocument =
+          await this.agreementDocumentsModel.findOne({
+            applicant: body.applicant,
+            status: 'Unsigned',
+          });
         if (existingUnsignedDocument) {
-          throw new Error('An unsigned agreement document for this applicant already exists.');
+          throw new Error(
+            'An unsigned agreement document for this applicant already exists.',
+          );
         }
       }
-  
+
       // Handle uploading of the unsigned document if present
       let unsignedDocument = null;
       if (body.unsignedDocument && body.unsignedDocument.length > 0) {
-        unsignedDocument = await this.cloudinaryService.upload(body.unsignedDocument[0]);
+        unsignedDocument = await this.cloudinaryService.upload(
+          body.unsignedDocument[0],
+        );
         if (!unsignedDocument) {
           throw new Error('Failed to upload unsigned document.');
         }
       }
-  
+
       // Handle uploading of the signed document if present
       let signedDocument = null;
       if (body.signedDocument && body.signedDocument.length > 0) {
-        signedDocument = await this.cloudinaryService.upload(body.signedDocument[0]);
+        signedDocument = await this.cloudinaryService.upload(
+          body.signedDocument[0],
+        );
         if (!signedDocument) {
           throw new Error('Failed to upload signed document.');
         }
-  
+
         // If an existing document exists, update it with the signed document
         const existingDocument = await this.agreementDocumentsModel.findOne({
           applicant: body.applicant,
         });
-  
+
         if (existingDocument) {
           // Update existing document with the signed document
           existingDocument.signedDocument = signedDocument;
@@ -745,7 +786,7 @@ export class PropertiesService {
           return existingDocument; // Return the updated document
         }
       }
-  
+
       // If no signed document exists, create a new document
       const data = {
         propertyId: body.propertyId,
@@ -755,13 +796,15 @@ export class PropertiesService {
         unsignedDocument,
         signedDocument,
       };
-  
+
       // Create a new agreement document if no update was performed
-      const newAgreementDocuments = await this.agreementDocumentsModel.create(data);
+      const newAgreementDocuments =
+        await this.agreementDocumentsModel.create(data);
       return newAgreementDocuments;
     } catch (error) {
-      throw new Error(`Failed to create or update agreement document: ${error.message}`);
+      throw new Error(
+        `Failed to create or update agreement document: ${error.message}`,
+      );
     }
   }
-  
 }

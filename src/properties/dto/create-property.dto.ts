@@ -1,33 +1,51 @@
-import { IsString, IsEmail, IsNotEmpty, IsNumberString, Length, IsEnum, IsBoolean } from 'class-validator';
+import {
+  IsString,
+  IsEmail,
+  IsNotEmpty,
+  IsNumberString,
+  Length,
+  IsEnum,
+  IsBoolean,
+} from 'class-validator';
 import { UploadedFile } from '@nestjs/common';
 import { Express } from 'express';
+import { ApiProperty } from '@nestjs/swagger';
 
 export class CreatePropertyDto {
-    @IsString()
-    @IsNotEmpty()
-    streetAddress: string;
+  @IsString()
+  @IsNotEmpty()
+  @ApiProperty()
+  streetAddress: string;
 
-    @IsString()
-    @IsNotEmpty()
-    city: string;
+  @IsString()
+  @IsNotEmpty()
+  @ApiProperty()
+  city: string;
 
-    @IsString()
-    @IsNotEmpty()
-    state: string;
+  @IsString()
+  @IsNotEmpty()
+  @ApiProperty()
+  state: string;
 
-    @IsString()
-    @IsNotEmpty()
-    zipCode: string;
+  @IsString()
+  @IsNotEmpty()
+  @ApiProperty()
+  zipCode: string;
 
-    @IsString()
-    @IsNotEmpty()
-    createdBy: string;
+  @IsString()
+  @IsNotEmpty()
+  @ApiProperty()
+  createdBy: string;
 
-    file: Express.Multer.File;
+  @ApiProperty()
+  file: Express.Multer.File;
 
-    landlordInsurancePolicy: Express.Multer.File;
+  @ApiProperty()
+  landlordInsurancePolicy: Express.Multer.File;
 
-    utilityAndMaintenance: Express.Multer.File;
+  @ApiProperty()
+  utilityAndMaintenance: Express.Multer.File;
 
-    otherDocuments: Express.Multer.File;
+  @ApiProperty()
+  otherDocuments: Express.Multer.File;
 }

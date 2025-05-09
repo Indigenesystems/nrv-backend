@@ -36,6 +36,8 @@ import { MessagingController } from './messages/messages.controller';
 import { MessagingService } from './messages/messages.service';
 import { MessagesModule } from './messages/messages.module';
 import { MessageSchema } from './messages/entities/message.entity';
+import { DocumentsModule } from './documents/documents.module';
+import { ApiProperty } from '@nestjs/swagger';
 
 @Module({
   imports: [
@@ -43,10 +45,20 @@ import { MessageSchema } from './messages/entities/message.entity';
     UsersModule,
     EmailServiceModule,
     // MyMulterModule,
-    MongooseModule.forFeature([{ name: 'AgreementDocuments', schema: UserSchema },{ name: 'Message', schema: MessageSchema },{ name: 'User', schema: AgreementDocumentsSchema }, { name: 'NotificationSettings', schema: NotificationSettingsSchema },{ name: 'Property', schema: PropertySchema }, { name: 'Room', schema: RoomSchema },  { name: 'Application', schema:  ApplicationSchema }, { name: 'Maintenance', schema:  MaintenanceSchema }, { name: 'LandlordAssignedTenant', schema:  LandlordAssignedTenantSchema }]),
+    MongooseModule.forFeature([
+      { name: 'AgreementDocuments', schema: UserSchema },
+      { name: 'Message', schema: MessageSchema },
+      { name: 'User', schema: AgreementDocumentsSchema },
+      { name: 'NotificationSettings', schema: NotificationSettingsSchema },
+      { name: 'Property', schema: PropertySchema },
+      { name: 'Room', schema: RoomSchema },
+      { name: 'Application', schema: ApplicationSchema },
+      { name: 'Maintenance', schema: MaintenanceSchema },
+      { name: 'LandlordAssignedTenant', schema: LandlordAssignedTenantSchema },
+    ]),
     JwtModule.register({
-      secret: 'your-secret-key-here',
-      signOptions: { expiresIn: '1d' }, 
+      secret: '34ttyyuhbyh',
+      signOptions: { expiresIn: '1d' },
     }),
     AuthModule,
     PropertiesModule,
@@ -54,6 +66,7 @@ import { MessageSchema } from './messages/entities/message.entity';
     MessagesModule,
     MaintenanceModule,
     ExpensesModule,
+    DocumentsModule,
   ],
   controllers: [AppController, UserController, AuthController, PropertiesController, RoomsController, UserController, MaintenanceController, MessagingController],
   providers: [AppService, UserService, AuthService, EmailService, CloudinaryService, PropertiesService, RoomsService, MaintenanceService, MessagingService], 

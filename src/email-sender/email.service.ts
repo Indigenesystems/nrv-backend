@@ -2,9 +2,11 @@
 
 import { Injectable } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
+import { ApiProperty } from '@nestjs/swagger';
 
 @Injectable()
 export class EmailService {
+  @ApiProperty()
   private transporter: nodemailer.Transporter;
 
   constructor() {
@@ -13,9 +15,9 @@ export class EmailService {
       port: 465, // or 465 for SSL/TLS
       secure: true, // Set to true if using SSL/TLS
       auth: {
-        user: "hello@naijarentverify.com",
-        pass: "Maythird1.!"
-      }
+        user: 'hello@naijarentverify.com',
+        pass: 'Maythird1.!',
+      },
       // service: "gmail",
       // auth: {
       //     user: "mailto:ojobabajide629@gmail.com",
@@ -25,7 +27,6 @@ export class EmailService {
   }
 
   async sendUserCreatedEmail(payload: any): Promise<void> {
-
     const emailTemplate = `<!DOCTYPE html>
     <html>
     <head>
@@ -247,13 +248,16 @@ export class EmailService {
     </html>`;
 
     const replacements = {
-      "[userName]": payload.firstName + ' ' + payload.lastName,
-      "[userEmail]": payload.email,
-      "[verificationToken]": payload.confirmationCode,
-      "[accountType]": payload.accountType
+      '[userName]': payload.firstName + ' ' + payload.lastName,
+      '[userEmail]': payload.email,
+      '[verificationToken]': payload.confirmationCode,
+      '[accountType]': payload.accountType,
     };
 
-    const resultEmailTemplate = emailTemplate.replace(/\[userName\]|\[userRoleTag\]|\[userEmail\]|\[userPassword\]|\[verificationToken\]|\[accountType\]|\[loginUrl\]|\[supportTeamEmail\]/g, (match) => replacements[match]);
+    const resultEmailTemplate = emailTemplate.replace(
+      /\[userName\]|\[userRoleTag\]|\[userEmail\]|\[userPassword\]|\[verificationToken\]|\[accountType\]|\[loginUrl\]|\[supportTeamEmail\]/g,
+      (match) => replacements[match],
+    );
 
     try {
       const info = await this.transporter.sendMail({
@@ -262,8 +266,6 @@ export class EmailService {
         subject: 'Welcome onboard',
         html: resultEmailTemplate,
       });
-
-
     } catch (error) {
       console.error('Email sending error: ', error);
       throw error;
@@ -271,7 +273,6 @@ export class EmailService {
   }
 
   async sendApplicationInvitation(payload: any): Promise<void> {
-
     const emailTemplate = `<!DOCTYPE html>
     <html>
     <head>
@@ -494,11 +495,14 @@ export class EmailService {
     </html>`;
 
     const replacements = {
-      "[userName]": payload.name,
-      "[userEmail]": payload.email
+      '[userName]': payload.name,
+      '[userEmail]': payload.email,
     };
 
-    const resultEmailTemplate = emailTemplate.replace(/\[userName\]|\[userRoleTag\]|\[userEmail\]|\[userPassword\]|\[verificationToken\]|\[accountType\]|\[loginUrl\]|\[supportTeamEmail\]/g, (match) => replacements[match]);
+    const resultEmailTemplate = emailTemplate.replace(
+      /\[userName\]|\[userRoleTag\]|\[userEmail\]|\[userPassword\]|\[verificationToken\]|\[accountType\]|\[loginUrl\]|\[supportTeamEmail\]/g,
+      (match) => replacements[match],
+    );
 
     try {
       const info = await this.transporter.sendMail({
@@ -507,7 +511,6 @@ export class EmailService {
         subject: 'Invitation to Apply',
         html: resultEmailTemplate,
       });
-
     } catch (error) {
       console.error('Email sending error: ', error);
       throw error;
@@ -515,7 +518,6 @@ export class EmailService {
   }
 
   async sendUserCreatedByLandlordEmail(payload: any): Promise<void> {
-
     const emailTemplate = `<!DOCTYPE html>
     <html>
     <head>
@@ -740,13 +742,16 @@ export class EmailService {
     </html>`;
 
     const replacements = {
-      "[userName]": payload.firstName + ' ' + payload.lastName,
-      "[userEmail]": payload.email,
-      "[verificationToken]": payload.password,
-      "[accountType]": payload.accountType
+      '[userName]': payload.firstName + ' ' + payload.lastName,
+      '[userEmail]': payload.email,
+      '[verificationToken]': payload.password,
+      '[accountType]': payload.accountType,
     };
 
-    const resultEmailTemplate = emailTemplate.replace(/\[userName\]|\[userRoleTag\]|\[userEmail\]|\[userPassword\]|\[verificationToken\]|\[accountType\]|\[loginUrl\]|\[supportTeamEmail\]/g, (match) => replacements[match]);
+    const resultEmailTemplate = emailTemplate.replace(
+      /\[userName\]|\[userRoleTag\]|\[userEmail\]|\[userPassword\]|\[verificationToken\]|\[accountType\]|\[loginUrl\]|\[supportTeamEmail\]/g,
+      (match) => replacements[match],
+    );
 
     try {
       const info = await this.transporter.sendMail({
@@ -755,7 +760,6 @@ export class EmailService {
         subject: 'Your Landlord has Onboarded on NaijaRentVerify',
         html: resultEmailTemplate,
       });
-
     } catch (error) {
       console.error('Email sending error: ', error);
       throw error;
@@ -984,13 +988,16 @@ export class EmailService {
     </html>`;
 
     const replacements = {
-      "[userName]": payload._doc.firstName + ' ' + payload._doc.lastName,
-      "[userEmail]": payload._doc.email,
-      "[verificationToken]": payload.passwordResetToken,
-      "[accountType]": payload.accountType
+      '[userName]': payload._doc.firstName + ' ' + payload._doc.lastName,
+      '[userEmail]': payload._doc.email,
+      '[verificationToken]': payload.passwordResetToken,
+      '[accountType]': payload.accountType,
     };
 
-    const resultEmailTemplate = emailTemplate.replace(/\[userName\]|\[userRoleTag\]|\[userEmail\]|\[userPassword\]|\[verificationToken\]|\[accountType\]|\[loginUrl\]|\[supportTeamEmail\]/g, (match) => replacements[match]);
+    const resultEmailTemplate = emailTemplate.replace(
+      /\[userName\]|\[userRoleTag\]|\[userEmail\]|\[userPassword\]|\[verificationToken\]|\[accountType\]|\[loginUrl\]|\[supportTeamEmail\]/g,
+      (match) => replacements[match],
+    );
 
     try {
       const info = await this.transporter.sendMail({
@@ -999,9 +1006,7 @@ export class EmailService {
         subject: 'Reset Password Code',
         html: resultEmailTemplate,
       });
-      console.log("email sent successfully");
-      
-
+      console.log('email sent successfully');
     } catch (error) {
       console.error('Email sending error: ', error);
       throw error;
@@ -1139,15 +1144,18 @@ export class EmailService {
     </table>
   </body>
   </html>`;
-  
+
     const replacements = {
-      "[recipientName]": payload.recipientName,
-      "[senderName]": payload.senderName,
-      "[messageContent]": payload.messageContent,
+      '[recipientName]': payload.recipientName,
+      '[senderName]': payload.senderName,
+      '[messageContent]': payload.messageContent,
     };
-  
-    const resultEmailTemplate = emailTemplate.replace(/\[recipientName\]|\[senderName\]|\[messageContent\]/g, (match) => replacements[match]);
-  
+
+    const resultEmailTemplate = emailTemplate.replace(
+      /\[recipientName\]|\[senderName\]|\[messageContent\]/g,
+      (match) => replacements[match],
+    );
+
     try {
       const info = await this.transporter.sendMail({
         from: 'hello@naijarentverify.com',
@@ -1155,11 +1163,10 @@ export class EmailService {
         subject: 'You Have a New Message',
         html: resultEmailTemplate,
       });
-      console.log("Email sent successfully");
+      console.log('Email sent successfully');
     } catch (error) {
       console.error('Email sending error: ', error);
       throw error;
     }
   }
-  
 }

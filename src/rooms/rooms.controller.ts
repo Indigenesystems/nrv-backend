@@ -1,4 +1,15 @@
-import { BadRequestException, Body, Controller, Get, Param, Post, Put, Query, UploadedFiles, UseInterceptors } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Put,
+  Query,
+  UploadedFiles,
+  UseInterceptors,
+} from '@nestjs/common';
 import { RoomsService } from './rooms.service';
 import { createRoomSchema } from '../validations/validator';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
@@ -6,18 +17,24 @@ import { LandlordAssignedTenant } from '../properties/entities/landlord_assigned
 import { Model } from 'mongoose';
 import { InjectModel } from '@nestjs/mongoose';
 import { AgreementDocuments } from 'src/properties/entities/agreement_documents.entity';
-
-
+import { ApiProperty } from '@nestjs/swagger';
 
 @Controller('rooms')
 export class RoomsController {
-  constructor(    @InjectModel(AgreementDocuments.name) private readonly agreementDocumentsModel: Model<AgreementDocuments>,private roomsService: RoomsService, @InjectModel(LandlordAssignedTenant.name) private readonly landlordAssignedTenantModel: Model<LandlordAssignedTenant>) { }
+  constructor(
+    @InjectModel(AgreementDocuments.name)
+    private readonly agreementDocumentsModel: Model<AgreementDocuments>,
+    private roomsService: RoomsService,
+    @InjectModel(LandlordAssignedTenant.name)
+    private readonly landlordAssignedTenantModel: Model<LandlordAssignedTenant>,
+  ) {}
 
   @Post('/create')
-  @UseInterceptors(FileFieldsInterceptor([
-    { name: 'file', maxCount: 1 },
-  ]))
-  async createRoom(@Body() roomData: any, @UploadedFiles() files: { file?: Express.Multer.File }) {
+  @UseInterceptors(FileFieldsInterceptor([{ name: 'file', maxCount: 1 }]))
+  async createRoom(
+    @Body() roomData: any,
+    @UploadedFiles() files: { file?: Express.Multer.File },
+  ) {
     try {
       const createRoomDTO = { ...roomData, ...files };
       const validationResult = createRoomSchema.validate(roomData);
@@ -26,11 +43,11 @@ export class RoomsController {
         throw new BadRequestException(validationResult.error.message);
       }
 
-      const data = await this.roomsService.createRooms(createRoomDTO)
+      const data = await this.roomsService.createRooms(createRoomDTO);
       return {
-        status: "success",
-        message: "Rooms added successfully",
-        data: data
+        status: 'success',
+        message: 'Rooms added successfully',
+        data: data,
       };
     } catch (error) {
       throw new BadRequestException(error.message);
@@ -45,8 +62,14 @@ export class RoomsController {
     @Query('maxPrice') maxPrice?: number,
     @Query('id') id?: string,
   ) {
-
-    const properties = await this.roomsService.findAllApartments(page, limit, search, minPrice, maxPrice, id);
+    const properties = await this.roomsService.findAllApartments(
+      page,
+      limit,
+      search,
+      minPrice,
+      maxPrice,
+      id,
+    );
     if (!properties || properties.length === 0) {
       return {
         status: 'success',
@@ -63,19 +86,19 @@ export class RoomsController {
   }
 
   @Get('/:id')
-  async findProperyByUserId(@Param('id') id: string,) {
+  async findProperyByUserId(@Param('id') id: string) {
     const users = await this.roomsService.roomByPropertyId(id);
     if (!users) {
       return {
-        status: "success",
-        message: "No room found",
-        data: null
-      }
+        status: 'success',
+        message: 'No room found',
+        data: null,
+      };
     } else {
       return {
-        status: "success",
-        message: "rooms fetched",
-        data: users
+        status: 'success',
+        message: 'rooms fetched',
+        data: users,
       };
     }
   }
@@ -85,33 +108,36 @@ export class RoomsController {
     try {
       let finalResult: any = null;
       let agreementDocument = null;
-      const activeTenant = await this.roomsService.findCurrentOccupantForRoom(id);
-  
+      const activeTenant =
+        await this.roomsService.findCurrentOccupantForRoom(id);
+
       if (activeTenant) {
         finalResult = activeTenant;
       } else {
-        finalResult = await this.landlordAssignedTenantModel.findOne({
-          propertyId: id,
-          status: 'active',
-        })
+        finalResult = await this.landlordAssignedTenantModel
+          .findOne({
+            propertyId: id,
+            status: 'active',
+          })
           .populate('propertyId')
           .populate('applicant')
           .lean();
       }
       if (!finalResult) {
-        throw new Error('No active tenant or assignment found for the given property ID.');
+        throw new Error(
+          'No active tenant or assignment found for the given property ID.',
+        );
       }
 
       if (finalResult?.applicant?._id) {
         agreementDocument = await this.agreementDocumentsModel.findOne({
           applicant: finalResult.applicant._id.toString(),
-        });  
+        });
         finalResult = {
-          finalResult, 
-          agreementDocument: agreementDocument || null, 
+          finalResult,
+          agreementDocument: agreementDocument || null,
         };
-        console.log('Final Result with Agreement Document:', finalResult
-        );
+        console.log('Final Result with Agreement Document:', finalResult);
       }
       return {
         status: 'success',
@@ -122,20 +148,22 @@ export class RoomsController {
       console.error('Error fetching active tenant:', error);
       throw new BadRequestException({
         status: 'error',
-        message: error.message || 'An error occurred while fetching the active tenant.',
+        message:
+          error.message ||
+          'An error occurred while fetching the active tenant.',
       });
     }
   }
-  
 
   @Get('/update/status')
   async update(@Query('id') id: string, @Query('status') status: boolean) {
     try {
-      const updatedSubProperty = await this.roomsService.updateSubPropertyStatus(id, status);
+      const updatedSubProperty =
+        await this.roomsService.updateSubPropertyStatus(id, status);
       return {
-        status: "success",
-        message: "Sub property updated successfully",
-        data: updatedSubProperty
+        status: 'success',
+        message: 'Sub property updated successfully',
+        data: updatedSubProperty,
       };
     } catch (error) {
       throw new BadRequestException(error.message);
@@ -147,46 +175,51 @@ export class RoomsController {
     const user = await this.roomsService.singlePropertyById(id);
     if (!user) {
       return {
-        status: "success",
-        message: "No room found",
-        data: null
-      }
+        status: 'success',
+        message: 'No room found',
+        data: null,
+      };
     } else {
       return {
-        status: "success",
-        message: "room fetched successfully",
-        data: user
+        status: 'success',
+        message: 'room fetched successfully',
+        data: user,
       };
     }
   }
 
   @Get('/single/tenant/:id/:tenantId')
-  async findPropertyByIdForTenant(@Param('id') id: string, @Param('tenantId') tenantId: string) {
-    const property = await this.roomsService.findPropertyByIdForTenant(id, tenantId);
+  async findPropertyByIdForTenant(
+    @Param('id') id: string,
+    @Param('tenantId') tenantId: string,
+  ) {
+    const property = await this.roomsService.findPropertyByIdForTenant(
+      id,
+      tenantId,
+    );
     if (!property) {
       return {
-        status: "error",
-        message: "No property found",
-        data: property
-      }
+        status: 'error',
+        message: 'No property found',
+        data: property,
+      };
     } else {
       return {
-        status: "success",
-        message: "Property fetched",
-        data: property
+        status: 'success',
+        message: 'Property fetched',
+        data: property,
       };
     }
   }
-
 
   @Get('/properties/renters')
   async getRentedProperties(@Query('id') id: string) {
     try {
       const properties = await this.roomsService.findRentedApartments(id);
       return {
-        status: "success",
-        message: "Properties fetched",
-        data: properties
+        status: 'success',
+        message: 'Properties fetched',
+        data: properties,
       };
     } catch (error) {
       throw new BadRequestException(error);
@@ -195,7 +228,7 @@ export class RoomsController {
 
   @Put(':id/extend-tenancy')
   async updateRentEndDate(
-    @Param('id') id: string, 
+    @Param('id') id: string,
     @Body('rentEndDate') rentEndDate: Date,
   ) {
     try {
@@ -205,8 +238,11 @@ export class RoomsController {
       }
 
       // Update the rentEndDate
-      const updatedTenant = await this.roomsService.updateRentEndDate(id, rentEndDate);
-      
+      const updatedTenant = await this.roomsService.updateRentEndDate(
+        id,
+        rentEndDate,
+      );
+
       if (!updatedTenant) {
         throw new BadRequestException('LandlordAssignedTenant not found');
       }
@@ -223,7 +259,7 @@ export class RoomsController {
 
   @Put(':id/assign-tenancy-date')
   async updateRentEndAndStartDate(
-    @Param('id') id: string, 
+    @Param('id') id: string,
     @Body('rentEndDate') rentEndDate: Date,
     @Body('rentStartDate') rentStartDate: Date,
   ) {
@@ -234,8 +270,12 @@ export class RoomsController {
       }
 
       // Update the rentEndDate
-      const updatedTenant = await this.roomsService.assignStartAndEndDate(id, rentEndDate, rentStartDate);
-      
+      const updatedTenant = await this.roomsService.assignStartAndEndDate(
+        id,
+        rentEndDate,
+        rentStartDate,
+      );
+
       if (!updatedTenant) {
         throw new BadRequestException('Application not found');
       }
@@ -250,26 +290,26 @@ export class RoomsController {
     }
   }
 
-  assignStartAndEndDate
+  @ApiProperty()
+  assignStartAndEndDate;
 
   @Put(':id/end-tenure')
-async endRentTenure(@Param('id') id: string) {
-  try {
-    // Find the landlord assigned tenant by ID and mark the tenure as ended
-    const updatedTenant = await this.roomsService.endRentTenure(id);
-    
-    if (!updatedTenant) {
-      throw new BadRequestException('LandlordAssignedTenant not found');
+  async endRentTenure(@Param('id') id: string) {
+    try {
+      // Find the landlord assigned tenant by ID and mark the tenure as ended
+      const updatedTenant = await this.roomsService.endRentTenure(id);
+
+      if (!updatedTenant) {
+        throw new BadRequestException('LandlordAssignedTenant not found');
+      }
+
+      return {
+        status: 'success',
+        message: 'Rent tenure ended successfully',
+        data: updatedTenant,
+      };
+    } catch (error) {
+      throw new BadRequestException(error.message);
     }
-
-    return {
-      status: 'success',
-      message: 'Rent tenure ended successfully',
-      data: updatedTenant,
-    };
-  } catch (error) {
-    throw new BadRequestException(error.message);
   }
-}
-
 }

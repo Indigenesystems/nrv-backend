@@ -12,19 +12,56 @@ import { User, UserSchema } from '../users/entities/user.entity';
 import { JwtService } from '@nestjs/jwt';
 import { EmailService } from '../email-sender/email.service';
 import { RoomSchema, Room } from '../rooms/entities/room.entity';
-import { Property, PropertySchema } from '../properties/entities/property.entity';
-import { Application, ApplicationSchema } from '../properties/entities/application.entity';
-import { LandlordAssignedTenant, LandlordAssignedTenantSchema } from '../properties/entities/landlord_assigned_tenant.entity';
+import {
+  Property,
+  PropertySchema,
+} from '../properties/entities/property.entity';
+import {
+  Application,
+  ApplicationSchema,
+} from '../properties/entities/application.entity';
+import {
+  LandlordAssignedTenant,
+  LandlordAssignedTenantSchema,
+} from '../properties/entities/landlord_assigned_tenant.entity';
 import { PropertiesService } from '../properties/properties.service';
 import { AuthService } from '../auth/auth.service';
-import { NotificationSettings, NotificationSettingsSchema } from 'src/users/entities/notificationSettings.entity';
-import { AgreementDocuments, AgreementDocumentsSchema } from 'src/properties/entities/agreement_documents.entity';
+import {
+  NotificationSettings,
+  NotificationSettingsSchema,
+} from 'src/users/entities/notificationSettings.entity';
+import {
+  AgreementDocuments,
+  AgreementDocumentsSchema,
+} from 'src/properties/entities/agreement_documents.entity';
+import { ApiProperty } from '@nestjs/swagger';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: Maintenance.name, schema: MaintenanceSchema },{ name: AgreementDocuments.name, schema: AgreementDocumentsSchema }, { name: User.name, schema: UserSchema }, { name: Room.name, schema: RoomSchema }, { name: Property.name, schema: PropertySchema }, { name: Application.name, schema: ApplicationSchema }, { name: LandlordAssignedTenant.name, schema: LandlordAssignedTenantSchema }, { name: NotificationSettings.name, schema: NotificationSettingsSchema }])
+    MongooseModule.forFeature([
+      { name: Maintenance.name, schema: MaintenanceSchema },
+      { name: AgreementDocuments.name, schema: AgreementDocumentsSchema },
+      { name: User.name, schema: UserSchema },
+      { name: Room.name, schema: RoomSchema },
+      { name: Property.name, schema: PropertySchema },
+      { name: Application.name, schema: ApplicationSchema },
+      {
+        name: LandlordAssignedTenant.name,
+        schema: LandlordAssignedTenantSchema,
+      },
+      { name: NotificationSettings.name, schema: NotificationSettingsSchema },
+    ]),
   ],
   controllers: [MaintenanceController, RoomsController, UserController],
-  providers: [MaintenanceService, UserService, RoomsService, CloudinaryService, JwtService, EmailService, PropertiesService, AuthService],
+  providers: [
+    MaintenanceService,
+    UserService,
+    RoomsService,
+    CloudinaryService,
+    JwtService,
+    EmailService,
+    PropertiesService,
+    AuthService,
+  ],
 })
-export class MaintenanceModule { }
+export class MaintenanceModule {}
