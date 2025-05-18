@@ -311,9 +311,9 @@ export class PropertiesController {
     }
   }
 
-  @Get('/tenant-applications')
+  @Get('/tenant-applications/:id')
   async getApplicantsByTenantId(
-    @Query('id') id: string,
+    @Param('id') id: string,
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10,
     @Query('status') status: string = 'New',
