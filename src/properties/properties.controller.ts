@@ -281,9 +281,9 @@ export class PropertiesController {
     }
   }
 
-  @Get('/applications')
+  @Get('/applications/:id')
   async findApplicantsByLandlordId(
-    @Query('id') id: string,
+    @Param('id') id: string,
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10,
     @Query('status') status: string = 'New',
@@ -533,4 +533,27 @@ export class PropertiesController {
       });
     }
   }
+
+  @Get('/single-application/:id')
+async fetchTenantHistoryById(
+  @Param('id') id: string,
+  @Res() res: Response,
+) {
+  const tenantHistory = await this.propertiesService.getLandlordApplicationById(id);
+
+  if (!tenantHistory) {
+    return res.status(HttpStatus.NOT_FOUND).json({
+      status: 'error',
+      message: 'Application not found',
+      data: null,
+    });
+  }
+
+  return res.status(HttpStatus.OK).json({
+    status: 'success',
+    message: 'Application fetched successfully',
+    data: tenantHistory,
+  });
+}
+
 }

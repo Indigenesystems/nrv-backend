@@ -465,7 +465,6 @@ export class PropertiesService {
     try {
       const skip = (page - 1) * limit;
       let query = this.applicationModel.find({ ownerId: id });
-
       if (status) {
         query = query.where('status').equals(status);
       }
@@ -807,4 +806,61 @@ export class PropertiesService {
       );
     }
   }
+
+  async getLandlordApplicationsById(
+    page: number = 1,
+    limit: number = 10,
+    id: any,
+    status: string,
+  ): Promise<any> {
+    try {
+      const skip = (page - 1) * limit;
+      let query = this.applicationModel.find({ ownerId: id });
+      if (status) {
+        query = query.where('status').equals(status);
+      }
+
+      const applications = await query
+        .populate('ownerId')
+        .populate({
+          path: 'propertyId',
+          populate: {
+            path: 'propertyId',
+          },
+        })
+        .populate('applicant')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .exec();
+      return applications;
+    } catch (error) {
+      throw new Error(`Failed to fetch landlord applications: ${error}`);
+    }
+  }
+
+  async getLandlordApplicationById(applicationId: string): Promise<any> {
+    try {
+      const application = await this.applicationModel
+        .findById(applicationId)
+        .populate('ownerId')
+        .populate({
+          path: 'propertyId',
+          populate: {
+            path: 'propertyId',
+          },
+        })
+        .populate('applicant')
+        .exec();
+  
+      if (!application) {
+        throw new Error('Application not found');
+      }
+  
+      return application;
+    } catch (error) {
+      throw new Error(`Failed to fetch landlord application: ${error.message}`);
+    }
+  }
+  
 }
