@@ -43,6 +43,11 @@ export class Application {
   @ApiProperty()
   currentResidence: string;
 
+  @Prop()
+  @ApiProperty()
+  jobTitle: string;
+
+
   @Prop({ default: null })
   @ApiProperty()
   rentEndDate: Date;

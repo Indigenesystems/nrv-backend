@@ -443,28 +443,22 @@ export class PropertiesController {
     @Query('status') status: string = 'activeTenant',
     @Res() res: Response,
   ) {
-    const tenants =
-      await this.propertiesService.findLandlordOnboardedTenants(id);
-    const applications = await this.propertiesService.getLandlordApplications(
+    const tenants =await this.propertiesService.findLandlordOnboardedTenants(id, status);
+      const applications = await this.propertiesService.getLandlordApplications(
       page,
       limit,
       id,
       status,
     );
+console.log({tenants, applications});
 
-    if (!tenants || tenants.length === 0) {
-      return res.status(HttpStatus.NOT_FOUND).json({
-        status: 'error',
-        message: 'No tenants found',
-        data: null,
-      });
-    } else {
+
       return res.status(HttpStatus.OK).json({
         status: 'success',
         message: 'Tenants fetched successfully',
         data: [...tenants, ...applications],
       });
-    }
+
   }
 
   @Get('/tenant-history')

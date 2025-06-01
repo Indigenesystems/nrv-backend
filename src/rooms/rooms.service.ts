@@ -219,9 +219,12 @@ export class RoomsService {
 
   async findRentedApartments(id: any): Promise<any> {
     try {
+      const now = new Date();
       const rentedApartments: any = await this.applicationModel
         .find({
           applicant: id,
+          // rentStartDate: { $lte: now },
+          // rentEndDate: { $gte: now },
         })
         .where('status')
         .equals('activeTenant')

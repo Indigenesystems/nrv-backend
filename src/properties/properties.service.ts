@@ -443,6 +443,7 @@ export class PropertiesService {
       identificationCard: fileUrl || null,
       currentEmployer: body.currentEmployer,
       reasonForLiving: body.reasonForLiving,
+      jobTitle: body.jobTitle,
       currentResidence: body.currentResidence,
       monthlyIncome: body.monthlyIncome,
     };
@@ -463,26 +464,54 @@ export class PropertiesService {
     status: string,
   ): Promise<any> {
     try {
+      const now = new Date();
+      let formattedStatus = status === 'activeTenant' ? 'active' : status;
+
       const skip = (page - 1) * limit;
       let query = this.applicationModel.find({ ownerId: id });
-      if (status) {
-        query = query.where('status').equals(status);
-      }
 
-      const applications = await query
-        .populate('ownerId')
-        .populate({
-          path: 'propertyId',
-          populate: {
+      if (formattedStatus === 'ended') {
+        // Rent has already ended
+        return await this.applicationModel
+          .find({
+            ownerId: id,
+            rentEndDate: { $lt: now },
+          })
+          .populate('ownerId')
+          .populate({
             path: 'propertyId',
-          },
-        })
-        .populate('applicant')
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .exec();
-      return applications;
+            populate: { path: 'propertyId' },
+          })
+          .populate('applicant');
+      }
+      if (formattedStatus === 'active') {
+        console.log({formattedStatus, id});
+        
+        // Currently active leases
+        return await this.applicationModel
+          .find({
+            ownerId: id,
+            status: { $in: ['active', 'activeTenant'] },
+          })
+          .populate('ownerId')
+          .populate({
+            path: 'propertyId',
+            populate: { path: 'propertyId' },
+          })
+          .populate('applicant');
+      }
+   // Generic fallback for other statuses (e.g., pending, rejected)
+   return await this.applicationModel
+   .find({
+     ownerId: id,
+     ...(formattedStatus ? { status: formattedStatus } : {}),
+   })
+   .populate('ownerId')
+   .populate({
+     path: 'propertyId',
+     populate: { path: 'propertyId' },
+   })
+   .populate('applicant');
     } catch (error) {
       throw new Error(`Failed to fetch landlord applications: ${error}`);
     }
@@ -681,19 +710,55 @@ export class PropertiesService {
     }
   }
 
-  async findLandlordOnboardedTenants(id: any): Promise<any> {
-    const tenants = await this.landlordAssignedTenantModel
-      .find({ ownerId: id, status: 'active' })
+  async findLandlordOnboardedTenants(id: any, status?: string): Promise<any> {
+    const now = new Date();
+    let formattedStatus = status === 'activeTenant' ? 'active' : status;
+    if (formattedStatus === 'ended') {
+      // Rent has already ended
+      return await this.landlordAssignedTenantModel
+        .find({
+          ownerId: id,
+          rentEndDate: { $lt: now },
+        })
+        .populate('ownerId')
+        .populate({
+          path: 'propertyId',
+          populate: { path: 'propertyId' },
+        })
+        .populate('applicant');
+    }
+    if (formattedStatus === 'active') {
+      // Currently active leases
+      return await this.landlordAssignedTenantModel
+        .find({
+          ownerId: id,
+          status: { $in: ['active', 'activeTenant'] },
+          rentStartDate: { $lte: now },
+          rentEndDate: { $gte: now },
+        })
+        .populate('ownerId')
+        .populate({
+          path: 'propertyId',
+          populate: { path: 'propertyId' },
+        })
+        .populate('applicant');
+    }
+    
+  
+    // Generic fallback for other statuses (e.g., pending, rejected)
+    return await this.landlordAssignedTenantModel
+      .find({
+        ownerId: id,
+        ...(formattedStatus ? { status: formattedStatus } : {}),
+      })
       .populate('ownerId')
       .populate({
         path: 'propertyId',
-        populate: {
-          path: 'propertyId',
-        },
+        populate: { path: 'propertyId' },
       })
       .populate('applicant');
-    return tenants;
   }
+  
 
   async findTenantHistory(nin: string, userId: any): Promise<any> {
     const user = await this.userModel.findOne({ nin: nin });
@@ -854,7 +919,19 @@ export class PropertiesService {
         .exec();
   
       if (!application) {
-        throw new Error('Application not found');
+        const application = await this.landlordAssignedTenantModel
+        .findById(applicationId)
+        .populate('ownerId')
+        .populate({
+          path: 'propertyId',
+          populate: {
+            path: 'propertyId',
+          },
+        })
+        .populate('applicant')
+        .exec();
+
+        return application
       }
   
       return application;
