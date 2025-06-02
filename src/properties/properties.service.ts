@@ -17,6 +17,7 @@ import { AgreementDocuments } from './entities/agreement_documents.entity';
 import { Room } from 'src/rooms/entities/room.entity';
 import { randomInt } from 'crypto';
 import { ApiProperty } from '@nestjs/swagger';
+import { populate } from 'dotenv';
 
 @Injectable()
 export class PropertiesService {
@@ -461,15 +462,31 @@ export class PropertiesService {
     page: number = 1,
     limit: number = 10,
     id: any,
-    status: string,
+    status?: string, // make it optional
   ): Promise<any> {
     try {
+      console.log({status});
+      
       const now = new Date();
-      let formattedStatus = status === 'activeTenant' ? 'active' : status;
-
       const skip = (page - 1) * limit;
-      let query = this.applicationModel.find({ ownerId: id });
-
+  
+      // If no status is provided, return all applications
+      if (!status || status.trim() === '') {
+        return await this.applicationModel
+          .find({ ownerId: id })
+          .skip(skip)
+          .limit(limit)
+          .populate('ownerId')
+          .populate({
+            path: 'propertyId',
+            populate: { path: 'propertyId' },
+          })
+          .populate('applicant');
+      }
+  
+      // Normalize the status
+      let formattedStatus = status === 'activeTenant' ? 'active' : status;
+  
       if (formattedStatus === 'ended') {
         // Rent has already ended
         return await this.applicationModel
@@ -477,6 +494,8 @@ export class PropertiesService {
             ownerId: id,
             rentEndDate: { $lt: now },
           })
+          .skip(skip)
+          .limit(limit)
           .populate('ownerId')
           .populate({
             path: 'propertyId',
@@ -484,15 +503,16 @@ export class PropertiesService {
           })
           .populate('applicant');
       }
+  
       if (formattedStatus === 'active') {
-        console.log({formattedStatus, id});
-        
         // Currently active leases
         return await this.applicationModel
           .find({
             ownerId: id,
             status: { $in: ['active', 'activeTenant'] },
           })
+          .skip(skip)
+          .limit(limit)
           .populate('ownerId')
           .populate({
             path: 'propertyId',
@@ -500,22 +520,27 @@ export class PropertiesService {
           })
           .populate('applicant');
       }
-   // Generic fallback for other statuses (e.g., pending, rejected)
-   return await this.applicationModel
-   .find({
-     ownerId: id,
-     ...(formattedStatus ? { status: formattedStatus } : {}),
-   })
-   .populate('ownerId')
-   .populate({
-     path: 'propertyId',
-     populate: { path: 'propertyId' },
-   })
-   .populate('applicant');
+  
+      // Generic fallback for other statuses (e.g., pending, rejected)
+      return await this.applicationModel
+        .find({
+          ownerId: id,
+          status: formattedStatus,
+        })
+        .skip(skip)
+        .limit(limit)
+        .populate('ownerId')
+        .populate({
+          path: 'propertyId',
+          populate: { path: 'propertyId' },
+        })
+        .populate('applicant');
+  
     } catch (error) {
       throw new Error(`Failed to fetch landlord applications: ${error}`);
     }
   }
+  
 
   async findApplicationyById(id: any): Promise<any> {
     const applicant = await this.applicationModel.findOne({ _id: id });
@@ -542,6 +567,7 @@ export class PropertiesService {
           path: 'propertyId',
           populate: {
             path: 'propertyId',
+            
           },
         })
         .populate('applicant')
