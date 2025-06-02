@@ -294,6 +294,12 @@ export class RoomsService {
     rentEndDate: Date,
     rentStartDate: Date,
   ): Promise<LandlordAssignedTenant | any> {
+    const singleApp = await this.applicationModel.findById(id);
+    this.roomModel.findByIdAndUpdate(
+      singleApp.propertyId,
+      { assignedToTenant: true },
+      { new: true },
+    );
     return this.applicationModel.findByIdAndUpdate(
       id,
       { rentEndDate, rentStartDate },
