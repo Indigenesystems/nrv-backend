@@ -194,4 +194,13 @@ export class UserController {
   ): Promise<any> {
     return this.userService.updateNotificationSettings(id, settings);
   }
+
+  @Post('/nin')
+  async verifyBVN(@Body('nin') nin: string) {
+    const data: any = await this.userService.verifyBVN(nin);
+    if (!data) {
+      return;
+    }
+    return data;
+  }
 }

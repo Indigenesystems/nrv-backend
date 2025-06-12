@@ -18,7 +18,15 @@ import { NotificationSettings } from './entities/notificationSettings.entity';
 import { AgreementDocuments } from 'src/properties/entities/agreement_documents.entity';
 import { CloudinaryService } from 'src/upload/cloudinary.service';
 import { ApiProperty } from '@nestjs/swagger';
+import config from 'src/config/config';
+import axios from 'axios';
+const baseURL = config.web.youVerifyNIN;
+const token = config.web.token;
 
+const headers = {
+    "token": `${token}`,
+    "Content-Type": "application/json"
+};
 @Injectable()
 export class UserService {
   constructor(
@@ -35,6 +43,7 @@ export class UserService {
     private emailService: EmailService,
     private propertiesService: PropertiesService,
     private cloudinaryService: CloudinaryService,
+    
   ) {}
 
   async findAllUsers(): Promise<User[]> {
@@ -213,8 +222,6 @@ export class UserService {
     });
 
     if (user) {
-      console.log('here');
-
       this.emailService.sendResetPasswordToken(_user);
     }
   }
@@ -268,4 +275,63 @@ export class UserService {
 
     return updatedSettings;
   }
+
+  async  verifyBVN(nin: string) {
+    if (!nin) {
+        return new Error('NIN is required to perform verification');
+    }
+
+    const body = {
+        id: nin,
+        isSubjectConsent: true,
+       // premiumNin: false
+    };
+
+    try {
+        const response = await axios.post(baseURL, body, { headers });
+        return response.data; 
+    } catch (error) {
+        const errorResponse = error.response?.data;
+
+        if (errorResponse) {
+            switch (errorResponse.statusCode) {
+                case 402:
+                    throw {
+                        statusCode: 402,
+                        text: "insufficient funds. Please top up your account",
+                        message: "We are currently unable to complete your request. Please try again later.",
+                    };
+
+                case 403:
+                    throw {
+                        statusCode: 403,
+                        text: "permission error, check access token",
+                        message: "We are unable to verify your information at the moment. Please contact support for assistance.",
+                    };
+
+                case 503:
+                    throw {
+                        statusCode: 503,
+                        message: "Third-party service is currently unavailable. Please try again later.",
+                    };
+                case 500:
+                    throw {
+                        statusCode: 500,
+                        message: "Internal server error. Please contact support.",
+                    };
+                default:
+                    throw {
+                        statusCode: errorResponse.statusCode || 500,
+                        message: errorResponse.message || "An unknown error occurred during BVN verification.",
+                    };
+            }
+        } else {
+            throw {
+                statusCode: 500,
+                message: error.message || "An unexpected error occurred during BVN verification.",
+            };
+        }
+    }
+}
+
 }
