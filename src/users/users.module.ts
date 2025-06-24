@@ -35,6 +35,7 @@ import {
   AgreementDocumentsSchema,
 } from 'src/properties/entities/agreement_documents.entity';
 import { ApiProperty } from '@nestjs/swagger';
+import  { UserVerification, UserVerificationSchema } from './entities/userVerification';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { ApiProperty } from '@nestjs/swagger';
         schema: LandlordAssignedTenantSchema,
       },
       { name: Property.name, schema: PropertySchema },
+      { name: UserVerification.name, schema: UserVerificationSchema },
       { name: Application.name, schema: ApplicationSchema },
       { name: AgreementDocuments.name, schema: AgreementDocumentsSchema },
       { name: Room.name, schema: RoomSchema },

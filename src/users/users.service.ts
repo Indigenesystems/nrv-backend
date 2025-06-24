@@ -18,8 +18,10 @@ import { NotificationSettings } from './entities/notificationSettings.entity';
 import { AgreementDocuments } from 'src/properties/entities/agreement_documents.entity';
 import { CloudinaryService } from 'src/upload/cloudinary.service';
 import { ApiProperty } from '@nestjs/swagger';
+
 import config from 'src/config/config';
 import axios from 'axios';
+import { UserVerification } from './entities/userVerification';
 const baseURL = config.web.youVerifyNIN;
 const token = config.web.token;
 
@@ -32,6 +34,7 @@ export class UserService {
   constructor(
     @InjectModel(Room.name) private readonly roomModel: Model<Room>,
     @InjectModel(Property.name) private readonly propertyModel: Model<Property>,
+    @InjectModel(UserVerification.name) private readonly userVerification: Model<UserVerification>,
     @InjectModel(Application.name)
     private readonly applicationModel: Model<Application>,
     @InjectModel(User.name) private readonly userModel: Model<User>,
@@ -158,6 +161,7 @@ export class UserService {
         const formattedPayload = {
           ...user,
           applicant: createdUser._id,
+          
         };
         await this.propertiesService.mapCreatedUserToApartment(
           formattedPayload,
@@ -276,20 +280,128 @@ export class UserService {
     return updatedSettings;
   }
 
-  async  verifyBVN(nin: string) {
+//   async  verifyBVN(nin: string) {
+//     if (!nin) {
+//         return new Error('NIN is required to perform verification');
+//     }
+
+//     const body = {
+//         id: nin,
+//         isSubjectConsent: true,
+//        // premiumNin: false
+//     };
+
+//     try {
+//         const response = await axios.post(baseURL, body, { headers });
+//         return response.data; 
+//     } catch (error) {
+//         const errorResponse = error.response?.data;
+
+//         if (errorResponse) {
+//             switch (errorResponse.statusCode) {
+//                 case 402:
+//                     throw {
+//                         statusCode: 402,
+//                         text: "insufficient funds. Please top up your account",
+//                         message: "We are currently unable to complete your request. Please try again later.",
+//                     };
+
+//                 case 403:
+//                     throw {
+//                         statusCode: 403,
+//                         text: "permission error, check access token",
+//                         message: "We are unable to verify your information at the moment. Please contact support for assistance.",
+//                     };
+
+//                 case 503:
+//                     throw {
+//                         statusCode: 503,
+//                         message: "Third-party service is currently unavailable. Please try again later.",
+//                     };
+//                 case 500:
+//                     throw {
+//                         statusCode: 500,
+//                         message: "Internal server error. Please contact support.",
+//                     };
+//                 default:
+//                     throw {
+//                         statusCode: errorResponse.statusCode || 500,
+//                         message: errorResponse.message || "An unknown error occurred during BVN verification.",
+//                     };
+//             }
+//         } else {
+//             throw {
+//                 statusCode: 500,
+//                 message: error.message || "An unexpected error occurred during BVN verification.",
+//             };
+//         }
+//     }
+// }
+
+
+
+
+async verifyBVN(nin: string) {
     if (!nin) {
-        return new Error('NIN is required to perform verification');
+        throw new Error('NIN is required to perform verification');
+    }
+
+    // Step 1: Check if user already exists in DB
+    const existingRecord = await this.userVerification.findOne({ idNumber: nin });
+
+    if (existingRecord) {
+        return {
+            message: 'Record already exists in database.',
+            data: existingRecord,
+        };
     }
 
     const body = {
         id: nin,
         isSubjectConsent: true,
-       // premiumNin: false
     };
 
     try {
         const response = await axios.post(baseURL, body, { headers });
-        return response.data; 
+        const data = response.data?.data;
+
+        // Step 2: Save to DB if not already present
+        const saved = await this.userVerification.create({
+            id: data.id,
+            firstName: data.firstName,
+            lastName: data.lastName,
+            middleName: data.middleName,
+            image: data.image,
+            mobile: data.mobile,
+            email: data.email,
+            gender: data.gender,
+            dateOfBirth: data.dateOfBirth,
+            idNumber: data.idNumber,
+            type: data.type,
+            address: data.address,
+            birthState: data.birthState,
+            birthLGA: data.birthLGA,
+            birthCountry: data.birthCountry,
+            nokState: data.nokState,
+            religion: data.religion,
+            isConsent: data.isConsent,
+            country: data.country,
+            status: data.status,
+            createdAt: data.createdAt,
+            lastModifiedAt: data.lastModifiedAt,
+            requestedAt: data.requestedAt,
+            requestedBy: data.requestedBy,
+            businessId: data.businessId,
+            allValidationPassed: data.allValidationPassed,
+            dataValidation: data.dataValidation,
+            selfieValidation: data.selfieValidation,
+        });
+
+        return {
+            message: 'Verification successful and data saved.',
+            data: saved,
+        };
+
     } catch (error) {
         const errorResponse = error.response?.data;
 
@@ -301,14 +413,12 @@ export class UserService {
                         text: "insufficient funds. Please top up your account",
                         message: "We are currently unable to complete your request. Please try again later.",
                     };
-
                 case 403:
                     throw {
                         statusCode: 403,
                         text: "permission error, check access token",
                         message: "We are unable to verify your information at the moment. Please contact support for assistance.",
                     };
-
                 case 503:
                     throw {
                         statusCode: 503,
@@ -333,5 +443,6 @@ export class UserService {
         }
     }
 }
+
 
 }

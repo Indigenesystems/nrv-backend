@@ -3,6 +3,7 @@ import { Document, Types } from 'mongoose';
 import { User } from '../../users/entities/user.entity';
 import { Room } from '../../rooms/entities/room.entity';
 import { ApiProperty } from '@nestjs/swagger';
+import { ApplicationStatus } from './application.entity';
 
 @Schema({ timestamps: true })
 export class LandlordAssignedTenant {
@@ -14,13 +15,10 @@ export class LandlordAssignedTenant {
   @ApiProperty()
   ownerId: User;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
-  @ApiProperty()
-  applicant: User;
 
-  @Prop({ default: 'New' })
-  @ApiProperty()
-  status: string;
+  @Prop({ enum: ApplicationStatus, default: ApplicationStatus.NEW })
+  @ApiProperty({ enum: ApplicationStatus, default: ApplicationStatus.NEW })
+  status: ApplicationStatus;
 
   @Prop({ default: null })
   @ApiProperty()

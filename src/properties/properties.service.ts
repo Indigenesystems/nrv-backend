@@ -8,7 +8,7 @@ import mongoose, { Model } from 'mongoose';
 import { CloudinaryService } from '../upload/cloudinary.service';
 import { Property } from './entities/property.entity';
 import { RoomsService } from '../rooms/rooms.service';
-import { Application } from './entities/application.entity';
+import { Application, ApplicationStatus } from './entities/application.entity';
 import { EmailService } from '../email-sender/email.service';
 import { LandlordAssignedTenant } from './entities/landlord_assigned_tenant.entity';
 import { User } from '../users/entities/user.entity';
@@ -485,7 +485,7 @@ export class PropertiesService {
       }
   
       // Normalize the status
-      let formattedStatus = status === 'activeTenant' ? 'active' : status;
+      let formattedStatus = status === 'Accepted' ? 'active' : status;
   
       if (formattedStatus === 'ended') {
         // Rent has already ended
@@ -509,7 +509,7 @@ export class PropertiesService {
         return await this.applicationModel
           .find({
             ownerId: id,
-            status: { $in: ['active', 'activeTenant'] },
+            status: { $in: ['active', 'Accepted'] },
           })
           .skip(skip)
           .limit(limit)
@@ -587,11 +587,11 @@ export class PropertiesService {
     roomId?: any,
   ): Promise<any> {
     try {
-      if (newStatus === 'activeTenant') {
+      if (newStatus === 'Accepted') {
         const doesActiveTenantExists = await this.applicationModel
           .findOne({ propertyId: roomId })
           .where('status')
-          .equals('activeTenant');
+          .equals('Accepted');
         if (doesActiveTenantExists)
           return new BadRequestException(
             'This property/apartment has an active tenant',
@@ -635,7 +635,7 @@ export class PropertiesService {
 
       const x = await this.findLandlordOnboardedTenants(id);
       const totalActiveTenantsPromise = await this.applicationModel
-        .countDocuments({ ownerId: id, status: 'activeTenant' })
+        .countDocuments({ ownerId: id, status: 'Accepted' })
         .exec();
 
       const totalPropertiesPromise = await this.propertyModel
@@ -673,7 +673,7 @@ export class PropertiesService {
         .countDocuments({ applicant: id, status: 'New' })
         .exec();
       const totalAcceptedPromise = this.applicationModel
-        .countDocuments({ applicant: id, status: 'activeTenant' })
+        .countDocuments({ applicant: id, status: 'Accepted' })
         .exec();
 
       const totalActiveTenantsPromise = await this.maintenanceModel
@@ -703,7 +703,7 @@ export class PropertiesService {
       });
       const doesActiveTenantExist = await this.applicationModel.findOne({
         propertyId: propertyId,
-        status: 'activeTenant',
+        status: 'Accepted',
       });
 
       if (doesActiveTenantExist) {
@@ -729,7 +729,7 @@ export class PropertiesService {
         );
       }
       const newApplication =
-        await this.landlordAssignedTenantModel.create(payload);
+        await this.landlordAssignedTenantModel.create({...payload, status: ApplicationStatus.ACTIVE_LEASE});
       return newApplication;
     } catch (error) {
       throw new Error(`Failed to map user to this apartment: ${error.message}`);
@@ -738,7 +738,7 @@ export class PropertiesService {
 
   async findLandlordOnboardedTenants(id: any, status?: string): Promise<any> {
     const now = new Date();
-    let formattedStatus = status === 'activeTenant' ? 'active' : status;
+    let formattedStatus = status === 'Accepted' ? 'active' : status;
     if (formattedStatus === 'ended') {
       // Rent has already ended
       return await this.landlordAssignedTenantModel
@@ -758,7 +758,7 @@ export class PropertiesService {
       return await this.landlordAssignedTenantModel
         .find({
           ownerId: id,
-          status: { $in: ['active', 'activeTenant'] },
+          status: { $in: ['active', 'Accepted'] },
           rentStartDate: { $lte: now },
           rentEndDate: { $gte: now },
         })

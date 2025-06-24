@@ -35,6 +35,7 @@ import {
   AgreementDocumentsSchema,
 } from 'src/properties/entities/agreement_documents.entity';
 import { ApiProperty } from '@nestjs/swagger';
+import { UserVerification, UserVerificationSchema } from 'src/users/entities/userVerification';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { ApiProperty } from '@nestjs/swagger';
       },
       { name: NotificationSettings.name, schema: NotificationSettingsSchema },
       { name: AgreementDocuments.name, schema: AgreementDocumentsSchema },
+      { name: UserVerification.name, schema: UserVerificationSchema },
     ]),
   ],
   controllers: [AuthController],

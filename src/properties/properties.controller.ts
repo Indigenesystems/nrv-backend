@@ -440,7 +440,7 @@ export class PropertiesController {
     @Param('id') id: string,
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10,
-    @Query('status') status: string = 'activeTenant',
+    @Query('status') status: string = 'Accepted',
     @Res() res: Response,
   ) {
     const tenants =await this.propertiesService.findLandlordOnboardedTenants(id, status);

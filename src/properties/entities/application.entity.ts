@@ -5,6 +5,15 @@ import { Property } from './property.entity';
 import { Room } from '../../rooms/entities/room.entity';
 import { ApiProperty } from '@nestjs/swagger';
 
+// Step 1: Define the enum
+export enum ApplicationStatus {
+  NEW = 'New',
+  ACCEPTED = 'Accepted',
+  ACTIVE_LEASE = 'Active Lease',
+  EXPIRED = 'Expired',
+  ENDED = 'Ended',
+}
+
 @Schema({ timestamps: true })
 export class Application {
   @Prop({ type: Types.ObjectId, ref: 'Room' })
@@ -19,9 +28,10 @@ export class Application {
   @ApiProperty()
   applicant: User;
 
-  @Prop({ default: 'New' })
-  @ApiProperty()
-  status: string;
+  // Step 2: Use the enum in the status field
+  @Prop({ enum: ApplicationStatus, default: ApplicationStatus.NEW })
+  @ApiProperty({ enum: ApplicationStatus, default: ApplicationStatus.NEW })
+  status: ApplicationStatus;
 
   @Prop()
   @ApiProperty()
@@ -47,7 +57,6 @@ export class Application {
   @ApiProperty()
   jobTitle: string;
 
-
   @Prop({ default: null })
   @ApiProperty()
   rentEndDate: Date;
@@ -58,5 +67,4 @@ export class Application {
 }
 
 export type ApplicationDocument = Application & Document;
-
 export const ApplicationSchema = SchemaFactory.createForClass(Application);

@@ -38,6 +38,7 @@ import { MessagesModule } from './messages/messages.module';
 import { MessageSchema } from './messages/entities/message.entity';
 import { DocumentsModule } from './documents/documents.module';
 import { ApiProperty } from '@nestjs/swagger';
+import { UserVerification, UserVerificationSchema } from './users/entities/userVerification';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { ApiProperty } from '@nestjs/swagger';
       { name: 'Application', schema: ApplicationSchema },
       { name: 'Maintenance', schema: MaintenanceSchema },
       { name: 'LandlordAssignedTenant', schema: LandlordAssignedTenantSchema },
+      { name: UserVerification.name, schema: UserVerificationSchema },
     ]),
     JwtModule.register({
       secret: '34ttyyuhbyh',

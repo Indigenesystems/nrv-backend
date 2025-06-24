@@ -3,7 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import mongoose, { Model } from 'mongoose';
 import { Room } from './entities/room.entity';
 import { Property } from '../properties/entities/property.entity';
-import { Application } from '../properties/entities/application.entity';
+import { Application, ApplicationStatus } from '../properties/entities/application.entity';
 import { CloudinaryService } from '../upload/cloudinary.service';
 import { LandlordAssignedTenant } from 'src/properties/entities/landlord_assigned_tenant.entity';
 import { AgreementDocuments } from 'src/properties/entities/agreement_documents.entity';
@@ -208,7 +208,7 @@ export class RoomsService {
           propertyId: id,
         })
         .where('status')
-        .equals('activeTenant')
+        .equals('Accepted')
         .populate('propertyId')
         .populate('applicant');
       return iactiveTenant;
@@ -227,7 +227,7 @@ export class RoomsService {
           // rentEndDate: { $gte: now },
         })
         .where('status')
-        .equals('activeTenant')
+        .equals('Accepted')
         .populate({
           path: 'propertyId',
           populate: {
@@ -297,12 +297,12 @@ export class RoomsService {
     const singleApp = await this.applicationModel.findById(id);
     this.roomModel.findByIdAndUpdate(
       singleApp.propertyId,
-      { assignedToTenant: true },
+      { assignedToTenant: true, listRoom: false , },
       { new: true },
     );
     return this.applicationModel.findByIdAndUpdate(
       id,
-      { rentEndDate, rentStartDate },
+      { rentEndDate, rentStartDate , status: ApplicationStatus.ACTIVE_LEASE},
       { new: true },
     );
   }
@@ -315,7 +315,7 @@ export class RoomsService {
     }
 
     // Set status to 'ended' (or any other status you want)
-    tenant.status = 'ended';
+    tenant.status = ApplicationStatus.ENDED
     tenant.rentEndDate = new Date(); // Set rentEndDate to current date (or provide a custom date)
 
     // Save the updated tenant
