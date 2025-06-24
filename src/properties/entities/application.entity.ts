@@ -9,7 +9,7 @@ import { ApiProperty } from '@nestjs/swagger';
 export enum ApplicationStatus {
   NEW = 'New',
   ACCEPTED = 'Accepted',
-  ACTIVE_LEASE = 'Active Lease',
+  ACTIVE_LEASE = 'Active_lease',
   EXPIRED = 'Expired',
   ENDED = 'Ended',
 }

@@ -316,7 +316,7 @@ export class PropertiesController {
     @Param('id') id: string,
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10,
-    @Query('status') status: string = 'New',
+    @Query('status') status: string = '',
     @Res() res: Response,
   ) {
     const applications = await this.propertiesService.findApplicationByTenantId(

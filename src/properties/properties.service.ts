@@ -465,13 +465,15 @@ export class PropertiesService {
     status?: string, // make it optional
   ): Promise<any> {
     try {
-      console.log({status});
+      console.log({id});
       
       const now = new Date();
       const skip = (page - 1) * limit;
   
       // If no status is provided, return all applications
       if (!status || status.trim() === '') {
+        console.log("hhereee");
+        
         return await this.applicationModel
           .find({ ownerId: id })
           .skip(skip)
@@ -554,6 +556,8 @@ export class PropertiesService {
     status: string,
   ): Promise<any> {
     try {
+      console.log({page, limit, id, status});
+      
       const skip = (page - 1) * limit;
       let query = this.applicationModel.find({ applicant: id });
 
