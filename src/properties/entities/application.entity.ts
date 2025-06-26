@@ -12,6 +12,7 @@ export enum ApplicationStatus {
   ACTIVE_LEASE = 'Active_lease',
   EXPIRED = 'Expired',
   ENDED = 'Ended',
+  REJECTED="Rejected"
 }
 
 @Schema({ timestamps: true })

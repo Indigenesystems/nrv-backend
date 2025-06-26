@@ -37,8 +37,9 @@ import { MessagingService } from './messages/messages.service';
 import { MessagesModule } from './messages/messages.module';
 import { MessageSchema } from './messages/entities/message.entity';
 import { DocumentsModule } from './documents/documents.module';
-import { ApiProperty } from '@nestjs/swagger';
 import { UserVerification, UserVerificationSchema } from './users/entities/userVerification';
+import { VerificationModule } from './verification/verification.module';
+import { VerificationSchema } from './verification/entities/verification.entity';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { UserVerification, UserVerificationSchema } from './users/entities/userV
       { name: 'Room', schema: RoomSchema },
       { name: 'Application', schema: ApplicationSchema },
       { name: 'Maintenance', schema: MaintenanceSchema },
+      { name: 'Verification', schema: VerificationSchema },
       { name: 'LandlordAssignedTenant', schema: LandlordAssignedTenantSchema },
       { name: UserVerification.name, schema: UserVerificationSchema },
     ]),
@@ -69,6 +71,7 @@ import { UserVerification, UserVerificationSchema } from './users/entities/userV
     MaintenanceModule,
     ExpensesModule,
     DocumentsModule,
+    VerificationModule,
   ],
   controllers: [AppController, UserController, AuthController, PropertiesController, RoomsController, UserController, MaintenanceController, MessagingController],
   providers: [AppService, UserService, AuthService, EmailService, CloudinaryService, PropertiesService, RoomsService, MaintenanceService, MessagingService], 

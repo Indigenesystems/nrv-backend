@@ -3,7 +3,10 @@ import { InjectModel } from '@nestjs/mongoose';
 import mongoose, { Model } from 'mongoose';
 import { Room } from './entities/room.entity';
 import { Property } from '../properties/entities/property.entity';
-import { Application, ApplicationStatus } from '../properties/entities/application.entity';
+import {
+  Application,
+  ApplicationStatus,
+} from '../properties/entities/application.entity';
 import { CloudinaryService } from '../upload/cloudinary.service';
 import { LandlordAssignedTenant } from 'src/properties/entities/landlord_assigned_tenant.entity';
 import { AgreementDocuments } from 'src/properties/entities/agreement_documents.entity';
@@ -297,25 +300,28 @@ export class RoomsService {
     const singleApp = await this.applicationModel.findById(id);
     this.roomModel.findByIdAndUpdate(
       singleApp.propertyId,
-      { assignedToTenant: true, listRoom: false , },
+      { assignedToTenant: true, listRoom: false },
       { new: true },
     );
     return this.applicationModel.findByIdAndUpdate(
       id,
-      { rentEndDate, rentStartDate , status: ApplicationStatus.ACTIVE_LEASE},
+      { rentEndDate, rentStartDate, status: ApplicationStatus.ACTIVE_LEASE },
       { new: true },
     );
   }
 
   async endRentTenure(id: string): Promise<LandlordAssignedTenant> {
     // First, find the tenant by ID
-    const tenant = await this.landlordAssignedTenantModel.findById(id);
+    let tenant;
+    tenant = await this.landlordAssignedTenantModel.findById(id);
     if (!tenant) {
-      throw new Error('LandlordAssignedTenant not found');
+      tenant = await this.applicationModel.findById(id);
+    } else {
+      throw new Error('Application does not exists!');
     }
 
     // Set status to 'ended' (or any other status you want)
-    tenant.status = ApplicationStatus.ENDED
+    tenant.status = ApplicationStatus.ENDED;
     tenant.rentEndDate = new Date(); // Set rentEndDate to current date (or provide a custom date)
 
     // Save the updated tenant
