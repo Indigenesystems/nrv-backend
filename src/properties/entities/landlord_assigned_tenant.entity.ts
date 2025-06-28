@@ -15,6 +15,9 @@ export class LandlordAssignedTenant {
   @ApiProperty()
   ownerId: User;
 
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @ApiProperty()
+  applicant: User;
 
   @Prop({ enum: ApplicationStatus, default: ApplicationStatus.NEW })
   @ApiProperty({ enum: ApplicationStatus, default: ApplicationStatus.NEW })

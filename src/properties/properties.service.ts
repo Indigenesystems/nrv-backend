@@ -462,82 +462,54 @@ export class PropertiesService {
     page: number = 1,
     limit: number = 10,
     id: any,
-    status?: string, // make it optional
+    status?: string
   ): Promise<any> {
     try {
-      console.log({id});
-      
       const now = new Date();
       const skip = (page - 1) * limit;
   
-      // If no status is provided, return all applications
-      if (!status || status.trim() === '') {
-        console.log("hhereee");
-        
-        return await this.applicationModel
-          .find({ ownerId: id })
+      // Format and normalize status
+      let formattedStatus = status?.trim() || null;
+      if (formattedStatus?.toLowerCase() === 'active_lease') {
+        formattedStatus = 'Active_lease';
+      }
+  
+      // Build query filters
+      const buildQuery = () => {
+        const query: any = { ownerId: id };
+        if (formattedStatus === ApplicationStatus.ENDED) {
+          query.rentEndDate = { $lt: now };
+        } else if (formattedStatus) {
+          query.status = formattedStatus;
+        }
+        return query;
+      };
+  
+      const query = buildQuery();
+  
+      // Run both queries in parallel
+      const [applications, onboardedTenants] = await Promise.all([
+        this.applicationModel
+          .find(query)
           .skip(skip)
           .limit(limit)
           .populate('ownerId')
-          .populate({
-            path: 'propertyId',
-            populate: { path: 'propertyId' },
-          })
-          .populate('applicant');
-      }
+          .populate({ path: 'propertyId', populate: { path: 'propertyId' } })
+          .populate('applicant'),
   
-      // Normalize the status
-      let formattedStatus = status === 'Accepted' ? 'active' : status;
-  
-      if (formattedStatus === 'ended') {
-        // Rent has already ended
-        return await this.applicationModel
-          .find({
-            ownerId: id,
-            rentEndDate: { $lt: now },
-          })
+        this.landlordAssignedTenantModel
+          .find(query)
           .skip(skip)
           .limit(limit)
           .populate('ownerId')
-          .populate({
-            path: 'propertyId',
-            populate: { path: 'propertyId' },
-          })
-          .populate('applicant');
-      }
+          .populate({ path: 'propertyId', populate: { path: 'propertyId' } })
+          .populate('applicant'),
+      ]);
   
-      if (formattedStatus === 'active') {
-        // Currently active leases
-        return await this.applicationModel
-          .find({
-            ownerId: id,
-            status: { $in: ['active', 'Accepted'] },
-          })
-          .skip(skip)
-          .limit(limit)
-          .populate('ownerId')
-          .populate({
-            path: 'propertyId',
-            populate: { path: 'propertyId' },
-          })
-          .populate('applicant');
-      }
+      // Combine and return results
+      const combined = [...applications, ...onboardedTenants];
   
-      // Generic fallback for other statuses (e.g., pending, rejected)
-      return await this.applicationModel
-        .find({
-          ownerId: id,
-          status: formattedStatus,
-        })
-        .skip(skip)
-        .limit(limit)
-        .populate('ownerId')
-        .populate({
-          path: 'propertyId',
-          populate: { path: 'propertyId' },
-        })
-        .populate('applicant');
-  
+      return combined;
     } catch (error) {
       throw new Error(`Failed to fetch landlord applications: ${error}`);
     }
@@ -556,8 +528,6 @@ export class PropertiesService {
     status: string,
   ): Promise<any> {
     try {
-      console.log({page, limit, id, status});
-      
       const skip = (page - 1) * limit;
       let query = this.applicationModel.find({ applicant: id });
 
@@ -591,21 +561,20 @@ export class PropertiesService {
     roomId?: any,
   ): Promise<any> {
     try {
-      if (newStatus === 'Accepted') {
+      if (newStatus === ApplicationStatus.ACTIVE_LEASE) {
         const doesActiveTenantExists = await this.applicationModel
           .findOne({ propertyId: roomId })
           .where('status')
-          .equals('Accepted');
+          .equals(ApplicationStatus.ACTIVE_LEASE);
         if (doesActiveTenantExists)
           return new BadRequestException(
             'This property/apartment has an active tenant',
-          );
+        );
       }
       const updatedApplication = await this.findApplicationyById(id);
-
       updatedApplication.status = newStatus;
-
       return updatedApplication.save();
+
     } catch (error) {
       throw new Error(`Failed to update application status: ${error}`);
     }
@@ -703,11 +672,11 @@ export class PropertiesService {
     try {
       const existingMapping = await this.landlordAssignedTenantModel.findOne({
         propertyId: propertyId,
-        status: 'active',
+        status: 'Active_lease',
       });
       const doesActiveTenantExist = await this.applicationModel.findOne({
         propertyId: propertyId,
-        status: 'Accepted',
+        status: 'Active_lease',
       });
 
       if (doesActiveTenantExist) {
@@ -734,6 +703,8 @@ export class PropertiesService {
       }
       const newApplication =
         await this.landlordAssignedTenantModel.create({...payload, status: ApplicationStatus.ACTIVE_LEASE});
+        await this.roomModel.updateOne(  { _id: propertyId },
+          { $set: { assignedToTenant: true, listRoom: false } })
       return newApplication;
     } catch (error) {
       throw new Error(`Failed to map user to this apartment: ${error.message}`);

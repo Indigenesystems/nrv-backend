@@ -206,15 +206,27 @@ export class RoomsService {
 
   async findCurrentOccupantForRoom(id: any): Promise<any> {
     try {
-      const iactiveTenant: any = await this.applicationModel
+      let activeTenant: any 
+      activeTenant  = await this.applicationModel
         .findOne({
           propertyId: id,
         })
         .where('status')
-        .equals('Accepted')
+        .equals(ApplicationStatus.ACTIVE_LEASE)
         .populate('propertyId')
         .populate('applicant');
-      return iactiveTenant;
+
+        if (!activeTenant){
+          activeTenant =  await this.landlordAssignedTenantModel
+          .findOne({
+            propertyId: id,
+          })
+          .where('status')
+          .equals(ApplicationStatus.ACTIVE_LEASE)
+          .populate('propertyId')
+          .populate('applicant');
+        }
+      return activeTenant;
     } catch (error) {
       throw new NotFoundException(error);
     }
@@ -225,12 +237,12 @@ export class RoomsService {
       const now = new Date();
       const rentedApartments: any = await this.applicationModel
         .find({
-          applicant: id,
+          ownerId: id,
           // rentStartDate: { $lte: now },
           // rentEndDate: { $gte: now },
         })
         .where('status')
-        .equals('Accepted')
+        .equals(ApplicationStatus.ACTIVE_LEASE)
         .populate({
           path: 'propertyId',
           populate: {
@@ -242,8 +254,8 @@ export class RoomsService {
 
       const x = await this.landlordAssignedTenantModel
         .find({
-          applicant: new mongoose.Types.ObjectId(id),
-          status: 'active',
+          ownerId: new mongoose.Types.ObjectId(id),
+          status: ApplicationStatus.ACTIVE_LEASE,
         })
         .populate('propertyId')
         .populate('applicant')
