@@ -78,6 +78,21 @@ export class VerificationController {
   }
 
   /**
+   * Get all verification requests for a given email
+   * @param email
+   * @returns Array of verifications
+   */
+  @Get('by-email')
+  async getVerificationsByEmail(@Query('email') email: string) {
+    if (!email) {
+      throw new BadRequestException('Email query parameter is required');
+    }
+    console.log({ email });
+    const verifications = await this.verificationService.getVerificationsByEmail(email);
+    return verificationSuccessResponse('Verifications fetched successfully', verifications);
+  }
+
+  /**
    * Get a single verification by ID
    * @param id
    * @returns Success response with verification
@@ -276,21 +291,6 @@ export class VerificationController {
       console.error('Error fetching latest verification response by user:', error);
       throw new BadRequestException(error?.response || 'Failed to fetch verification response.');
     }
-  }
-
-  /**
-   * Get all verification requests for a given email
-   * @param email
-   * @returns Array of verifications
-   */
-  @Get('by-email')
-  async getVerificationsByEmail(@Query('email') email: string) {
-    if (!email) {
-      throw new BadRequestException('Email query parameter is required');
-    }
-    console.log({ email });
-    const verifications = await this.verificationService.getVerificationsByEmail(email);
-    return verificationSuccessResponse('Verifications fetched successfully', verifications);
   }
 
   /**
