@@ -1,18 +1,23 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { IsString, IsNotEmpty, IsArray } from 'class-validator';
 
 export class CreateDocumentDto {
-  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
   file: string;
 
-  @ApiProperty({ type: [String] })
+  @IsArray()
+  @IsString({ each: true })
   landlordInsurancePolicy: string[];
 
-  @ApiProperty({ type: [String] })
+  @IsArray()
+  @IsString({ each: true })
   utilityAndMaintenance: string[];
 
-  @ApiProperty({ type: [String] })
+  @IsArray()
+  @IsString({ each: true })
   otherDocuments: string[];
 
-  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
   property: string; // or ObjectId if you're referencing a MongoDB ID
 }

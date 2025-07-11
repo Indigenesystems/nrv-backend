@@ -7,8 +7,8 @@ export type VerificationDocument = Verification & Document;
 // 1. Define enum for status
 export enum VerificationStatus {
   PENDING = 'pending',
-  PROCESSING = 'processing',
-  COMPLETED = 'completed',
+  APPROVED = 'approved',
+  REJECTED = 'rejected',
 }
 
 @Schema({ timestamps: true })
@@ -19,7 +19,7 @@ export class Verification {
   @Prop({ required: true })
   lastName: string;
 
-  @Prop({ required: true, unique: true })
+  @Prop({ required: true })
   email: string;
 
   @Prop({ required: true })

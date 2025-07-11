@@ -11,7 +11,7 @@ import { CloudinaryService } from '../upload/cloudinary.service';
 import { LandlordAssignedTenant } from 'src/properties/entities/landlord_assigned_tenant.entity';
 import { AgreementDocuments } from 'src/properties/entities/agreement_documents.entity';
 import { randomInt } from 'crypto';
-import { ApiProperty } from '@nestjs/swagger';
+
 
 @Injectable()
 export class RoomsService {

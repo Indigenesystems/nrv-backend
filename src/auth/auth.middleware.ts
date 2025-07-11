@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 import * as jwt from 'jsonwebtoken';
-import { ApiProperty } from '@nestjs/swagger';
+
 
 @Injectable()
 export class JwtMiddleware implements NestMiddleware {

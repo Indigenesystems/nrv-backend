@@ -2,7 +2,7 @@ import { Module, OnModuleInit } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import mongoose from 'mongoose';
 import config from '../config/config';
-import { ApiProperty } from '@nestjs/swagger';
+
 
 @Module({
   imports: [MongooseModule.forRoot(getMongoURI(), {})],
@@ -20,10 +20,10 @@ export class MongodbModule implements OnModuleInit {
 }
 
 function getMongoURI(): string {
-  const MONGO_DB_URI = config.web.mongoDBUri;
-  if (!MONGO_DB_URI) {
-    throw new Error('MongoDB environment variables are not set');
-  }
+  const MONGO_DB_URI = 'mongodb+srv://Babajide:Maythird1.!@cluster0.azxmr.mongodb.net/nrv-test-db?retryWrites=true&w=majority&appName=Cluster0';
+  // if (!MONGO_DB_URI) {
+  //   throw new Error('MongoDB environment variables are not set');
+  // }
 
   return MONGO_DB_URI;
 }

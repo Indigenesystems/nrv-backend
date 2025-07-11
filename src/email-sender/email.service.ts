@@ -1,12 +1,12 @@
 // email.service.ts
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
-import { ApiProperty } from '@nestjs/swagger';
+
 
 @Injectable()
 export class EmailService {
-  @ApiProperty()
+  
   private transporter: nodemailer.Transporter;
 
   constructor() {
@@ -1169,4 +1169,47 @@ export class EmailService {
       throw error;
     }
   }
+
+async sendTenantVerificationInviteEmail(payload: {
+  recipientName: string;
+  recipientEmail: string;
+  landlordName: string;
+  formLink: string;
+}) {
+  const emailTemplate = `
+    <html>
+      <body style="font-family: Arial, sans-serif; padding: 20px; background: #f9f9f9;">
+        <div style="max-width: 600px; margin: auto; background: white; padding: 24px; border-radius: 8px;">
+          <h2>Hello ${payload.recipientName},</h2>
+          <p><strong>${payload.landlordName}</strong> has requested to verify your rental history through Naija Rent Verify.</p>
+          <p>Please click the button below to fill out your verification form:</p>
+          <p style="text-align: center;">
+            <a href="${payload.formLink}" style="background-color: #1a82e2; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none;">
+              Complete Verification Form
+            </a>
+          </p>
+          <p>If you did not expect this request, you can safely ignore this email.</p>
+          <hr />
+          <p style="font-size: 12px; color: #999;">&copy; ${new Date().getFullYear()} Naija Rent Verify</p>
+        </div>
+      </body>
+    </html>
+  `;
+
+  try {
+    await this.transporter.sendMail({
+      from: 'hello@naijarentverify.com',
+      to: payload.recipientEmail,
+      subject: `Action Required: Verification Request from ${payload.landlordName}`,
+      html: emailTemplate,
+    });
+
+    console.log('Tenant verification invite email sent');
+  } catch (err) {
+    console.error('Error sending tenant invite:', err);
+    throw new InternalServerErrorException('Could not send tenant invite email.');
+  }
+}
+
+
 }

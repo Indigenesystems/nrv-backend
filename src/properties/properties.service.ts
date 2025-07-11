@@ -16,7 +16,7 @@ import { Maintenance } from 'src/maintenance/entities/maintenance.entity';
 import { AgreementDocuments } from './entities/agreement_documents.entity';
 import { Room } from 'src/rooms/entities/room.entity';
 import { randomInt } from 'crypto';
-import { ApiProperty } from '@nestjs/swagger';
+
 import { populate } from 'dotenv';
 
 @Injectable()

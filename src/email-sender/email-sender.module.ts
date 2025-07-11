@@ -3,7 +3,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { AuthService } from '../auth/auth.service';
 import { JwtService } from '@nestjs/jwt';
 import { EmailService } from '../email-sender/email.service';
-import { ApiProperty } from '@nestjs/swagger';
+
 
 @Module({
   controllers: [],

@@ -1,9 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { ApiProperty } from '@nestjs/swagger';
 
 @Injectable()
 export class AppService {
-  getHello(): any {
+  /**
+   * Returns health check message
+   * @returns Status and message
+   */
+  getHello(): { status: string; message: string } {
     return {
       status: 'success',
       message: 'Naija Rent Verify is up and running!',

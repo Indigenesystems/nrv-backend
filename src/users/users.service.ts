@@ -17,7 +17,7 @@ import { Property } from '../properties/entities/property.entity';
 import { NotificationSettings } from './entities/notificationSettings.entity';
 import { AgreementDocuments } from 'src/properties/entities/agreement_documents.entity';
 import { CloudinaryService } from 'src/upload/cloudinary.service';
-import { ApiProperty } from '@nestjs/swagger';
+
 
 import config from 'src/config/config';
 import axios from 'axios';
@@ -49,23 +49,49 @@ export class UserService {
     
   ) {}
 
+  /**
+   * Find all users
+   * @returns Array of users
+   */
   async findAllUsers(): Promise<User[]> {
     return await this.userModel.find();
   }
 
-  async findUserById(id: string): Promise<User> {
+  /**
+   * Find user by ID
+   * @param id
+   * @returns User or null
+   */
+  async findUserById(id: string): Promise<User | null> {
     return await this.userModel.findById(id);
   }
 
-  async findUserByEmail(email: string): Promise<User> {
+  /**
+   * Find user by email
+   * @param email
+   * @returns User or null
+   */
+  async findUserByEmail(email: string): Promise<User | null> {
+    console.log({email});
+    
     return await this.userModel.findOne({ email });
   }
 
-  async findUserByNin(nin: string): Promise<User> {
+  /**
+   * Find user by NIN
+   * @param nin
+   * @returns User or null
+   */
+  async findUserByNin(nin: string): Promise<User | null> {
     return await this.userModel.findOne({ nin });
   }
 
-  async createUser(user: User): Promise<User | any | { message: string }> {
+  /**
+   * Create a new user
+   * @param user
+   * @returns Created user or error message
+   */
+  async createUser(user: User): Promise<User | { message: string }> {
     const confirmationCode = generateConfirmationCode();
     const existingUser = await this.userModel.findOne({ email: user.email });
     const checkExistingUserByNin = await this.userModel.findOne({
@@ -110,6 +136,11 @@ export class UserService {
     }
   }
 
+  /**
+   * Create a new user by landlord
+   * @param user
+   * @returns Created user or error message
+   */
   async createUserByLandlord(
     user: any,
   ): Promise<User | any | { message: string }> {
@@ -119,26 +150,14 @@ export class UserService {
       nin: user.nin,
     });
 
-    if (existingUser) {
-      return { message: 'An account with this email already exists' };
-    }
-    if (checkExistingUserByNin) {
-      return { message: 'An account with this NIN already exists' };
-    }
 
-    const isPropertyMapped =
-      await this.propertiesService.isPropertyMappedToActiveTenant(
-        user.propertyId,
-      );
-    if (isPropertyMapped) {
-      return { message: 'This property has an active occupant' };
-    }
 
     user.confirmationCode = confirmationCode;
     user.password = generateConfirmationCode();
     user.status = 'active';
     const newUser = new this.userModel(user);
-
+   console.log({user});
+   
     try {
       const createdUser: any = await newUser.save();
       if (createdUser) {
@@ -176,7 +195,12 @@ export class UserService {
     }
   }
 
-  async confirmAccount(body: any): Promise<any> {
+  /**
+   * Confirm user account
+   * @param body
+   * @returns User and access token or throws
+   */
+  async confirmAccount(body: any): Promise<{ user: User; accessToken: string }> {
     const { email, confirmationCode } = body;
     const user = await this.userModel.findOne({ email });
 
@@ -199,6 +223,12 @@ export class UserService {
     return { user, accessToken };
   }
 
+  /**
+   * Update user by ID
+   * @param id
+   * @param updatedUser
+   * @returns Updated user
+   */
   async updateUser(id: string, updatedUser: any): Promise<User> {
     let fileUrl: string | undefined;
     if (updatedUser.file && updatedUser.file.length > 0) {
@@ -215,6 +245,10 @@ export class UserService {
     });
   }
 
+  /**
+   * Save password reset token for a user
+   * @param email
+   */
   async savePasswordResetToken(email: string): Promise<void> {
     const user: any = await this.findUserByEmail(email);
     const confirmationCode = generateConfirmationCode();
@@ -230,6 +264,11 @@ export class UserService {
     }
   }
 
+  /**
+   * Update password for a user
+   * @param token
+   * @param hashedPassword
+   */
   async updatePassword(token: string, hashedPassword: string): Promise<void> {
     try {
       const user: any = await this.userModel.findOne({
@@ -260,6 +299,12 @@ export class UserService {
     });
   }
 
+  /**
+   * Update notification settings for a user
+   * @param userId
+   * @param settings
+   * @returns Updated notification settings
+   */
   async updateNotificationSettings(
     userId: string,
     settings: Partial<NotificationSettings>,
@@ -280,68 +325,12 @@ export class UserService {
     return updatedSettings;
   }
 
-//   async  verifyBVN(nin: string) {
-//     if (!nin) {
-//         return new Error('NIN is required to perform verification');
-//     }
-
-//     const body = {
-//         id: nin,
-//         isSubjectConsent: true,
-//        // premiumNin: false
-//     };
-
-//     try {
-//         const response = await axios.post(baseURL, body, { headers });
-//         return response.data; 
-//     } catch (error) {
-//         const errorResponse = error.response?.data;
-
-//         if (errorResponse) {
-//             switch (errorResponse.statusCode) {
-//                 case 402:
-//                     throw {
-//                         statusCode: 402,
-//                         text: "insufficient funds. Please top up your account",
-//                         message: "We are currently unable to complete your request. Please try again later.",
-//                     };
-
-//                 case 403:
-//                     throw {
-//                         statusCode: 403,
-//                         text: "permission error, check access token",
-//                         message: "We are unable to verify your information at the moment. Please contact support for assistance.",
-//                     };
-
-//                 case 503:
-//                     throw {
-//                         statusCode: 503,
-//                         message: "Third-party service is currently unavailable. Please try again later.",
-//                     };
-//                 case 500:
-//                     throw {
-//                         statusCode: 500,
-//                         message: "Internal server error. Please contact support.",
-//                     };
-//                 default:
-//                     throw {
-//                         statusCode: errorResponse.statusCode || 500,
-//                         message: errorResponse.message || "An unknown error occurred during BVN verification.",
-//                     };
-//             }
-//         } else {
-//             throw {
-//                 statusCode: 500,
-//                 message: error.message || "An unexpected error occurred during BVN verification.",
-//             };
-//         }
-//     }
-// }
-
-
-
-
-async verifyBVN(nin: string) {
+  /**
+   * Verify NIN
+   * @param nin
+   * @returns Verification data or null
+   */
+  async verifyBVN(nin: string): Promise<any> {
     if (!nin) {
         throw new Error('NIN is required to perform verification');
     }
@@ -442,7 +431,12 @@ async verifyBVN(nin: string) {
             };
         }
     }
-}
+  }
 
-
+  /**
+   * Send user created by landlord email with password
+   */
+  async sendUserCreatedByLandlordEmailWithPassword(user: any, password: string): Promise<void> {
+    await this.emailService.sendUserCreatedByLandlordEmail({ ...user, password });
+  }
 }

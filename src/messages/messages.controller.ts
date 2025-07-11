@@ -14,7 +14,7 @@ import { CreateMessageDto } from './dto/create-message.dto';
 import { GetConversationDto } from './dto/get-conversation.dto';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
-import { ApiProperty } from '@nestjs/swagger';
+
 
 @Controller('messages')
 export class MessagingController {

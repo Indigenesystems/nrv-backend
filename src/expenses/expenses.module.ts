@@ -5,7 +5,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { Expense, ExpenseSchema } from './entities/expense.entity';
 import { Room, RoomSchema } from 'src/rooms/entities/room.entity';
 import { CloudinaryService } from 'src/upload/cloudinary.service';
-import { ApiProperty } from '@nestjs/swagger';
+
 
 @Module({
   imports: [

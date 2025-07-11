@@ -10,7 +10,7 @@ import { Property } from 'src/properties/entities/property.entity';
 import { CloudinaryService } from 'src/upload/cloudinary.service';
 import { NotificationSettings } from '../users/entities/notificationSettings.entity';
 import { EmailService } from 'src/email-sender/email.service';
-import { ApiProperty } from '@nestjs/swagger';
+
 
 @Injectable()
 export class AuthService {

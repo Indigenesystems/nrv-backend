@@ -5,7 +5,7 @@ import { Room } from 'src/rooms/entities/room.entity';
 import { Model } from 'mongoose';
 import { CloudinaryService } from 'src/upload/cloudinary.service';
 import { Expense } from './entities/expense.entity';
-import { ApiProperty } from '@nestjs/swagger';
+
 
 @Injectable()
 export class ExpensesService {

@@ -13,7 +13,7 @@ import {
 } from './entities/conversation.entity';
 import { CloudinaryService } from 'src/upload/cloudinary.service';
 import { EmailService } from 'src/email-sender/email.service';
-import { ApiProperty } from '@nestjs/swagger';
+
 
 @Module({
   imports: [

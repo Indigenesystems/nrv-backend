@@ -16,7 +16,7 @@ import { ExpensesService } from './expenses.service';
 import { UpdateExpenseDto } from './dto/update-expense.dto';
 import { createExpenseSchema } from 'src/validations/validator';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
-import { ApiProperty } from '@nestjs/swagger';
+
 
 @Controller('expenses')
 export class ExpensesController {

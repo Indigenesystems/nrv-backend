@@ -6,7 +6,7 @@ import { CreateMaintenanceDTO } from './dto/create-maintenance.dto';
 import { Maintenance } from './entities/maintenance.entity';
 import { AgreementDocuments } from 'src/properties/entities/agreement_documents.entity';
 import { paginateAndSummarize } from 'src/helper/pagination.helper';
-import { ApiProperty } from '@nestjs/swagger';
+
 
 @Injectable()
 export class MaintenanceService {

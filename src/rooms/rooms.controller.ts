@@ -17,7 +17,7 @@ import { LandlordAssignedTenant } from '../properties/entities/landlord_assigned
 import { Model } from 'mongoose';
 import { InjectModel } from '@nestjs/mongoose';
 import { AgreementDocuments } from 'src/properties/entities/agreement_documents.entity';
-import { ApiProperty } from '@nestjs/swagger';
+
 
 @Controller('rooms')
 export class RoomsController {
@@ -290,7 +290,7 @@ export class RoomsController {
     }
   }
 
-  @ApiProperty()
+  
   assignStartAndEndDate;
 
   @Put(':id/end-tenure')

@@ -2,7 +2,7 @@ import { Controller, Post, Body, BadRequestException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginUserDto } from '../users/dto/login-user.dto';
 import { loginUserSchema } from 'src/validations/validator';
-import { ApiProperty } from '@nestjs/swagger';
+
 
 @Controller('auth')
 export class AuthController {

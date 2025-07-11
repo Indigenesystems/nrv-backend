@@ -22,7 +22,7 @@ import {
   AgreementDocuments,
   AgreementDocumentsSchema,
 } from './entities/agreement_documents.entity';
-import { ApiProperty } from '@nestjs/swagger';
+
 
 @Module({
   imports: [

@@ -1,4 +1,4 @@
-import { IsEmail, IsNotEmpty, IsPhoneNumber, IsString } from 'class-validator';
+import { IsDateString, IsEmail, IsNotEmpty, IsNumber, IsOptional, IsPhoneNumber, IsString } from 'class-validator';
 
 export class CreateVerificationDto {
   @IsString()
@@ -23,3 +23,50 @@ export class CreateVerificationDto {
   @IsNotEmpty()
   requestedBy: string;
 }
+
+
+
+
+export class CreateTenantVerificationDto {
+  @IsNotEmpty() @IsString() fullName: string;
+  @IsNotEmpty() @IsEmail() email: string;
+  @IsOptional() @IsString() phone?: string;
+  @IsOptional() @IsDateString() dateOfBirth?: string;
+  @IsOptional() @IsString() address?: string;
+  @IsOptional() @IsString() gender?: string;
+  @IsOptional() @IsString() verificationId?: string;
+  @IsOptional() @IsString() createdBy?: string;
+}
+
+
+
+export class UpdateEmploymentDto {
+  @IsOptional() @IsString() employmentStatus?: string;
+  @IsOptional() @IsString() roleInCompany?: string;
+  @IsOptional() @IsString() companyName?: string;
+  @IsOptional() @IsString() currentEmployer?: string;
+  @IsOptional() @IsString() companyAddress?: string;
+  @IsOptional() @IsNumber() monthlyIncome?: number;
+  @IsOptional() @IsDateString() dateJoined?: string;
+}
+
+
+
+export class UpdateGuarantorDto {
+  @IsOptional() @IsString() guarantorFirstName?: string;
+  @IsOptional() @IsString() guarantorLastName?: string;
+  @IsOptional() @IsEmail() guarantorEmail?: string;
+  @IsOptional() @IsString() guarantorPhone?: string;
+  @IsOptional() @IsString() guarantorEmploymentStatus?: string;
+  @IsOptional() @IsString() guarantorCompany?: string;
+  @IsOptional() @IsString() guarantorAddress?: string;
+}
+
+// Generic response pattern for verification actions
+export const verificationSuccessResponse = (message: string, data: any) => {
+  return {
+    status: 'success',
+    message,
+    data,
+  };
+};

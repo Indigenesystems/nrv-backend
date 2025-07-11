@@ -34,7 +34,7 @@ import {
   AgreementDocuments,
   AgreementDocumentsSchema,
 } from 'src/properties/entities/agreement_documents.entity';
-import { ApiProperty } from '@nestjs/swagger';
+
 import { UserVerification, UserVerificationSchema } from 'src/users/entities/userVerification';
 
 @Module({
