@@ -11,7 +11,8 @@ const corsOptions: CorsOptions = {
     'https://nrv-frontend.vercel.app',
     'https://nrv-frontend.onrender.com',
     'https://nrv-frontend-main.vercel.app',
-    'https://www.naijarentverify.com'
+    'https://www.naijarentverify.com',
+    'https://nrv-admin-fe.vercel.app'
   ], // Allow requests from these origins
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'], // Allowed HTTP methods
   allowedHeaders: ['Content-Type', 'Authorization'], // Allowed headers
