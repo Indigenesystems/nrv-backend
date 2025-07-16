@@ -143,26 +143,39 @@ export class PropertiesController {
 
   @Get('/all')
   async findAllProperties(
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 10,
     @Res() res: Response,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
+    @Query('search') search?: string,
+    @Query('status') status?: string,
+    @Query('propertyType') propertyType?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: 'asc' | 'desc',
   ) {
-    const properties = await this.propertiesService.findAllProperty(
-      page,
-      limit,
-    );
-
-    if (!properties || properties.length === 0) {
-      return res.status(HttpStatus.OK).json({
-        status: 'success',
-        message: 'No properties found',
-        data: null,
+    try {
+      const pageNum = parseInt(page);
+      const limitNum = parseInt(limit);
+      
+      const result = await this.propertiesService.findAllPropertyWithPagination({
+        page: pageNum,
+        limit: limitNum,
+        search,
+        status,
+        propertyType,
+        sortBy,
+        sortOrder,
       });
-    } else {
+
       return res.status(HttpStatus.OK).json({
         status: 'success',
-        message: 'Properties fetched',
-        data: properties,
+        message: 'Properties fetched successfully',
+        data: result.data,
+        pagination: result.pagination,
+      });
+    } catch (error) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        status: 'error',
+        message: error.message,
       });
     }
   }

@@ -10,7 +10,7 @@ import { PropertiesService } from '../properties/properties.service';
 import {
   LandlordAssignedTenant,
   LandlordAssignedTenantSchema,
-} from 'src/properties/entities/landlord_assigned_tenant.entity';
+} from '../properties/entities/landlord_assigned_tenant.entity';
 import {
   Property,
   PropertySchema,

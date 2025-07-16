@@ -298,6 +298,96 @@ export class PropertiesService {
     return filteredProperties;
   }
 
+  /**
+   * Find all properties with enhanced pagination and filtering
+   * @param params
+   * @returns Paginated properties with metadata
+   */
+  async findAllPropertyWithPagination(params: {
+    page: number;
+    limit: number;
+    search?: string;
+    status?: string;
+    propertyType?: string;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  }): Promise<{ data: any[]; pagination: { total: number; page: number; limit: number } }> {
+    const { page, limit, search, status, propertyType, sortBy, sortOrder } = params;
+    
+    // Build query
+    let query: any = {};
+    
+    // Search functionality
+    if (search) {
+      const searchRegex = new RegExp(search, 'i');
+      query = {
+        $or: [
+          { propertyName: searchRegex },
+          { streetAddress: searchRegex },
+          { city: searchRegex },
+          { state: searchRegex },
+          { zipCode: searchRegex },
+        ],
+      };
+    }
+    
+    // Status filter
+    if (status) {
+      query.status = status;
+    }
+    
+    // Property type filter
+    if (propertyType) {
+      query.propertyType = propertyType;
+    }
+    
+    // Build sort object
+    let sort: any = { createdAt: -1 }; // Default: most recent first
+    if (sortBy) {
+      sort = { [sortBy]: sortOrder === 'asc' ? 1 : -1 };
+    }
+    
+    // Calculate skip
+    const skip = (page - 1) * limit;
+    
+    // Get total count
+    const total = await this.propertyModel.countDocuments(query);
+    
+    // Get paginated results with populated rooms
+    const properties = await this.propertyModel
+      .find(query)
+      .populate({
+        path: 'rooms',
+        model: 'Room',
+      })
+      .populate('createdBy', 'firstName lastName email')
+      .sort(sort)
+      .skip(skip)
+      .limit(limit)
+      .exec();
+    
+    // Process properties to include apartment counts and other metadata
+    const processedProperties = properties.map((property) => {
+      const rooms = property.rooms || [];
+      return {
+        ...property.toObject(),
+        propertyType: property.propertyType?.value || property.propertyType || 'Unknown',
+        apartments: rooms,
+        apartmentCount: rooms.length,
+        unitsLeft: rooms.filter((room: any) => !room.assignedToTenant).length,
+      };
+    });
+    
+    return {
+      data: processedProperties,
+      pagination: {
+        total,
+        page,
+        limit,
+      },
+    };
+  }
+
   async findPropertyById(id: any): Promise<any> {
     const property = await this.propertyModel
       .findById(id)

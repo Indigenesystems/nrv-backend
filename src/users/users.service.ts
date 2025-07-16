@@ -58,6 +58,78 @@ export class UserService {
   }
 
   /**
+   * Find all users with pagination and filtering
+   * @param params
+   * @returns Paginated users with metadata
+   */
+  async findAllUsersWithPagination(params: {
+    page: number;
+    limit: number;
+    search?: string;
+    role?: string;
+    status?: string;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  }): Promise<{ data: User[]; pagination: { total: number; page: number; limit: number } }> {
+    const { page, limit, search, role, status, sortBy, sortOrder } = params;
+    
+    // Build query
+    let query: any = {};
+    
+    // Search functionality
+    if (search) {
+      const searchRegex = new RegExp(search, 'i');
+      query = {
+        $or: [
+          { firstName: searchRegex },
+          { lastName: searchRegex },
+          { email: searchRegex },
+          { phoneNumber: searchRegex },
+        ],
+      };
+    }
+    
+    // Role filter
+    if (role) {
+      query.accountType = role;
+    }
+    
+    // Status filter
+    if (status) {
+      query.status = status;
+    }
+    
+    // Build sort object
+    let sort: any = { createdAt: -1 }; // Default: most recent first
+    if (sortBy) {
+      sort = { [sortBy]: sortOrder === 'asc' ? 1 : -1 };
+    }
+    
+    // Calculate skip
+    const skip = (page - 1) * limit;
+    
+    // Get total count
+    const total = await this.userModel.countDocuments(query);
+    
+    // Get paginated results
+    const users = await this.userModel
+      .find(query)
+      .sort(sort)
+      .skip(skip)
+      .limit(limit)
+      .select('-password -confirmationCode'); // Exclude sensitive fields
+    
+    return {
+      data: users,
+      pagination: {
+        total,
+        page,
+        limit,
+      },
+    };
+  }
+
+  /**
    * Find user by ID
    * @param id
    * @returns User or null
@@ -149,7 +221,6 @@ export class UserService {
     const checkExistingUserByNin = await this.userModel.findOne({
       nin: user.nin,
     });
-
 
 
     user.confirmationCode = confirmationCode;
@@ -330,106 +401,55 @@ export class UserService {
    * @param nin
    * @returns Verification data or null
    */
-  async verifyBVN(nin: string): Promise<any> {
+  async verifyNIN(nin: string): Promise<{ success: boolean; message: string; data?: any }> {
     if (!nin) {
-        throw new Error('NIN is required to perform verification');
+      return { success: false, message: 'NIN is required.' };
     }
-
-    // Step 1: Check if user already exists in DB
-    const existingRecord = await this.userVerification.findOne({ idNumber: nin });
-
-    if (existingRecord) {
-        return {
-            message: 'Record already exists in database.',
-            data: existingRecord,
-        };
-    }
-
-    const body = {
-        id: nin,
-        isSubjectConsent: true,
-    };
-
     try {
-        const response = await axios.post(baseURL, body, { headers });
-        const data = response.data?.data;
-
-        // Step 2: Save to DB if not already present
-        const saved = await this.userVerification.create({
-            id: data.id,
-            firstName: data.firstName,
-            lastName: data.lastName,
-            middleName: data.middleName,
-            image: data.image,
-            mobile: data.mobile,
-            email: data.email,
-            gender: data.gender,
-            dateOfBirth: data.dateOfBirth,
-            idNumber: data.idNumber,
-            type: data.type,
-            address: data.address,
-            birthState: data.birthState,
-            birthLGA: data.birthLGA,
-            birthCountry: data.birthCountry,
-            nokState: data.nokState,
-            religion: data.religion,
-            isConsent: data.isConsent,
-            country: data.country,
-            status: data.status,
-            createdAt: data.createdAt,
-            lastModifiedAt: data.lastModifiedAt,
-            requestedAt: data.requestedAt,
-            requestedBy: data.requestedBy,
-            businessId: data.businessId,
-            allValidationPassed: data.allValidationPassed,
-            dataValidation: data.dataValidation,
-            selfieValidation: data.selfieValidation,
-        });
-
-        return {
-            message: 'Verification successful and data saved.',
-            data: saved,
-        };
-
+      // Step 1: Check if user already exists in DB
+      const existingRecord = await this.userVerification.findOne({ idNumber: nin });
+      if (existingRecord) {
+        return { success: true, message: 'Record already exists in database.', data: existingRecord };
+      }
+      // Step 2: Call external API
+      const body = { id: nin, isSubjectConsent: true };
+      const response = await axios.post(baseURL, body, { headers });
+      const data = response.data?.data;
+      // Step 3: Save to DB
+      const saved = await this.userVerification.create({
+        id: data.id,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        middleName: data.middleName,
+        image: data.image,
+        mobile: data.mobile,
+        email: data.email,
+        gender: data.gender,
+        dateOfBirth: data.dateOfBirth,
+        idNumber: data.idNumber,
+        type: data.type,
+        address: data.address,
+        birthState: data.birthState,
+        birthLGA: data.birthLGA,
+        birthCountry: data.birthCountry,
+        nokState: data.nokState,
+        religion: data.religion,
+        isConsent: data.isConsent,
+        country: data.country,
+        status: data.status,
+        createdAt: data.createdAt,
+        lastModifiedAt: data.lastModifiedAt,
+        requestedAt: data.requestedAt,
+        requestedBy: data.requestedBy,
+        businessId: data.businessId,
+        allValidationPassed: data.allValidationPassed,
+        dataValidation: data.dataValidation,
+        selfieValidation: data.selfieValidation,
+      });
+      return { success: true, message: 'Verification successful and data saved.', data: saved };
     } catch (error) {
-        const errorResponse = error.response?.data;
-
-        if (errorResponse) {
-            switch (errorResponse.statusCode) {
-                case 402:
-                    throw {
-                        statusCode: 402,
-                        text: "insufficient funds. Please top up your account",
-                        message: "We are currently unable to complete your request. Please try again later.",
-                    };
-                case 403:
-                    throw {
-                        statusCode: 403,
-                        text: "permission error, check access token",
-                        message: "We are unable to verify your information at the moment. Please contact support for assistance.",
-                    };
-                case 503:
-                    throw {
-                        statusCode: 503,
-                        message: "Third-party service is currently unavailable. Please try again later.",
-                    };
-                case 500:
-                    throw {
-                        statusCode: 500,
-                        message: "Internal server error. Please contact support.",
-                    };
-                default:
-                    throw {
-                        statusCode: errorResponse.statusCode || 500,
-                        message: errorResponse.message || "An unknown error occurred during BVN verification.",
-                    };
-            }
-        } else {
-            throw {
-                statusCode: 500,
-                message: error.message || "An unexpected error occurred during BVN verification.",
-            };
-        }
+      console.error('NIN verification error:', error);
+      return { success: false, message: 'Verification failed. Please try again later.' };
     }
   }
 

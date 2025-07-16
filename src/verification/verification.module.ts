@@ -6,14 +6,17 @@ import { VerificationSchema } from './entities/verification.entity';
 import { EmailService } from 'src/email-sender/email.service';
 import { VerificationResponseSchema } from './entities/verification-response.entity';
 import { CloudinaryService } from 'src/upload/cloudinary.service';
+import { HttpModule } from '@nestjs/axios';
+import { VerificationHistory, VerificationHistorySchema } from './entities/verification-history.entity';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
       { name: "Verification", schema: VerificationSchema },
-            { name: "VerificationResponse", schema: VerificationResponseSchema },
-
+      { name: "VerificationResponse", schema: VerificationResponseSchema },
+      { name: VerificationHistory.name, schema: VerificationHistorySchema },
     ]),
+    HttpModule,
   ],
   controllers: [VerificationController],
   providers: [VerificationService, EmailService, CloudinaryService],

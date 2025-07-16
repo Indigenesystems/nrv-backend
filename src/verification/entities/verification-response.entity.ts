@@ -81,6 +81,57 @@ export class VerificationResponse {
 
   @Prop()
   createdBy: string;
+
+  @Prop({ type: Object, default: null })
+  personalReport?: {
+    status: string;
+    comment: string;
+    reviewedBy: string;
+    reviewedAt: Date;
+  };
+
+  @Prop({ type: Object, default: null })
+  employmentReport?: {
+    status: string;
+    comment: string;
+    reviewedBy: string;
+    reviewedAt: Date;
+  };
+
+  @Prop({ type: Object, default: null })
+  guarantorReport?: {
+    status: string;
+    comment: string;
+    reviewedBy: string;
+    reviewedAt: Date;
+  };
+
+  @Prop({ type: Object, default: null })
+  documentsReport?: {
+    status: string;
+    comment: string;
+    reviewedBy: string;
+    reviewedAt: Date;
+  };
+
+  @Prop({ type: Object, default: null })
+  phoneVerificationResult?: {
+    status?: string;
+    error?: string;
+    data?: Record<string, unknown>;
+    entity?: Record<string, unknown>;
+    timestamp?: Date;
+    originalError?: unknown;
+    originalPhone?: string;
+    finalPhone?: string;
+    [key: string]: unknown;
+  };
+
+  @Prop({ default: null })
+  phoneVerificationStatus?: string;
+
+  @Prop({ default: null })
+  phoneVerificationDate?: Date;
 }
 
 export const VerificationResponseSchema = SchemaFactory.createForClass(VerificationResponse);

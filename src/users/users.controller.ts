@@ -91,23 +91,40 @@ export class UserController {
   }
 
   /**
-   * Get all users
+   * Get all users with pagination and filtering
    */
   @Get()
-  async getUsers(): Promise<{ status: string; message: string; data: any }> {
-    const users = await this.userService.findAllUsers();
-    if (!users) {
+  async getUsers(
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
+    @Query('search') search?: string,
+    @Query('role') role?: string,
+    @Query('status') status?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: 'asc' | 'desc',
+  ): Promise<{ status: string; message: string; data: any; pagination: any }> {
+    try {
+      const pageNum = parseInt(page);
+      const limitNum = parseInt(limit);
+      
+      const result = await this.userService.findAllUsersWithPagination({
+        page: pageNum,
+        limit: limitNum,
+        search,
+        role,
+        status,
+        sortBy,
+        sortOrder,
+      });
+
       return {
         status: 'success',
-        message: 'No user found',
-        data: null,
+        message: 'Users fetched successfully',
+        data: result.data,
+        pagination: result.pagination,
       };
-    } else {
-      return {
-        status: 'success',
-        message: 'All users fetched successfully',
-        data: users,
-      };
+    } catch (error) {
+      throw new BadRequestException(error.message);
     }
   }
 
@@ -218,8 +235,8 @@ export class UserController {
    * Verify NIN
    */
   @Post('/nin')
-  async verifyBVN(@Body('nin') nin: string): Promise<any> {
-    const data: any = await this.userService.verifyBVN(nin);
+  async verifyNIN(@Body('nin') nin: string): Promise<any> {
+    const data: any = await this.userService.verifyNIN(nin);
     if (!data) {
       return;
     }

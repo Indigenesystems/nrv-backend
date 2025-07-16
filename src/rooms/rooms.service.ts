@@ -8,7 +8,7 @@ import {
   ApplicationStatus,
 } from '../properties/entities/application.entity';
 import { CloudinaryService } from '../upload/cloudinary.service';
-import { LandlordAssignedTenant } from 'src/properties/entities/landlord_assigned_tenant.entity';
+import { LandlordAssignedTenant } from '../properties/entities/landlord_assigned_tenant.entity';
 import { AgreementDocuments } from 'src/properties/entities/agreement_documents.entity';
 import { randomInt } from 'crypto';
 
