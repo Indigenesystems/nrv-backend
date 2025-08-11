@@ -28,7 +28,30 @@ export class RoomsService {
   ) {}
 
   async createRooms(createRoomDTO: any) {
-    //const fileUrl = await this.cloudinaryService.upload(createRoomDTO.file[0]);
+    console.log('Service received createRoomDTO:', createRoomDTO);
+    console.log('Service received images:', createRoomDTO.images);
+    
+    let fileUrl: any = null;
+    let imageUrls: any = null;
+
+    // Upload main room image
+    if (createRoomDTO.file) {
+      fileUrl = await this.cloudinaryService.upload(createRoomDTO.file[0]);
+    }
+
+    // Upload multiple images
+    if (createRoomDTO.images && createRoomDTO.images.length > 0) {
+      console.log('Service processing images:', createRoomDTO.images);
+      imageUrls = await Promise.all(
+        createRoomDTO.images.map(
+          async (file: Express.Multer.File) =>
+            this.cloudinaryService.upload(file),
+        ),
+      );
+      console.log('Service uploaded imageUrls:', imageUrls);
+    } else {
+      console.log('Service: No images found in createRoomDTO.images');
+    }
 
     let {
       description,
@@ -58,6 +81,7 @@ export class RoomsService {
       apartmentType,
       rentAmountMetrics,
       rentAmount: parsedRentAmount,
+      file: fileUrl,
       noOfRooms,
       noOfBaths,
       noOfPools,
@@ -65,6 +89,7 @@ export class RoomsService {
       leaseTerms,
       paymentOption,
       otherAmentities,
+      imageUrls: imageUrls || [],
     };
 
     try {
@@ -135,12 +160,16 @@ export class RoomsService {
         }
       });
     } else {
+      // For tenant view, only show available (unoccupied) rooms that are listed
       query = this.roomModel
         .find()
         .populate('propertyId')
         .where('listRoom')
-        .equals(true);
+        .equals(true)
+        .where('assignedToTenant')
+        .equals(false); // Only show unoccupied rooms
     }
+    
     if (search) {
       const searchRegex = new RegExp(search, 'i');
       query.or([
@@ -177,8 +206,63 @@ export class RoomsService {
         query = query.lte(maxPrice);
       }
     }
-    const properties = await query;
+    
+    // Apply pagination
+    const skip = (page - 1) * limit;
+    const properties = await query.skip(skip).limit(limit).exec();
     return properties;
+  }
+
+  async countAvailableApartments(
+    search: string = '',
+    minPrice?: number,
+    maxPrice?: number,
+  ): Promise<number> {
+    let query = this.roomModel
+      .find()
+      .where('listRoom')
+      .equals(true)
+      .where('assignedToTenant')
+      .equals(false);
+
+    if (search) {
+      const searchRegex = new RegExp(search, 'i');
+      query.or([
+        {
+          propertyId: {
+            $in: await this.propertyModel
+              .find({ state: searchRegex })
+              .distinct('_id'),
+          },
+        },
+        {
+          propertyId: {
+            $in: await this.propertyModel
+              .find({ city: searchRegex })
+              .distinct('_id'),
+          },
+        },
+        {
+          propertyId: {
+            $in: await this.propertyModel
+              .find({ streetAddress: searchRegex })
+              .distinct('_id'),
+          },
+        },
+      ]);
+    }
+
+    if (minPrice !== undefined || maxPrice !== undefined) {
+      query = query.where('rentAmount');
+      if (minPrice !== undefined) {
+        query = query.gte(minPrice);
+      }
+      if (maxPrice !== undefined) {
+        query = query.lte(maxPrice);
+      }
+    }
+
+    return await query.countDocuments();
   }
 
   async findPropertyByIdForTenant(id: any, tenantId: any): Promise<any> {

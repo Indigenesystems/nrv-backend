@@ -26,6 +26,10 @@ export class Property {
   
   file: string;
 
+  @Prop({ type: [String], default: [] })
+  
+  imageUrls: string[];
+
   @Prop()
   
   landlordInsurancePolicy: string[];

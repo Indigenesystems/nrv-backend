@@ -31,6 +31,8 @@ export class PropertiesController {
   @UseInterceptors(
     FileFieldsInterceptor([
       { name: 'file', maxCount: 1 },
+      { name: 'images', maxCount: 10 },
+      { name: 'unitImages', maxCount: 50 }, // Allow up to 50 unit images (10 units × 5 images each)
       { name: 'landlordInsurancePolicy', maxCount: 5 },
       { name: 'utilityAndMaintenance', maxCount: 5 },
       { name: 'otherDocuments', maxCount: 5 },
@@ -41,6 +43,8 @@ export class PropertiesController {
     @UploadedFiles()
     files: {
       file?: Express.Multer.File;
+    //  images?: Express.Multer.File[];
+      unitImages?: Express.Multer.File[];
       landlordInsurancePolicy?: Express.Multer.File;
       utilityAndMaintenance?: Express.Multer.File;
       otherDocuments?: Express.Multer.File;
@@ -69,6 +73,7 @@ export class PropertiesController {
   @UseInterceptors(
     FileFieldsInterceptor([
       { name: 'file', maxCount: 1 },
+      { name: 'images', maxCount: 10 },
       { name: 'landlordInsurancePolicy', maxCount: 5 },
       { name: 'utilityAndMaintenance', maxCount: 5 },
       { name: 'otherDocuments', maxCount: 5 },
@@ -80,6 +85,7 @@ export class PropertiesController {
     @UploadedFiles()
     files: {
       file?: Express.Multer.File;
+      images?: Express.Multer.File[];
       landlordInsurancePolicy?: Express.Multer.File;
       utilityAndMaintenance?: Express.Multer.File;
       otherDocuments?: Express.Multer.File;

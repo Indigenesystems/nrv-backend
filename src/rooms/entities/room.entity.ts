@@ -25,6 +25,9 @@ export class Room {
   @Prop()
   file: string;
 
+  @Prop({ type: [String], default: [] })
+  imageUrls: string[];
+
   @Prop()
   noOfRooms: string;
 

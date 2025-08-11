@@ -30,13 +30,25 @@ export class RoomsController {
   ) {}
 
   @Post('/create')
-  @UseInterceptors(FileFieldsInterceptor([{ name: 'file', maxCount: 1 }]))
+  @UseInterceptors(FileFieldsInterceptor([
+    { name: 'file', maxCount: 1 },
+    { name: 'images', maxCount: 10 }
+  ]))
   async createRoom(
     @Body() roomData: any,
-    @UploadedFiles() files: { file?: Express.Multer.File },
+    @UploadedFiles() files: { 
+      file?: Express.Multer.File;
+      images?: Express.Multer.File[];
+    },
   ) {
     try {
+      console.log('Backend received roomData:', roomData);
+      console.log('Backend received files:', files);
+      console.log('Backend received images:', files.images);
+      
       const createRoomDTO = { ...roomData, ...files };
+      console.log('Backend createRoomDTO:', createRoomDTO);
+      
       const validationResult = createRoomSchema.validate(roomData);
 
       if (validationResult.error) {

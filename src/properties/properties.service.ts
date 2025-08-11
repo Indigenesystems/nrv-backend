@@ -89,6 +89,7 @@ export class PropertiesService {
       landlordInsurancePolicy: landlordInsurancePolicyUrls,
       utilityAndMaintenance: utilityAndMaintenanceUrls,
       otherDocuments: otherDocumentsUrls,
+      imageUrls: [], // Remove property-level images, will be handled at room level
       preferredTenants: createPropertyDto.preferredTenants || [],
       propertyName: createPropertyDto.propertyName || '',
       rentCollection: createPropertyDto.rentCollection || {
@@ -101,14 +102,42 @@ export class PropertiesService {
     const createdProperty = await newProperty.save();
 
     if (createPropertyDto.units && createPropertyDto.units.length > 0) {
+      const parsedUnits = JSON.parse(createPropertyDto.units);
+      const unitImages = createPropertyDto.unitImages || [];
+      
+      console.log(`Backend received ${unitImages.length} unit images`);
+      console.log(`Backend processing ${parsedUnits.length} units`);
+      
       const roomDocs = await Promise.all(
-        JSON.parse(createPropertyDto.units).map((room: any) =>
-          this.roomModel.create({
+        parsedUnits.map(async (room: any, index: number) => {
+          let roomImageUrls: any = null;
+          
+          // Calculate which images belong to this unit
+          // Assuming 5 images per unit, calculate the range for this unit
+          const imagesPerUnit = 5;
+          const startIndex = index * imagesPerUnit;
+          const endIndex = startIndex + imagesPerUnit;
+          const unitImageFiles = unitImages.slice(startIndex, endIndex);
+          
+          console.log(`Unit ${index + 1}: ${unitImageFiles.length} images`);
+          
+          // Upload multiple images for each room
+          if (unitImageFiles && unitImageFiles.length > 0) {
+            roomImageUrls = await Promise.all(
+              unitImageFiles.map(
+                async (file: Express.Multer.File) =>
+                  this.cloudinaryService.upload(file),
+              ),
+            );
+          }
+
+          return this.roomModel.create({
             ...room,
             roomId: randomInt(10000000),
             propertyId: createdProperty._id,
-          }),
-        ),
+            imageUrls: roomImageUrls || [], // Add room-level images
+          });
+        }),
       );
 
       // Update property with linked rooms
@@ -123,6 +152,7 @@ export class PropertiesService {
     let landlordInsurancePolicyUrls: any = [];
     let utilityAndMaintenanceUrls: any = [];
     let otherDocumentsUrls: any = [];
+    let imageUrls: any = [];
 
     const singleProperty = await this.findPropertyById(
       updatePropertyDto?.query,
@@ -134,6 +164,7 @@ export class PropertiesService {
     singleProperty.utilityAndMaintenance =
       singleProperty.utilityAndMaintenance || [];
     singleProperty.otherDocuments = singleProperty.otherDocuments || [];
+    singleProperty.imageUrls = singleProperty.imageUrls || [];
 
     // Upload landlord insurance policies
     if (updatePropertyDto.landlordInsurancePolicy) {
@@ -174,6 +205,19 @@ export class PropertiesService {
       );
 
       singleProperty.otherDocuments.push(...otherDocumentsUrls);
+    }
+
+    // Upload multiple images
+    if (updatePropertyDto.images && updatePropertyDto.images.length > 0) {
+      imageUrls = await Promise.all(
+        updatePropertyDto.images.map(
+          async (file: Express.Multer.File) => {
+            return await this.cloudinaryService.upload(file);
+          },
+        ),
+      );
+
+      singleProperty.imageUrls.push(...imageUrls);
     }
 
     // Update other properties
