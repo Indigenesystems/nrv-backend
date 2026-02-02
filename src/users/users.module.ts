@@ -36,9 +36,11 @@ import {
 } from 'src/properties/entities/agreement_documents.entity';
 
 import  { UserVerification, UserVerificationSchema } from './entities/userVerification';
+import { ActivitiesModule } from '../activities/activities.module';
 
 @Module({
   imports: [
+    ActivitiesModule,
     MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
       { name: Maintenance.name, schema: MaintenanceSchema },
@@ -65,5 +67,6 @@ import  { UserVerification, UserVerificationSchema } from './entities/userVerifi
     CloudinaryService,
     RoomsService,
   ],
+  exports: [UserService],
 })
 export class UsersModule {}

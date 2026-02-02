@@ -18,6 +18,7 @@ import { Room } from 'src/rooms/entities/room.entity';
 import { randomInt } from 'crypto';
 
 import { populate } from 'dotenv';
+import { ActivitiesService } from '../activities/activities.service';
 
 @Injectable()
 export class PropertiesService {
@@ -36,6 +37,7 @@ export class PropertiesService {
     private cloudinaryService: CloudinaryService,
     private roomService: RoomsService,
     private emailService: EmailService,
+    private activitiesService: ActivitiesService,
   ) {}
 
   async createProperty(createPropertyDto: any) {
@@ -91,7 +93,7 @@ export class PropertiesService {
       otherDocuments: otherDocumentsUrls,
       imageUrls: [], // Remove property-level images, will be handled at room level
       preferredTenants: createPropertyDto.preferredTenants || [],
-      propertyName: createPropertyDto.propertyName || '',
+      propertyName: createPropertyDto.propertyName || createPropertyDto.nameOfProperty || '',
       rentCollection: createPropertyDto.rentCollection || {
         value: '',
         label: '',
@@ -143,6 +145,34 @@ export class PropertiesService {
       // Update property with linked rooms
       createdProperty.rooms = roomDocs.map((room) => room._id);
       await createdProperty.save();
+
+      // Log "Unit Added" activity for each unit
+      const createdBy = createdProperty.createdBy as any;
+      const userId =
+        typeof createdBy === 'object' ? createdBy?._id?.toString() : createdBy?.toString();
+      if (userId) {
+        for (const room of roomDocs) {
+          await this.activitiesService.create({
+            type: 'Unit Added',
+            details: `${(room as any).description || 'New unit'} added to property`,
+            userId,
+            metadata: { roomId: (room as any)._id, propertyId: createdProperty._id },
+          });
+        }
+      }
+    }
+
+    // Log activity
+    const createdBy = createdProperty.createdBy as any;
+    const userId =
+      typeof createdBy === 'object' ? createdBy?._id?.toString() : createdBy?.toString();
+    if (userId) {
+      await this.activitiesService.create({
+        type: 'Property Added',
+        details: `${createdProperty.propertyName || createdProperty.streetAddress || 'New property'} has been added`,
+        userId,
+        metadata: { propertyId: createdProperty._id },
+      });
     }
 
     return createdProperty;
@@ -526,6 +556,21 @@ export class PropertiesService {
   }
 
   async deletePropertyById(id: any) {
+    const propertyToDelete = await this.propertyModel.findById(id);
+    if (propertyToDelete) {
+      const createdBy = propertyToDelete.createdBy as any;
+      const userId =
+        typeof createdBy === 'object' ? createdBy?._id?.toString() : createdBy?.toString();
+      if (userId) {
+        await this.activitiesService.create({
+          type: 'Property Deleted',
+          details: `${propertyToDelete.propertyName || propertyToDelete.streetAddress || 'Property'} has been removed`,
+          userId,
+          metadata: { propertyId: id },
+        });
+      }
+    }
+
     const deletedProperty: any = await this.propertyModel.findByIdAndDelete({
       _id: id,
     });
@@ -729,10 +774,18 @@ export class PropertiesService {
         totalAccepted: number;
         totalActiveTenants: number;
         totalProperties: number;
+        totalNewLastMonth: number;
+        totalAcceptedLastMonth: number;
+        totalActiveTenantsLastMonth: number;
+        totalPropertiesLastMonth: number;
       }
     | any
   > {
     try {
+      const now = new Date();
+      const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const endOfLastMonth = new Date(startOfThisMonth.getTime() - 1);
+
       const totalNewPromise = this.applicationModel
         .countDocuments({ ownerId: id, status: 'New' })
         .exec();
@@ -741,26 +794,61 @@ export class PropertiesService {
         .exec();
 
       const x = await this.findLandlordOnboardedTenants(id);
-      const totalActiveTenantsPromise = await this.applicationModel
+      const totalActiveTenantsPromise = this.applicationModel
         .countDocuments({ ownerId: id, status: 'Accepted' })
         .exec();
 
-      const totalPropertiesPromise = await this.propertyModel
+      const totalPropertiesPromise = this.propertyModel
         .countDocuments({ createdBy: id })
         .exec();
 
-      const [totalNew, totalAccepted, totalActiveTenants, totalProperties] =
+      const totalNewLastMonthPromise = this.applicationModel
+        .countDocuments({ ownerId: id, status: 'New', createdAt: { $lt: startOfThisMonth } })
+        .exec();
+      const totalAcceptedLastMonthPromise = this.applicationModel
+        .countDocuments({ ownerId: id, status: 'Accepted', createdAt: { $lt: startOfThisMonth } })
+        .exec();
+      const totalPropertiesLastMonthPromise = this.propertyModel
+        .countDocuments({ createdBy: id, createdAt: { $lt: startOfThisMonth } })
+        .exec();
+
+      const activeTenantsLastMonthQuery = {
+        ownerId: id,
+        status: ApplicationStatus.ACTIVE_LEASE,
+        rentStartDate: { $lte: endOfLastMonth },
+        $or: [
+          { rentEndDate: { $gte: endOfLastMonth } },
+          { rentEndDate: null },
+        ],
+      };
+      const totalActiveTenantsLastMonthPromise = Promise.all([
+        this.applicationModel.countDocuments(activeTenantsLastMonthQuery).exec(),
+        this.landlordAssignedTenantModel.countDocuments(activeTenantsLastMonthQuery).exec(),
+      ]).then(([a, b]) => a + b);
+
+      const [totalNew, totalAccepted, totalActiveTenants, totalProperties, totalNewLastMonth, totalAcceptedLastMonth, totalPropertiesLastMonth, totalActiveTenantsLastMonth] =
         await Promise.all([
           totalNewPromise,
           totalAcceptedPromise,
-          totalActiveTenantsPromise + x.length,
+          totalActiveTenantsPromise,
           totalPropertiesPromise,
+          totalNewLastMonthPromise,
+          totalAcceptedLastMonthPromise,
+          totalPropertiesLastMonthPromise,
+          totalActiveTenantsLastMonthPromise,
         ]);
+
+      const totalActiveTenantsCount = totalActiveTenants + x.length;
+
       return {
         totalNew,
         totalAccepted,
-        totalActiveTenants,
+        totalActiveTenants: totalActiveTenantsCount,
         totalProperties,
+        totalNewLastMonth,
+        totalAcceptedLastMonth,
+        totalActiveTenantsLastMonth,
+        totalPropertiesLastMonth,
       };
     } catch (error) {
       throw new Error(`Failed to fetch landlord applications: ${error}`);

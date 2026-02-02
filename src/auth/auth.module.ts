@@ -36,9 +36,11 @@ import {
 } from 'src/properties/entities/agreement_documents.entity';
 
 import { UserVerification, UserVerificationSchema } from 'src/users/entities/userVerification';
+import { ActivitiesModule } from '../activities/activities.module';
 
 @Module({
   imports: [
+    ActivitiesModule,
     MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
       { name: Room.name, schema: RoomSchema },

@@ -40,6 +40,8 @@ import { DocumentsModule } from './documents/documents.module';
 import { UserVerification, UserVerificationSchema } from './users/entities/userVerification';
 import { VerificationModule } from './verification/verification.module';
 import { VerificationSchema } from './verification/entities/verification.entity';
+import { ActivitiesModule } from './activities/activities.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -72,6 +74,8 @@ import { VerificationSchema } from './verification/entities/verification.entity'
     ExpensesModule,
     DocumentsModule,
     VerificationModule,
+    ActivitiesModule,
+    DashboardModule,
   ],
   controllers: [AppController, UserController, AuthController, PropertiesController, RoomsController, UserController, MaintenanceController, MessagingController],
   providers: [AppService, UserService, AuthService, EmailService, CloudinaryService, PropertiesService, RoomsService, MaintenanceService, MessagingService], 

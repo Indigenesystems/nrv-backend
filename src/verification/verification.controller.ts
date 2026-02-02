@@ -24,6 +24,7 @@ import {
   UpdateGuarantorDto,
   verificationSuccessResponse,
 } from './dto/create-verification.dto';
+import { UpdateVerificationDto } from './dto/update-verification.dto';
 import { Response } from 'express';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 
@@ -355,26 +356,27 @@ export class VerificationController {
   }
 
   /**
-   * Get a verification response by ID
-   * @param id
-   * @returns Success response with verification response
+   * Get a verification response by verification request ID and tenant email.
+   * Must be declared before /response/:id so "by-request" is not matched as id.
    */
-  @Get('/response/:id')
-  async getVerificationResponse(@Param('id') id: string): Promise<{ status: string; message: string; data: any }> {
-    try {
-      const result = await this.verificationService.getVerificationResponseById(id);
-      if (!result) throw new NotFoundException('Verification not found.');
-      return verificationSuccessResponse('Verification fetched successfully', result);
-    } catch (error) {
-      console.error('Error fetching verification by ID:', error);
-      throw new BadRequestException(error?.response || 'Failed to fetch verification record.');
+  @Get('/response/by-request/:verificationId')
+  async getVerificationResponseByRequestAndEmail(
+    @Param('verificationId') verificationId: string,
+    @Query('email') email: string,
+  ) {
+    if (!email) {
+      throw new BadRequestException('Email query parameter is required');
     }
+    const result = await this.verificationService.getVerificationResponseByRequestAndEmail(verificationId, email);
+    return verificationSuccessResponse(
+      result ? 'Verification response fetched successfully' : 'No verification response yet',
+      result ?? null,
+    );
   }
 
   /**
-   * Get the latest verification response for a user
-   * @param userId
-   * @returns Success response with latest verification response
+   * Get the latest verification response for a user.
+   * Must be declared before /response/:id so "user" is not matched as id.
    */
   @Get('/response/user/:userId')
   async getLatestVerificationResponseByUser(@Param('userId') userId: string) {
@@ -390,24 +392,32 @@ export class VerificationController {
   }
 
   /**
-   * Get a verification response by verification request ID and tenant email
-   * @param verificationId
-   * @param email
-   * @returns Success response with verification response or 404 if not found
+   * Get all verification responses by verificationId (request id).
+   * Must be declared before /response/:id so "by-verification" is not matched as id.
    */
-  @Get('/response/by-request/:verificationId')
-  async getVerificationResponseByRequestAndEmail(
+  @Get('/response/by-verification/:verificationId')
+  async getVerificationResponsesByVerificationId(
     @Param('verificationId') verificationId: string,
-    @Query('email') email: string,
   ) {
-    if (!email) {
-      throw new BadRequestException('Email query parameter is required');
+    const result = await this.verificationService.getVerificationResponsesByVerificationId(verificationId);
+    return verificationSuccessResponse('Verification responses fetched successfully', result);
+  }
+
+  /**
+   * Get a verification response by ID
+   * @param id
+   * @returns Success response with verification response
+   */
+  @Get('/response/:id')
+  async getVerificationResponse(@Param('id') id: string): Promise<{ status: string; message: string; data: any }> {
+    try {
+      const result = await this.verificationService.getVerificationResponseById(id);
+      if (!result) throw new NotFoundException('Verification not found.');
+      return verificationSuccessResponse('Verification fetched successfully', result);
+    } catch (error) {
+      console.error('Error fetching verification by ID:', error);
+      throw new BadRequestException(error?.response || 'Failed to fetch verification record.');
     }
-    const result = await this.verificationService.getVerificationResponseByRequestAndEmail(verificationId, email);
-    if (!result) {
-      throw new NotFoundException('Verification response not found for this request and email.');
-    }
-    return verificationSuccessResponse('Verification response fetched successfully', result);
   }
 
   /**
@@ -431,6 +441,24 @@ export class VerificationController {
       return verificationSuccessResponse('AML screening successful', result);
     } catch (error) {
       throw new BadRequestException(error?.response || error?.message || 'Failed to perform AML screening');
+    }
+  }
+
+  /**
+   * Update a verification request (e.g. status: approved | rejected)
+   * @param id
+   * @returns Success response with updated verification
+   */
+  @Patch(':id')
+  async updateVerification(
+    @Param('id') id: string,
+    @Body(new ValidationPipe({ whitelist: true })) dto: UpdateVerificationDto,
+  ): Promise<{ status: string; message: string; data: any }> {
+    try {
+      const result = await this.verificationService.updateVerification(id, dto);
+      return verificationSuccessResponse('Verification updated successfully', result);
+    } catch (error) {
+      throw new BadRequestException(error?.response || error?.message || 'Failed to update verification.');
     }
   }
 
@@ -492,17 +520,6 @@ export class VerificationController {
   @Get('history')
   async getVerificationHistory(@Query('userId') userId?: string) {
     return this.verificationService.getVerificationHistory(userId);
-  }
-
-  /**
-   * Get all verification responses by verificationId
-   */
-  @Get('/response/by-verification/:verificationId')
-  async getVerificationResponsesByVerificationId(
-    @Param('verificationId') verificationId: string,
-  ) {
-    const result = await this.verificationService.getVerificationResponsesByVerificationId(verificationId);
-    return verificationSuccessResponse('Verification responses fetched successfully', result);
   }
 
   /**

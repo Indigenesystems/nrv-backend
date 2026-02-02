@@ -10,19 +10,18 @@ export class EmailService {
   private transporter: nodemailer.Transporter;
 
   constructor() {
+    const port = parseInt(process.env.SMTP_PORT || '587', 10);
+    const secure = process.env.SMTP_SECURE === 'true';
     this.transporter = nodemailer.createTransport({
-      host: 'smtp.zoho.com',
-      port: 465, // or 465 for SSL/TLS
-      secure: true, // Set to true if using SSL/TLS
+      host: process.env.SMTP_HOST || 'smtp.zoho.com',
+      port,
+      secure, // true for 465, false for 587 (STARTTLS)
       auth: {
-        user: 'hello@naijarentverify.com',
-        pass: 'Maythird1.!',
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
       },
-      // service: "gmail",
-      // auth: {
-      //     user: "mailto:ojobabajide629@gmail.com",
-      //     pass: "cbab fkou ppva fhxc",
-      // },
+      connectionTimeout: 15000,
+      greetingTimeout: 10000,
     });
   }
 
@@ -674,12 +673,19 @@ export class EmailService {
               </tr>
               <tr>
                 <td align="left" bgcolor="#ffffff" style="padding: 24px; font-family: 'Source Sans Pro', Helvetica, Arial, sans-serif; font-size: 16px; line-height: 24px;">
-                  <p style="margin: 0;">Your landlord has onboarded you as a tenent. Here is your default password - [verificationToken]</p>
+                  <p style="margin: 0;">Your landlord has onboarded you as a tenant on Naija Rent Verify.</p>
+                </td>
+              </tr>
+              <tr>
+                <td align="left" bgcolor="#ffffff" style="padding: 0 24px 24px; font-family: 'Source Sans Pro', Helvetica, Arial, sans-serif; font-size: 16px; line-height: 24px;">
+                  <p style="margin: 0 0 8px;"><strong>Your temporary password:</strong></p>
+                  <p style="margin: 0; font-size: 20px; font-weight: 700; letter-spacing: 2px;">[verificationToken]</p>
+                  <p style="margin: 12px 0 0; font-size: 14px; color: #666;">Use your email <strong>[userEmail]</strong> and this password to sign in. We recommend changing your password after your first login.</p>
                 </td>
               </tr>
                             <tr>
                 <td align="left" bgcolor="#ffffff" style="padding: 24px; font-family: 'Source Sans Pro', Helvetica, Arial, sans-serif; font-size: 16px; line-height: 24px;">
-                  <p style="margin: 0;">Kindly click the link to login : <a>https://nrv-frontend.onrender.com/sign-in</a></p>
+                  <p style="margin: 0;">Kindly click the link to sign in: <a href="[loginUrl]" style="color: #03442C; font-weight: 600;">[loginUrl]</a></p>
                 </td>
               </tr>
               <tr>
@@ -741,27 +747,30 @@ export class EmailService {
     </body>
     </html>`;
 
+    const loginUrl = process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/sign-in` : 'https://www.naijarentverify.com/sign-in';
     const replacements = {
       '[userName]': payload.firstName + ' ' + payload.lastName,
       '[userEmail]': payload.email,
       '[verificationToken]': payload.password,
       '[accountType]': payload.accountType,
+      '[loginUrl]': loginUrl,
     };
 
     const resultEmailTemplate = emailTemplate.replace(
       /\[userName\]|\[userRoleTag\]|\[userEmail\]|\[userPassword\]|\[verificationToken\]|\[accountType\]|\[loginUrl\]|\[supportTeamEmail\]/g,
-      (match) => replacements[match],
+      (match) => replacements[match] ?? match,
     );
 
     try {
-      const info = await this.transporter.sendMail({
+      await this.transporter.sendMail({
         from: 'hello@naijarentverify.com',
         to: payload.email,
-        subject: 'Your Landlord has Onboarded on NaijaRentVerify',
+        subject: 'Your landlord has onboarded you on Naija Rent Verify',
         html: resultEmailTemplate,
       });
-    } catch (error) {
-      console.error('Email sending error: ', error);
+      console.log('Onboard/password email sent to', payload.email);
+    } catch (error: any) {
+      console.error('Onboard email send failed:', error?.message || error);
       throw error;
     }
   }
@@ -1176,25 +1185,78 @@ async sendTenantVerificationInviteEmail(payload: {
   landlordName: string;
   formLink: string;
 }) {
-  const emailTemplate = `
-    <html>
-      <body style="font-family: Arial, sans-serif; padding: 20px; background: #f9f9f9;">
-        <div style="max-width: 600px; margin: auto; background: white; padding: 24px; border-radius: 8px;">
-          <h2>Hello ${payload.recipientName},</h2>
-          <p><strong>${payload.landlordName}</strong> has requested to verify your rental history through Naija Rent Verify.</p>
-          <p>Please click the button below to fill out your verification form:</p>
-          <p style="text-align: center;">
-            <a href="${payload.formLink}" style="background-color: #1a82e2; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none;">
-              Complete Verification Form
-            </a>
-          </p>
-          <p>If you did not expect this request, you can safely ignore this email.</p>
-          <hr />
-          <p style="font-size: 12px; color: #999;">&copy; ${new Date().getFullYear()} Naija Rent Verify</p>
-        </div>
-      </body>
-    </html>
-  `;
+  const emailTemplate = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <title>Verification Request - Naija Rent Verify</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style type="text/css">
+    body, table, td, a { -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%; }
+    table, td { mso-table-rspace: 0pt; mso-table-lspace: 0pt; }
+    a[x-apple-data-detectors] { font-family: inherit !important; font-size: inherit !important; color: inherit !important; text-decoration: none !important; }
+    body { margin: 0 !important; padding: 0 !important; width: 100% !important; }
+    .button-link { display: inline-block; background-color: #03442C; color: #ffffff !important; padding: 14px 32px; text-decoration: none; font-weight: 600; border-radius: 6px; font-size: 16px; }
+  </style>
+</head>
+<body style="margin: 0; padding: 0; background-color: #e9ecef; font-family: 'Segoe UI', Helvetica, Arial, sans-serif;">
+  <table border="0" cellpadding="0" cellspacing="0" width="100%" role="presentation">
+    <tr>
+      <td align="center" style="padding: 32px 16px;" bgcolor="#e9ecef">
+        <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px;" role="presentation">
+          <!-- Logo -->
+          <tr>
+            <td align="center" style="padding: 0 0 24px 0;">
+              <a href="https://www.naijarentverify.com" target="_blank" style="display: inline-block;">
+                <img src="https://res.cloudinary.com/dzv98o7ds/image/upload/v1734122260/nrv-logo_wzjwam.webp" alt="Naija Rent Verify" width="48" height="48" style="display: block; width: 48px; height: 48px; border: 0;" />
+              </a>
+            </td>
+          </tr>
+          <!-- Card -->
+          <tr>
+            <td bgcolor="#ffffff" style="border-radius: 8px; border: 1px solid #e0e0e0; overflow: hidden;">
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" role="presentation">
+                <tr>
+                  <td style="padding: 32px 24px 24px; border-bottom: 3px solid #03442C;">
+                    <h1 style="margin: 0; font-size: 22px; font-weight: 700; color: #1a1a1a; line-height: 1.3;">Verification request from your landlord</h1>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 24px;">
+                    <p style="margin: 0 0 16px; font-size: 16px; line-height: 1.6; color: #333333;">Hello ${payload.recipientName},</p>
+                    <p style="margin: 0 0 24px; font-size: 16px; line-height: 1.6; color: #333333;"><strong>${payload.landlordName}</strong> has requested to verify your rental details through Naija Rent Verify. Please complete the verification form so your landlord can review your application.</p>
+                    <table border="0" cellpadding="0" cellspacing="0" role="presentation">
+                      <tr>
+                        <td align="center" style="padding: 8px 0 24px;">
+                          <a href="${payload.formLink}" class="button-link" target="_blank">Complete verification form</a>
+                        </td>
+                      </tr>
+                    </table>
+                    <p style="margin: 0; font-size: 14px; line-height: 1.5; color: #666666;">Or copy and paste this link into your browser:</p>
+                    <p style="margin: 8px 0 0; font-size: 14px; line-height: 1.5;"><a href="${payload.formLink}" style="color: #03442C; word-break: break-all;">${payload.formLink}</a></p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 0 24px 24px;">
+                    <p style="margin: 0; font-size: 13px; line-height: 1.5; color: #888888;">If you didn’t expect this request, you can ignore this email.</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <!-- Footer -->
+          <tr>
+            <td align="center" style="padding: 24px 16px; font-size: 13px; color: #888888;">
+              <p style="margin: 0;">&copy; ${new Date().getFullYear()} Naija Rent Verify. All rights reserved.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
 
   try {
     await this.transporter.sendMail({

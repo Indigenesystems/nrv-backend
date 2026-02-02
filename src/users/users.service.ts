@@ -215,7 +215,7 @@ export class UserService {
    */
   async createUserByLandlord(
     user: any,
-  ): Promise<User | any | { message: string }> {
+  ): Promise<User | any | { message: string; emailSent?: boolean }> {
     const confirmationCode = generateConfirmationCode();
     const existingUser = await this.userModel.findOne({ email: user.email });
     const checkExistingUserByNin = await this.userModel.findOne({
@@ -234,7 +234,14 @@ export class UserService {
       if (createdUser) {
         console.log({ createdUser });
 
-        await this.emailService.sendUserCreatedByLandlordEmail(user);
+        try {
+          console.log(`Sending onboard/password email to ${user.email}`);
+          await this.emailService.sendUserCreatedByLandlordEmail(user);
+          console.log(`Onboard email sent successfully to ${user.email}`);
+        } catch (emailErr: any) {
+          console.error(`Onboard email failed for ${user.email}:`, emailErr?.message || emailErr);
+          // Don't fail user creation - tenant can use "Forgot password" or landlord can share credentials
+        }
 
         // Create notification settings for the new user
         const notificationSettings = new this.notificationSettingsModel({

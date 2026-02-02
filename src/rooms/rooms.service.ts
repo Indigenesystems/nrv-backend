@@ -11,7 +11,7 @@ import { CloudinaryService } from '../upload/cloudinary.service';
 import { LandlordAssignedTenant } from '../properties/entities/landlord_assigned_tenant.entity';
 import { AgreementDocuments } from 'src/properties/entities/agreement_documents.entity';
 import { randomInt } from 'crypto';
-
+import { ActivitiesService } from '../activities/activities.service';
 
 @Injectable()
 export class RoomsService {
@@ -25,6 +25,7 @@ export class RoomsService {
     @InjectModel(Application.name)
     private readonly applicationModel: Model<Application>,
     private cloudinaryService: CloudinaryService,
+    private activitiesService: ActivitiesService,
   ) {}
 
   async createRooms(createRoomDTO: any) {
@@ -96,11 +97,26 @@ export class RoomsService {
       const newRoom = await this.roomModel.create(finalPayload);
 
       //  Update the related property's rooms array with the new room's ID
+      const property = await this.propertyModel.findById(propertyId);
       await this.propertyModel.findByIdAndUpdate(
         propertyId,
         { $push: { rooms: newRoom._id } },
         { new: true },
       );
+
+      // Record activity
+      const createdBy = property?.createdBy as any;
+      const userId =
+        typeof createdBy === 'object' ? createdBy?._id?.toString() : createdBy?.toString();
+      if (userId) {
+        await this.activitiesService.create({
+          type: 'Unit Added',
+          details: `${newRoom.description || 'New unit'} added to property`,
+          userId,
+          metadata: { roomId: newRoom._id, propertyId },
+        });
+      }
+
       return newRoom;
     } catch (error) {
       throw new Error(`Failed to create room: ${error.message}`);
@@ -127,10 +143,31 @@ export class RoomsService {
 
   async updateSubPropertyStatus(id: any, newStatus: boolean): Promise<any> {
     try {
-      const room: any = await this.roomModel.findOne({ _id: id });
-      room.propertyId = room.propertyId;
+      const room: any = await this.roomModel
+        .findOne({ _id: id })
+        .populate({ path: 'propertyId', populate: { path: 'createdBy' } });
       room.listRoom = newStatus;
-      return room.save();
+      const savedRoom = await room.save();
+
+      // Record activity
+      const property = room.propertyId as any;
+      const createdBy = property?.createdBy;
+      const userId =
+        typeof createdBy === 'object' ? createdBy?._id?.toString() : createdBy?.toString();
+      if (userId) {
+        const activityType = newStatus ? 'Unit Listed' : 'Unit Unlisted';
+        const activityDetails = newStatus
+          ? `${room.description || 'Unit'} is now listed for rent`
+          : `${room.description || 'Unit'} has been unlisted`;
+        await this.activitiesService.create({
+          type: activityType,
+          details: activityDetails,
+          userId,
+          metadata: { roomId: id, propertyId: property?._id },
+        });
+      }
+
+      return savedRoom;
     } catch (error) {
       throw new Error(`Failed to update sub property status: ${error}`);
     }

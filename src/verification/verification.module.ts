@@ -8,6 +8,7 @@ import { VerificationResponseSchema } from './entities/verification-response.ent
 import { CloudinaryService } from 'src/upload/cloudinary.service';
 import { HttpModule } from '@nestjs/axios';
 import { VerificationHistory, VerificationHistorySchema } from './entities/verification-history.entity';
+import { UsersModule } from '../users/users.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { VerificationHistory, VerificationHistorySchema } from './entities/verif
       { name: VerificationHistory.name, schema: VerificationHistorySchema },
     ]),
     HttpModule,
+    UsersModule,
   ],
   controllers: [VerificationController],
   providers: [VerificationService, EmailService, CloudinaryService],

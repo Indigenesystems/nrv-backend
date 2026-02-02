@@ -34,7 +34,7 @@ export class CreateTenantVerificationDto {
   @IsOptional() @IsDateString() dateOfBirth?: string;
   @IsOptional() @IsString() address?: string;
   @IsOptional() @IsString() gender?: string;
-  @IsOptional() @IsString() verificationId?: string;
+  @IsNotEmpty() @IsString() verificationId: string;
   @IsOptional() @IsString() createdBy?: string;
 }
 

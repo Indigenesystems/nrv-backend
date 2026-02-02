@@ -6,6 +6,7 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { CreateTenantVerificationDto, CreateVerificationDto, UpdateEmploymentDto, UpdateGuarantorDto } from './dto/create-verification.dto';
+import { UpdateVerificationDto } from './dto/update-verification.dto';
 import {
   Verification,
   VerificationDocument,
@@ -16,6 +17,7 @@ import { CloudinaryService } from 'src/upload/cloudinary.service';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { VerificationHistory, VerificationHistoryDocument } from './entities/verification-history.entity';
+import { UserService } from '../users/users.service';
 
 @Injectable()
 export class VerificationService {
@@ -29,6 +31,7 @@ export class VerificationService {
     private readonly cloudinary: CloudinaryService,
     private emailService: EmailService,
     private readonly httpService: HttpService,
+    private readonly userService: UserService,
   ) {}
 
   /**
@@ -37,6 +40,10 @@ export class VerificationService {
    * @returns Created verification response
    */
   async create(dto: CreateTenantVerificationDto): Promise<VerificationResponse> {
+    const request = await this.verificationModel.findById(dto.verificationId);
+    if (!request) {
+      throw new BadRequestException('Verification request not found. Invalid verificationId.');
+    }
     return this.verificationResponseModel.create(dto);
   }
 
@@ -124,15 +131,46 @@ export class VerificationService {
       // Step 2: Create and save new verification entry
       const created = new this.verificationModel(dto);
       await created.save();
-      // Step 3: Generate verification link (customize with token if needed)
-      const verificationLink = `http://localhost:3000/dashboard/tenant/verification`;
-      // Step 4: Send verification email
-      await this.emailService.sendTenantVerificationInviteEmail({
-        recipientName: created.firstName || created.email,
-        recipientEmail: created.email,
-        landlordName: created.landlordDisplayName,
-        formLink: verificationLink,
-      });
+
+      // Step 3: If tenant doesn't have an account yet, create one and send them their password
+      const existingUser = await this.userService.findUserByEmail(dto.email);
+      if (!existingUser) {
+        try {
+          const newTenant = {
+            firstName: dto.firstName,
+            lastName: dto.lastName,
+            email: dto.email,
+            phoneNumber: dto.phone || '',
+            nin: '',
+            homeAddress: '',
+            confirmationCode: '',
+            status: 'active',
+            isOnboarded: false,
+            accountType: 'tenant',
+          };
+          await this.userService.createUserByLandlord(newTenant);
+          console.log(`Created tenant account for ${dto.email} (invited by landlord)`);
+        } catch (createErr: any) {
+          console.error('Failed to create tenant account on invite:', createErr?.message || createErr);
+          // Don't fail the verification request - verification is already saved
+        }
+      }
+
+      // Step 4: Generate verification link with request id so tenant lands on the right form
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      const verificationLink = `${frontendUrl}/dashboard/tenant/verification?verificationId=${created._id}`;
+      // Step 5: Send verification invite email (non-blocking - verification succeeds even if email fails)
+      try {
+        await this.emailService.sendTenantVerificationInviteEmail({
+          recipientName: created.firstName || created.email,
+          recipientEmail: created.email,
+          landlordName: created.landlordDisplayName,
+          formLink: verificationLink,
+        });
+      } catch (emailErr) {
+        console.error('Verification invite email failed (verification was saved):', emailErr?.message || emailErr);
+        // Don't fail the request - verification is already saved
+      }
       return {
         message: 'Tenant verification request submitted successfully.',
         data: created,
@@ -162,6 +200,24 @@ export class VerificationService {
       throw new BadRequestException('Verification not found.');
     }
     return verification;
+  }
+
+  /**
+   * Update a verification request (e.g. set status to approved/rejected)
+   * @param id
+   * @param dto
+   * @returns Updated verification or throws if not found
+   */
+  async updateVerification(id: string, dto: UpdateVerificationDto): Promise<Verification> {
+    const updated = await this.verificationModel.findByIdAndUpdate(
+      id,
+      { ...dto, dateUpdated: new Date() },
+      { new: true },
+    );
+    if (!updated) {
+      throw new BadRequestException('Verification not found.');
+    }
+    return updated;
   }
 
   /**
@@ -343,10 +399,10 @@ export class VerificationService {
    * @returns Updated verification response with phone verification result
    */
   async verifyPhoneAndStoreResult(responseId: string, phone: string) {
+    const isDevelopment = process.env.NODE_ENV === 'development';
+    const phoneToVerify = isDevelopment ? '09011111111' : (phone || '09011111111');
     try {
-      // Always use the default phone number for verification, regardless of what's passed
-      const defaultPhone = '09011111111';
-      const verificationResult = await this.verifyPhoneNumberBasic(defaultPhone);
+      const verificationResult = await this.verifyPhoneNumberBasic(phoneToVerify);
       
       // Update the verification response with the complete phone verification result
       const updateData = {
@@ -354,9 +410,9 @@ export class VerificationService {
           status: verificationResult.status || 'success',
           data: verificationResult.data || verificationResult,
           entity: verificationResult.entity || null,
-          originalPhone: phone, // Store the original phone that was passed
-          finalPhone: defaultPhone, // Store the default phone that was actually used
-          ...verificationResult // Store the complete response
+          originalPhone: phone,
+          finalPhone: phoneToVerify, // in development always 09011111111 (Dojah test number)
+          ...verificationResult
         },
         phoneVerificationDate: new Date(),
         phoneVerificationStatus: verificationResult.status || 'completed'
@@ -382,7 +438,7 @@ export class VerificationService {
           timestamp: new Date(),
           originalError: error,
           originalPhone: phone,
-          finalPhone: '09011111111' // Use default even on error
+          finalPhone: phoneToVerify
         },
         phoneVerificationDate: new Date(),
         phoneVerificationStatus: 'failed'
