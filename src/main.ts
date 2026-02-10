@@ -11,6 +11,7 @@ const corsOptions: CorsOptions = {
     'http://localhost:3000',
     'http://localhost:3001',
     'http://localhost:3002',
+    'http://localhost:8080',
     'https://nrv-frontend.vercel.app',
     'https://nrv-frontend.onrender.com',
     'https://nrv-frontend-main.vercel.app',
