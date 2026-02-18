@@ -250,6 +250,16 @@ export class PropertiesService {
       singleProperty.imageUrls.push(...imageUrls);
     }
 
+    // Upload/replace main property image (file)
+    if (updatePropertyDto.file) {
+      const fileToUpload = Array.isArray(updatePropertyDto.file)
+        ? updatePropertyDto.file[0]
+        : updatePropertyDto.file;
+      if (fileToUpload) {
+        singleProperty.file = await this.cloudinaryService.upload(fileToUpload);
+      }
+    }
+
     // Update other properties
     if (updatePropertyDto.unit) {
       singleProperty.unit = updatePropertyDto.unit;
@@ -258,7 +268,28 @@ export class PropertiesService {
       singleProperty.city = updatePropertyDto.city;
     }
     if (updatePropertyDto.propertyType) {
-      singleProperty.propertyType = updatePropertyDto.propertyType;
+      try {
+        singleProperty.propertyType =
+          typeof updatePropertyDto.propertyType === 'string'
+            ? JSON.parse(updatePropertyDto.propertyType)
+            : updatePropertyDto.propertyType;
+      } catch {
+        singleProperty.propertyType = updatePropertyDto.propertyType;
+      }
+    }
+    if (updatePropertyDto.rentCollection) {
+      try {
+        singleProperty.rentCollection =
+          typeof updatePropertyDto.rentCollection === 'string'
+            ? JSON.parse(updatePropertyDto.rentCollection)
+            : updatePropertyDto.rentCollection;
+      } catch {
+        // If it's not valid JSON, store as-is (best effort)
+        singleProperty.rentCollection = updatePropertyDto.rentCollection;
+      }
+    }
+    if (updatePropertyDto.propertyName) {
+      singleProperty.propertyName = updatePropertyDto.propertyName;
     }
     if (updatePropertyDto.streetAddress) {
       singleProperty.streetAddress = updatePropertyDto.streetAddress;
@@ -370,6 +401,25 @@ export class PropertiesService {
     });
 
     return filteredProperties;
+  }
+
+  async findAllPropertyByUserIdWithPagination(params: {
+    userId: string;
+    page: number;
+    limit: number;
+  }): Promise<{ data: any[]; totalPages: number; total: number; page: number; limit: number }> {
+    const { userId, page, limit } = params;
+    const [data, total] = await Promise.all([
+      this.findAllProperty(page, limit, userId),
+      this.propertyModel.countDocuments({ createdBy: userId }),
+    ]);
+    return {
+      data: Array.isArray(data) ? data : [],
+      total,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+      page,
+      limit,
+    };
   }
 
   /**
@@ -631,6 +681,65 @@ export class PropertiesService {
     try {
       const newApplication =
         await this.applicationModel.create(applicationData);
+      // Fire-and-forget emails (do not block application creation)
+      try {
+        const [landlord, applicant, room] = await Promise.all([
+          this.userModel.findById(newApplication.ownerId).lean(),
+          this.userModel.findById(newApplication.applicant).lean(),
+          this.roomModel
+            .findById(newApplication.propertyId)
+            .populate('propertyId')
+            .lean(),
+        ]);
+
+        const landlordName =
+          `${landlord?.firstName ?? ''} ${landlord?.lastName ?? ''}`.trim() ||
+          'Landlord';
+        const applicantName =
+          `${applicant?.firstName ?? ''} ${applicant?.lastName ?? ''}`.trim() ||
+          'Applicant';
+
+        const property: any = (room as any)?.propertyId || null;
+        const propertyTitle =
+          property?.propertyName ||
+          property?.streetAddress ||
+          (room as any)?.name ||
+          'Property';
+        const propertyLocation = [
+          property?.streetAddress,
+          property?.city,
+          property?.state,
+        ]
+          .filter(Boolean)
+          .join(', ');
+
+        if (landlord?.email) {
+          await this.emailService.sendNewPropertyApplicationNotificationToLandlord(
+            {
+              landlordEmail: landlord.email,
+              landlordName,
+              applicantName,
+              applicantEmail: applicant?.email || '',
+              propertyTitle,
+              propertyLocation,
+            },
+          );
+        }
+
+        if (applicant?.email) {
+          await this.emailService.sendPropertyApplicationConfirmationToApplicant({
+            applicantEmail: applicant.email,
+            applicantName,
+            propertyTitle,
+            propertyLocation,
+          });
+        }
+      } catch (err: any) {
+        console.error(
+          '[PropertiesService] Application email notification failed:',
+          err?.message || err,
+        );
+      }
       return newApplication;
     } catch (error) {
       throw new Error(`Failed to creating application: ${error.message}`);
@@ -646,6 +755,7 @@ export class PropertiesService {
     try {
       const now = new Date();
       const skip = (page - 1) * limit;
+      const prefetchLimit = Math.max(1, page) * limit;
   
       // Format and normalize status
       let formattedStatus = status?.trim() || null;
@@ -670,23 +780,29 @@ export class PropertiesService {
       const [applications, onboardedTenants] = await Promise.all([
         this.applicationModel
           .find(query)
-          .skip(skip)
-          .limit(limit)
+          .sort({ createdAt: -1 })
+          .limit(prefetchLimit)
           .populate('ownerId')
           .populate({ path: 'propertyId', populate: { path: 'propertyId' } })
           .populate('applicant'),
   
         this.landlordAssignedTenantModel
           .find(query)
-          .skip(skip)
-          .limit(limit)
+          .sort({ createdAt: -1 })
+          .limit(prefetchLimit)
           .populate('ownerId')
           .populate({ path: 'propertyId', populate: { path: 'propertyId' } })
           .populate('applicant'),
       ]);
   
       // Combine and return results
-      const combined = [...applications, ...onboardedTenants];
+      const combined = [...applications, ...onboardedTenants]
+        .sort((a: any, b: any) => {
+          const aTime = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const bTime = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return bTime - aTime;
+        })
+        .slice(skip, skip + limit);
   
       return combined;
     } catch (error) {
@@ -740,6 +856,11 @@ export class PropertiesService {
     roomId?: any,
   ): Promise<any> {
     try {
+      const existingApplication = await this.applicationModel.findById(id);
+      if (!existingApplication) {
+        throw new NotFoundException('Application not found');
+      }
+
       if (newStatus === ApplicationStatus.ACTIVE_LEASE) {
         const doesActiveTenantExists = await this.applicationModel
           .findOne({ propertyId: roomId })
@@ -750,9 +871,57 @@ export class PropertiesService {
             'This property/apartment has an active tenant',
         );
       }
-      const updatedApplication = await this.findApplicationyById(id);
-      updatedApplication.status = newStatus;
-      return updatedApplication.save();
+      const previousStatus = (existingApplication as any)?.status;
+      (existingApplication as any).status = newStatus;
+      const saved = await (existingApplication as any).save();
+
+      // Notify applicant of status change (best-effort)
+      try {
+        const hydrated = await this.applicationModel
+          .findById(saved._id)
+          .populate('applicant')
+          .populate('ownerId')
+          .populate({ path: 'propertyId', populate: { path: 'propertyId' } })
+          .lean();
+
+        const applicant: any = (hydrated as any)?.applicant;
+        const room: any = (hydrated as any)?.propertyId;
+        const property: any = room?.propertyId;
+
+        const applicantName =
+          `${applicant?.firstName ?? ''} ${applicant?.lastName ?? ''}`.trim() ||
+          applicant?.fullName ||
+          'Applicant';
+        const propertyTitle =
+          property?.propertyName ||
+          property?.streetAddress ||
+          room?.name ||
+          'Property';
+        const propertyLocation = [
+          property?.streetAddress,
+          property?.city,
+          property?.state,
+        ]
+          .filter(Boolean)
+          .join(', ');
+
+        if (applicant?.email && previousStatus !== newStatus) {
+          await this.emailService.sendApplicationStatusUpdateToApplicant({
+            applicantEmail: applicant.email,
+            applicantName,
+            status: newStatus,
+            propertyTitle,
+            propertyLocation,
+          });
+        }
+      } catch (err: any) {
+        console.error(
+          '[PropertiesService] Status update email notification failed:',
+          err?.message || err,
+        );
+      }
+
+      return saved;
 
     } catch (error) {
       throw new Error(`Failed to update application status: ${error}`);

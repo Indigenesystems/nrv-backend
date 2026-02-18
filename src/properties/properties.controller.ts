@@ -126,23 +126,31 @@ export class PropertiesController {
   ) {
     console.log({ userId });
 
-    const properties = await this.propertiesService.findAllProperty(
+    const result = await this.propertiesService.findAllPropertyByUserIdWithPagination({
+      userId,
       page,
       limit,
-      userId,
-    );
+    });
 
-    if (!properties || properties.length === 0) {
+    if (!result.data || result.data.length === 0) {
       return res.status(HttpStatus.OK).json({
         status: 'success',
         message: 'No properties found',
-        data: null,
+        data: [],
+        totalPages: result.totalPages,
+        total: result.total,
+        page: result.page,
+        limit: result.limit,
       });
     } else {
       return res.status(HttpStatus.OK).json({
         status: 'success',
         message: 'Properties fetched',
-        data: properties,
+        data: result.data,
+        totalPages: result.totalPages,
+        total: result.total,
+        page: result.page,
+        limit: result.limit,
       });
     }
   }

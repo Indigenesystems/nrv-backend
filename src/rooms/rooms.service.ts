@@ -243,7 +243,12 @@ export class RoomsService {
         query = query.lte(maxPrice);
       }
     }
-    
+
+    // Most recent first (for tenant/landing view)
+    if (!id) {
+      query = query.sort({ createdAt: -1 });
+    }
+
     // Apply pagination
     const skip = (page - 1) * limit;
     const properties = await query.skip(skip).limit(limit).exec();

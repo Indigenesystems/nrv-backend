@@ -58,7 +58,15 @@ export class AuthService {
     const accessToken = this.jwtService.sign(payload);
 
     if (user.status === 'inactive') {
-      await this.emailService.sendUserCreatedEmail(user);
+      try {
+        await this.emailService.sendUserCreatedEmail(user);
+      } catch (emailErr: any) {
+        console.error(
+          `Verification email resend failed for ${user?.email}:`,
+          emailErr?.message || emailErr,
+        );
+        // Don't fail login just because SMTP is down.
+      }
       return { user, accessToken, notificationSettings };
     }
     return { user, accessToken, notificationSettings };

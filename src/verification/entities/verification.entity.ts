@@ -22,8 +22,11 @@ export class Verification {
   @Prop({ required: true })
   email: string;
 
-  @Prop({ required: true })
-  phone: string;
+  @Prop({ default: null })
+  phone?: string;
+
+  @Prop({ default: null })
+  nin?: string;
 
   @Prop({ required: true })
   landlordDisplayName: string;

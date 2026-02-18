@@ -10,18 +10,42 @@ export class EmailService {
   private transporter: nodemailer.Transporter;
 
   constructor() {
+    const host = process.env.SMTP_HOST || 'smtp.zoho.com';
     const port = parseInt(process.env.SMTP_PORT || '587', 10);
-    const secure = process.env.SMTP_SECURE === 'true';
+    const secureFromEnv = process.env.SMTP_SECURE;
+    const secure =
+      secureFromEnv === undefined || secureFromEnv === ''
+        ? port === 465
+        : secureFromEnv === 'true';
+
+    // Helpful warning for a very common misconfiguration:
+    // - Port 465 expects implicit TLS (secure=true)
+    // - Port 587 expects STARTTLS (secure=false)
+    if (port === 465 && !secure) {
+      console.warn(
+        '[EmailService] SMTP_PORT is 465 but SMTP_SECURE is false. Set SMTP_SECURE=true for port 465.',
+      );
+    }
+    if (port === 587 && secure) {
+      console.warn(
+        '[EmailService] SMTP_PORT is 587 but SMTP_SECURE is true. Set SMTP_SECURE=false for port 587.',
+      );
+    }
     this.transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'smtp.zoho.com',
+      host,
       port,
       secure, // true for 465, false for 587 (STARTTLS)
+      requireTLS: !secure,
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
       },
       connectionTimeout: 15000,
-      greetingTimeout: 10000,
+      greetingTimeout: 15000,
+      tls: {
+        // Ensures SNI is set (helps with some providers/proxies)
+        servername: host,
+      },
     });
   }
 
@@ -1177,6 +1201,179 @@ export class EmailService {
       console.error('Email sending error: ', error);
       throw error;
     }
+  }
+
+  private getFrontendUrl(): string {
+    return (
+      process.env.FRONTEND_URL ||
+      'https://www.naijarentverify.com'
+    ).replace(/\/+$/, '');
+  }
+
+  private renderSimpleEmail(params: {
+    title: string;
+    preheader?: string;
+    contentHtml: string;
+  }): string {
+    const { title, preheader, contentHtml } = params;
+    return `<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="x-ua-compatible" content="ie=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${title}</title>
+  </head>
+  <body style="margin:0;padding:0;background-color:#e9ecef;font-family:Segoe UI, Helvetica, Arial, sans-serif;">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">
+      ${preheader || ''}
+    </div>
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color:#e9ecef;padding:24px 12px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:600px;background:#ffffff;border:1px solid #e0e0e0;border-radius:10px;overflow:hidden;">
+            <tr>
+              <td style="padding:18px 24px;border-bottom:3px solid #03442C;">
+                <div style="font-weight:700;color:#03442C;font-size:16px;">Naija Rent Verify</div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:24px;">
+                <h1 style="margin:0 0 12px;font-size:20px;line-height:1.3;color:#101828;">${title}</h1>
+                <div style="font-size:15px;line-height:1.6;color:#344054;">
+                  ${contentHtml}
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:14px 24px;background:#f8fafc;color:#667085;font-size:12px;line-height:1.4;">
+                &copy; ${new Date().getFullYear()} Naija Rent Verify
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+  }
+
+  async sendNewPropertyApplicationNotificationToLandlord(payload: {
+    landlordEmail: string;
+    landlordName: string;
+    applicantName: string;
+    applicantEmail: string;
+    propertyTitle: string;
+    propertyLocation?: string;
+    actionUrl?: string;
+  }): Promise<void> {
+    const actionUrl =
+      payload.actionUrl || `${this.getFrontendUrl()}/dashboard/landlord/tenants`;
+
+    const html = this.renderSimpleEmail({
+      title: `New application for ${payload.propertyTitle}`,
+      preheader: `${payload.applicantName} just applied.`,
+      contentHtml: `
+        <p style="margin:0 0 12px;">Hello ${payload.landlordName},</p>
+        <p style="margin:0 0 12px;"><strong>${payload.applicantName}</strong> just submitted a rental application.</p>
+        <p style="margin:0 0 6px;"><strong>Applicant email:</strong> ${payload.applicantEmail}</p>
+        ${
+          payload.propertyLocation
+            ? `<p style="margin:0 0 12px;"><strong>Property:</strong> ${payload.propertyLocation}</p>`
+            : ''
+        }
+        <p style="margin:16px 0 0;">
+          <a href="${actionUrl}" target="_blank" style="display:inline-block;background:#03442C;color:#ffffff;text-decoration:none;padding:12px 16px;border-radius:8px;font-weight:600;">
+            Review application
+          </a>
+        </p>
+        <p style="margin:12px 0 0;font-size:13px;color:#667085;">If the button doesn’t work, copy this link: <a href="${actionUrl}" target="_blank" style="color:#03442C;">${actionUrl}</a></p>
+      `,
+    });
+
+    await this.transporter.sendMail({
+      from: 'hello@naijarentverify.com',
+      to: payload.landlordEmail,
+      subject: `New application: ${payload.propertyTitle}`,
+      html,
+    });
+  }
+
+  async sendPropertyApplicationConfirmationToApplicant(payload: {
+    applicantEmail: string;
+    applicantName: string;
+    propertyTitle: string;
+    propertyLocation?: string;
+    actionUrl?: string;
+  }): Promise<void> {
+    const actionUrl =
+      payload.actionUrl || `${this.getFrontendUrl()}/dashboard/tenant`;
+
+    const html = this.renderSimpleEmail({
+      title: `Application received: ${payload.propertyTitle}`,
+      preheader: `We’ve received your application.`,
+      contentHtml: `
+        <p style="margin:0 0 12px;">Hello ${payload.applicantName},</p>
+        <p style="margin:0 0 12px;">We’ve received your rental application and sent it to the landlord for review.</p>
+        ${
+          payload.propertyLocation
+            ? `<p style="margin:0 0 12px;"><strong>Property:</strong> ${payload.propertyLocation}</p>`
+            : ''
+        }
+        <p style="margin:16px 0 0;">
+          <a href="${actionUrl}" target="_blank" style="display:inline-block;background:#03442C;color:#ffffff;text-decoration:none;padding:12px 16px;border-radius:8px;font-weight:600;">
+            View your applications
+          </a>
+        </p>
+        <p style="margin:12px 0 0;font-size:13px;color:#667085;">If the button doesn’t work, copy this link: <a href="${actionUrl}" target="_blank" style="color:#03442C;">${actionUrl}</a></p>
+      `,
+    });
+
+    await this.transporter.sendMail({
+      from: 'hello@naijarentverify.com',
+      to: payload.applicantEmail,
+      subject: `We received your application: ${payload.propertyTitle}`,
+      html,
+    });
+  }
+
+  async sendApplicationStatusUpdateToApplicant(payload: {
+    applicantEmail: string;
+    applicantName: string;
+    status: string;
+    propertyTitle: string;
+    propertyLocation?: string;
+    actionUrl?: string;
+  }): Promise<void> {
+    const actionUrl =
+      payload.actionUrl || `${this.getFrontendUrl()}/dashboard/tenant`;
+
+    const html = this.renderSimpleEmail({
+      title: `Application update: ${payload.propertyTitle}`,
+      preheader: `Your application status is now ${payload.status}.`,
+      contentHtml: `
+        <p style="margin:0 0 12px;">Hello ${payload.applicantName},</p>
+        <p style="margin:0 0 12px;">Your application status has been updated to <strong>${payload.status}</strong>.</p>
+        ${
+          payload.propertyLocation
+            ? `<p style="margin:0 0 12px;"><strong>Property:</strong> ${payload.propertyLocation}</p>`
+            : ''
+        }
+        <p style="margin:16px 0 0;">
+          <a href="${actionUrl}" target="_blank" style="display:inline-block;background:#03442C;color:#ffffff;text-decoration:none;padding:12px 16px;border-radius:8px;font-weight:600;">
+            View application
+          </a>
+        </p>
+        <p style="margin:12px 0 0;font-size:13px;color:#667085;">If the button doesn’t work, copy this link: <a href="${actionUrl}" target="_blank" style="color:#03442C;">${actionUrl}</a></p>
+      `,
+    });
+
+    await this.transporter.sendMail({
+      from: 'hello@naijarentverify.com',
+      to: payload.applicantEmail,
+      subject: `Application status: ${payload.status} (${payload.propertyTitle})`,
+      html,
+    });
   }
 
 async sendTenantVerificationInviteEmail(payload: {

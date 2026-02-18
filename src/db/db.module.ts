@@ -20,10 +20,14 @@ export class MongodbModule implements OnModuleInit {
 }
 
 function getMongoURI(): string {
-  const MONGO_DB_URI = 'mongodb+srv://Babajide:Maythird1.!@cluster0.azxmr.mongodb.net/nrv-test-db?retryWrites=true&w=majority&appName=Cluster0';
-  // if (!MONGO_DB_URI) {
-  //   throw new Error('MongoDB environment variables are not set');
-  // }
-
+  const MONGO_DB_URI =
+    process.env.MONGO_URI ||
+    process.env.MONGODB_URI ||
+    config?.web?.mongoDBUri;
+  if (!MONGO_DB_URI) {
+    throw new Error(
+      'MongoDB URI not set. Set MONGO_URI or MONGODB_URI in .env, or mongoDBUri in config.',
+    );
+  }
   return MONGO_DB_URI;
 }

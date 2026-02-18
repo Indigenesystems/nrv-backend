@@ -458,6 +458,64 @@ export class VerificationService {
     }
   }
 
+  /**
+   * Verify NIN and store the result in verification response
+   * @param responseId
+   * @param nin
+   * @returns Updated verification response with NIN verification result
+   */
+  async verifyNinAndStoreResult(responseId: string, nin: string) {
+    if (!nin || !nin.trim()) {
+      throw new BadRequestException('NIN is required');
+    }
+    try {
+      const verificationResult = await this.verifyNinBasic(nin.trim());
+      const updateData = {
+        nin: nin.trim(),
+        ninVerificationResult: {
+          status: verificationResult?.status || 'success',
+          data: verificationResult?.data ?? verificationResult,
+          entity: verificationResult?.entity ?? null,
+          originalNin: nin.trim(),
+          ...verificationResult,
+        },
+        ninVerificationDate: new Date(),
+        ninVerificationStatus: verificationResult?.status || 'completed',
+      };
+      const updatedResponse = await this.verificationResponseModel.findByIdAndUpdate(
+        responseId,
+        updateData,
+        { new: true },
+      );
+      if (!updatedResponse) {
+        throw new BadRequestException('Verification response not found');
+      }
+      return updatedResponse;
+    } catch (error) {
+      const errorData = {
+        nin: nin.trim(),
+        ninVerificationResult: {
+          status: 'failed',
+          error: error?.response?.data || error?.message || 'NIN verification failed',
+          timestamp: new Date(),
+          originalError: error,
+          originalNin: nin.trim(),
+        },
+        ninVerificationDate: new Date(),
+        ninVerificationStatus: 'failed',
+      };
+      const updatedResponse = await this.verificationResponseModel.findByIdAndUpdate(
+        responseId,
+        errorData,
+        { new: true },
+      );
+      if (!updatedResponse) {
+        throw new BadRequestException('Verification response not found');
+      }
+      return updatedResponse;
+    }
+  }
+
   async verifyNinBasic(nin: string) {
     const appId = process.env.DOJAH_APP_ID;
     const authKey = process.env.DOJAH_AUTH_KEY;

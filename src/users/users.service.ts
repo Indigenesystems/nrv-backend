@@ -197,7 +197,13 @@ export class UserService {
         });
         await notificationSettings.save();
 
-        this.emailService.sendUserCreatedEmail(createdUser);
+        // Never let email failures crash the request/process (SMTP may be blocked in dev/hosting).
+        void this.emailService.sendUserCreatedEmail(createdUser).catch((emailErr: any) => {
+          console.error(
+            `Welcome/verification email failed for ${createdUser?.email}:`,
+            emailErr?.message || emailErr,
+          );
+        });
       }
       return createdUser;
     } catch (error) {

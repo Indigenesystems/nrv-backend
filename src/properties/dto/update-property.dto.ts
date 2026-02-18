@@ -27,6 +27,11 @@ export class UpdatePropertyDto {
   @IsString()
   createdBy: string;
 
+  // Optional structured fields
+  rentCollection?: any;
+  propertyType?: any;
+  propertyName?: string;
+
   // File fields are handled by Multer/interceptor, not class-validator
   file?: Express.Multer.File;
   landlordInsurancePolicy?: Express.Multer.File;

@@ -60,9 +60,14 @@ export const updatePropertySchema = Joi.object({
   zipCode: Joi.string().optional(),
   createdBy: Joi.string().optional(),
   file: Joi.any().optional(),
+  images: Joi.any().optional(),
+  unit: Joi.any().optional(),
+  propertyType: Joi.any().optional(),
+  rentCollection: Joi.any().optional(),
+  propertyName: Joi.any().optional(),
   landlordInsurancePolicy: Joi.any().optional(),
-  utilityAndMaintenance: Joi.any(),
-  otherDocuments: Joi.any(),
+  utilityAndMaintenance: Joi.any().optional(),
+  otherDocuments: Joi.any().optional(),
 });
 
 export const createRoomSchema = Joi.object({

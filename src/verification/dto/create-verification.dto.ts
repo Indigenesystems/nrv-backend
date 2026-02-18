@@ -12,8 +12,13 @@ export class CreateVerificationDto {
   @IsEmail()
   email: string;
 
+  @IsOptional()
   @IsPhoneNumber('NG')
-  phone: string;
+  phone?: string;
+
+  @IsOptional()
+  @IsString()
+  nin?: string;
 
   @IsString()
   @IsNotEmpty()
@@ -31,6 +36,7 @@ export class CreateTenantVerificationDto {
   @IsNotEmpty() @IsString() fullName: string;
   @IsNotEmpty() @IsEmail() email: string;
   @IsOptional() @IsString() phone?: string;
+  @IsOptional() @IsString() nin?: string;
   @IsOptional() @IsDateString() dateOfBirth?: string;
   @IsOptional() @IsString() address?: string;
   @IsOptional() @IsString() gender?: string;

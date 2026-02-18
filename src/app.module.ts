@@ -42,6 +42,7 @@ import { VerificationModule } from './verification/verification.module';
 import { VerificationSchema } from './verification/entities/verification.entity';
 import { ActivitiesModule } from './activities/activities.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { StaffModule } from './staff/staff.module';
 
 @Module({
   imports: [
@@ -76,6 +77,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
     VerificationModule,
     ActivitiesModule,
     DashboardModule,
+    StaffModule,
   ],
   controllers: [AppController, UserController, AuthController, PropertiesController, RoomsController, UserController, MaintenanceController, MessagingController],
   providers: [AppService, UserService, AuthService, EmailService, CloudinaryService, PropertiesService, RoomsService, MaintenanceService, MessagingService], 

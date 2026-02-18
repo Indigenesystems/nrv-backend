@@ -13,8 +13,11 @@ export class VerificationResponse {
   @Prop({unique: false})
   email: string;
 
-  @Prop()
-  phone: string;
+  @Prop({ default: null })
+  phone?: string;
+
+  @Prop({ default: null })
+  nin?: string;
 
   @Prop()
   dateOfBirth: Date;
@@ -132,6 +135,24 @@ export class VerificationResponse {
 
   @Prop({ default: null })
   phoneVerificationDate?: Date;
+
+  @Prop({ type: Object, default: null })
+  ninVerificationResult?: {
+    status?: string;
+    error?: string;
+    data?: Record<string, unknown>;
+    entity?: Record<string, unknown>;
+    timestamp?: Date;
+    originalError?: unknown;
+    originalNin?: string;
+    [key: string]: unknown;
+  };
+
+  @Prop({ default: null })
+  ninVerificationStatus?: string;
+
+  @Prop({ default: null })
+  ninVerificationDate?: Date;
 }
 
 export const VerificationResponseSchema = SchemaFactory.createForClass(VerificationResponse);

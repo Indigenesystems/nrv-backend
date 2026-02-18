@@ -169,6 +169,28 @@ export class VerificationController {
     }
   }
 
+  /**
+   * Verify NIN and store result in verification response
+   * @param responseId
+   * @param nin
+   * @returns Updated verification response with NIN verification result
+   */
+  @Post('/nin-verify/:responseId')
+  async verifyNinAndStore(
+    @Param('responseId') responseId: string,
+    @Body() body: { nin: string },
+  ) {
+    if (!body.nin) {
+      throw new BadRequestException('nin is required in request body');
+    }
+    try {
+      const result = await this.verificationService.verifyNinAndStoreResult(responseId, body.nin);
+      return verificationSuccessResponse('NIN verification completed and stored', result);
+    } catch (error) {
+      throw new BadRequestException(error?.response || error?.message || 'Failed to verify and store NIN');
+    }
+  }
+
     /**
    * Verify Driver's Licence using Dojah API (basic)
    * @param dl
