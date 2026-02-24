@@ -238,6 +238,21 @@ export class RoomsController {
     }
   }
 
+  @Get('/properties/rented-by-tenant')
+  async getRentedPropertiesByTenant(@Query('id') id: string) {
+    try {
+      const properties =
+        await this.roomsService.findRentedApartmentsByTenantId(id);
+      return {
+        status: 'success',
+        message: 'Rented properties fetched',
+        data: properties,
+      };
+    } catch (error) {
+      throw new BadRequestException(error);
+    }
+  }
+
   @Put(':id/extend-tenancy')
   async updateRentEndDate(
     @Param('id') id: string,

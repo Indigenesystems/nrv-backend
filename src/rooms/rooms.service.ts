@@ -394,6 +394,37 @@ export class RoomsService {
     }
   }
 
+  /** Rented apartments where the given id is the tenant (applicant). */
+  async findRentedApartmentsByTenantId(tenantId: any): Promise<any> {
+    try {
+      const rentedFromApplications: any = await this.applicationModel
+        .find({ applicant: tenantId })
+        .where('status')
+        .equals(ApplicationStatus.ACTIVE_LEASE)
+        .populate({
+          path: 'propertyId',
+          populate: { path: 'propertyId' },
+        })
+        .populate('applicant')
+        .populate('ownerId')
+        .lean();
+
+      const rentedFromAssigned: any = await this.landlordAssignedTenantModel
+        .find({
+          applicant: new mongoose.Types.ObjectId(tenantId),
+          status: ApplicationStatus.ACTIVE_LEASE,
+        })
+        .populate('propertyId')
+        .populate('applicant')
+        .populate('ownerId')
+        .lean();
+
+      return [...rentedFromApplications, ...rentedFromAssigned];
+    } catch (error) {
+      throw new NotFoundException(error);
+    }
+  }
+
   async updateRentEndDate(
     id: string,
     rentEndDate: Date,
@@ -449,12 +480,12 @@ export class RoomsService {
   }
 
   async endRentTenure(id: string): Promise<LandlordAssignedTenant> {
-    // First, find the tenant by ID
-    let tenant;
-    tenant = await this.landlordAssignedTenantModel.findById(id);
+    // Find the tenant by ID in either LandlordAssignedTenant or Application
+    let tenant = await this.landlordAssignedTenantModel.findById(id);
     if (!tenant) {
       tenant = await this.applicationModel.findById(id);
-    } else {
+    }
+    if (!tenant) {
       throw new Error('Application does not exists!');
     }
 

@@ -762,12 +762,15 @@ export class PropertiesService {
       if (formattedStatus?.toLowerCase() === 'active_lease') {
         formattedStatus = 'Active_lease';
       }
+      if (formattedStatus?.toLowerCase() === 'ended') {
+        formattedStatus = ApplicationStatus.ENDED;
+      }
   
       // Build query filters
       const buildQuery = () => {
         const query: any = { ownerId: id };
         if (formattedStatus === ApplicationStatus.ENDED) {
-          query.rentEndDate = { $lt: now };
+          query.status = ApplicationStatus.ENDED;
         } else if (formattedStatus) {
           query.status = formattedStatus;
         }
@@ -1028,7 +1031,9 @@ export class PropertiesService {
     | {
         totalNew: number;
         totalAccepted: number;
+        totalRejected: number;
         totalActiveTenants: number;
+        totalRentedApartments: number;
       }
     | any
   > {
@@ -1039,23 +1044,44 @@ export class PropertiesService {
       const totalAcceptedPromise = this.applicationModel
         .countDocuments({ applicant: id, status: 'Accepted' })
         .exec();
-
-      const totalActiveTenantsPromise = await this.maintenanceModel
+      const totalRejectedPromise = this.applicationModel
+        .countDocuments({ applicant: id, status: ApplicationStatus.REJECTED })
+        .exec();
+      const totalMaintenancePromise = this.maintenanceModel
         .countDocuments({ createdBy: id })
         .exec();
+      const rentedFromApplicationsPromise = this.applicationModel
+        .countDocuments({ applicant: id, status: ApplicationStatus.ACTIVE_LEASE })
+        .exec();
+      const rentedFromAssignedPromise = this.landlordAssignedTenantModel
+        .countDocuments({ applicant: id, status: ApplicationStatus.ACTIVE_LEASE })
+        .exec();
 
-      const [totalNew, totalAccepted, totalActiveTenants] = await Promise.all([
+      const [
+        totalNew,
+        totalAccepted,
+        totalRejected,
+        totalActiveTenants,
+        rentedFromApplications,
+        rentedFromAssigned,
+      ] = await Promise.all([
         totalNewPromise,
         totalAcceptedPromise,
-        totalActiveTenantsPromise,
+        totalRejectedPromise,
+        totalMaintenancePromise,
+        rentedFromApplicationsPromise,
+        rentedFromAssignedPromise,
       ]);
+      const totalRentedApartments = rentedFromApplications + rentedFromAssigned;
       return {
         totalNew,
         totalAccepted,
+        totalRejected,
         totalActiveTenants,
+        totalRentedApartments,
       };
     } catch (error) {
-      throw new Error(`Failed to fetch landlord applications: ${error}`);
+      throw new Error(`Failed to fetch tenant metrics: ${error}`);
     }
   }
 

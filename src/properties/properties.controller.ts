@@ -557,6 +557,13 @@ async fetchTenantHistoryById(
   @Param('id') id: string,
   @Res() res: Response,
 ) {
+  if (!id || id === 'undefined') {
+    return res.status(HttpStatus.BAD_REQUEST).json({
+      status: 'error',
+      message: 'Invalid application id',
+      data: null,
+    });
+  }
   const tenantHistory = await this.propertiesService.getLandlordApplicationById(id);
 
   if (!tenantHistory) {
