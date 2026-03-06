@@ -30,7 +30,7 @@ export class PaymentsController {
     const reference = `pack_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const callbackUrl =
       process.env.PAYSTACK_CALLBACK_URL ||
-      'http://localhost:3000/payments/callback';
+      'https://www.naijarentverify.com/payments/callback';
 
     const data = await this.paystackService.initializeTransaction({
       email: (user as any).email,
