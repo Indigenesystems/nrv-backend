@@ -85,21 +85,34 @@ export class PaymentsController {
       );
     }
 
-    const meta = result.data?.metadata || {};
-    const { userId, planId, type } = meta as {
-      userId?: string;
-      planId?: string;
-      type?: string;
-    };
+    // Use our payment record for userId/planId (Paystack metadata can be stringified or missing)
+    const record = paymentRecord as any;
+    const userId = record?.userId?.toString?.() ?? record?.userId;
+    const planId = record?.planId?.toString?.() ?? record?.planId;
+    const type = record?.type ?? 'pack';
+    const quantity = Math.max(1, record?.quantity ?? 1);
 
-    if (type === 'pack' && userId && planId && paymentRecord) {
-      const quantity = (paymentRecord as any).quantity ?? 1;
+    if (type === 'pack' && userId && planId) {
       await this.userService.purchasePackWithQuantity(userId, planId, quantity);
+    }
+
+    // Return updated user so frontend can refresh credits without an extra GET
+    let updatedUser = null;
+    if (userId) {
+      try {
+        updatedUser = await this.userService.findUserById(userId);
+        if (updatedUser && (updatedUser as any).password) {
+          delete (updatedUser as any).password;
+        }
+      } catch {
+        // ignore
+      }
     }
 
     return {
       status: 'success',
       message: 'Payment verified and credits added.',
+      data: { user: updatedUser },
     };
   }
 
