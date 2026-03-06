@@ -216,6 +216,64 @@ export class UserController {
   }
 
   /**
+   * Update user's plan (display only; for backward compat)
+   */
+  @Patch(':id/plan')
+  async updatePlan(
+    @Param('id') id: string,
+    @Body('planId') planId: string,
+  ): Promise<{ status: string; message: string; data: any }> {
+    if (!planId) {
+      throw new BadRequestException('planId is required');
+    }
+    const updated = await this.userService.updatePlan(id, planId);
+    return {
+      status: 'success',
+      message: 'Plan updated successfully',
+      data: updated,
+    };
+  }
+
+  /**
+   * Add credits one at a time (or in quantity) for affordability.
+   * Body: { standardVerification?: number, premiumVerification?: number }
+   */
+  @Post(':id/add-credits')
+  async addCredits(
+    @Param('id') id: string,
+    @Body() body: { standardVerification?: number; premiumVerification?: number },
+  ): Promise<{ status: string; message: string; data: any }> {
+    const updated = await this.userService.addCredits(id, {
+      standardVerification: body.standardVerification,
+      premiumVerification: body.premiumVerification,
+    });
+    return {
+      status: 'success',
+      message: 'Credits added successfully.',
+      data: updated,
+    };
+  }
+
+  /**
+   * One-time purchase: buy a pack and add credits to user (stackable).
+   */
+  @Post(':id/purchase-pack')
+  async purchasePack(
+    @Param('id') id: string,
+    @Body('planId') planId: string,
+  ): Promise<{ status: string; message: string; data: any }> {
+    if (!planId) {
+      throw new BadRequestException('planId is required');
+    }
+    const updated = await this.userService.purchasePack(id, planId);
+    return {
+      status: 'success',
+      message: 'Pack purchased successfully. Your credits have been added.',
+      data: updated,
+    };
+  }
+
+  /**
    * Update notification settings for a user
    */
   @Patch(':id/notification-settings')

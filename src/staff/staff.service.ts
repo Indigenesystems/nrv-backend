@@ -21,6 +21,13 @@ export class StaffService implements OnModuleInit {
     @InjectModel(Staff.name) private readonly staffModel: Model<StaffDocument>,
   ) {}
 
+  private withoutPassword<T extends Record<string, any>>(obj: T): Omit<T, 'password'> {
+    if (!obj) return obj as any;
+    const clone = { ...(obj as any) };
+    delete clone.password;
+    return clone;
+  }
+
   async onModuleInit() {
     const count = await this.roleModel.countDocuments();
     if (count === 0) {
@@ -74,7 +81,8 @@ export class StaffService implements OnModuleInit {
       staff.onboardingStatus = OnboardingStatus.ONBOARDED;
       staff.onboardedAt = new Date();
     }
-    return staff.save();
+    const saved = await staff.save();
+    return this.withoutPassword(saved.toObject()) as any;
   }
 
   async findAllStaff(params: {
@@ -113,6 +121,7 @@ export class StaffService implements OnModuleInit {
     const [data, total] = await Promise.all([
       this.staffModel
         .find(query)
+        .select('-password')
         .populate('roleId', 'name slug')
         .sort(sort)
         .skip(skip)
@@ -132,6 +141,7 @@ export class StaffService implements OnModuleInit {
   async findStaffById(id: string): Promise<Staff & { role?: Role }> {
     const staff = await this.staffModel
       .findById(id)
+      .select('-password')
       .populate('roleId', 'name slug description')
       .lean()
       .exec();
@@ -154,7 +164,8 @@ export class StaffService implements OnModuleInit {
       (dto as Record<string, unknown>).password = await bcrypt.hash(dto.password, 10);
     }
     Object.assign(staff, dto);
-    return staff.save();
+    const saved = await staff.save();
+    return this.withoutPassword(saved.toObject()) as any;
   }
 
   async onboardStaff(id: string, dto: OnboardStaffDto): Promise<Staff> {
@@ -167,7 +178,8 @@ export class StaffService implements OnModuleInit {
     staff.onboardingStatus = OnboardingStatus.ONBOARDED;
     staff.onboardedAt = new Date();
     staff.status = 'active';
-    return staff.save();
+    const saved = await staff.save();
+    return this.withoutPassword(saved.toObject()) as any;
   }
 
   async deleteStaff(id: string): Promise<void> {

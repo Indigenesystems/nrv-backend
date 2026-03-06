@@ -23,10 +23,12 @@ import {
   AgreementDocumentsSchema,
 } from './entities/agreement_documents.entity';
 import { ActivitiesModule } from '../activities/activities.module';
+import { PlansModule } from '../plans/plans.module';
 
 @Module({
   imports: [
     ActivitiesModule,
+    PlansModule,
     MongooseModule.forFeature([
       { name: Property.name, schema: PropertySchema },
       { name: AgreementDocuments.name, schema: AgreementDocumentsSchema },

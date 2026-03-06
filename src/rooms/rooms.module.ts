@@ -28,10 +28,12 @@ import {
   AgreementDocumentsSchema,
 } from 'src/properties/entities/agreement_documents.entity';
 import { ActivitiesModule } from '../activities/activities.module';
+import { PlansModule } from '../plans/plans.module';
 
 @Module({
   imports: [
     ActivitiesModule,
+    PlansModule,
     MongooseModule.forFeature([
       { name: Room.name, schema: RoomSchema },
       { name: AgreementDocuments.name, schema: AgreementDocumentsSchema },

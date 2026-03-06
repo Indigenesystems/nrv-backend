@@ -43,10 +43,14 @@ import { VerificationSchema } from './verification/entities/verification.entity'
 import { ActivitiesModule } from './activities/activities.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { StaffModule } from './staff/staff.module';
+import { PlansModule } from './plans/plans.module';
+import { PaymentsModule } from './payments/payments.module';
 
 @Module({
   imports: [
     MongodbModule,
+    PlansModule,
+    PaymentsModule,
     UsersModule,
     EmailServiceModule,
     // MyMulterModule,

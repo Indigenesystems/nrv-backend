@@ -13,6 +13,10 @@ export enum VerificationStatus {
 
 @Schema({ timestamps: true })
 export class Verification {
+  /** Short unique reference number (5 digits) for display and lookup. Set on creation. */
+  @Prop({ unique: true, sparse: true })
+  uniqueId?: number;
+
   @Prop({ required: true })
   firstName: string;
 
@@ -41,6 +45,10 @@ export class Verification {
 
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   requestedBy: User;
+
+  /** Preferred screening tier when landlord runs Dojah screening: standard or premium. */
+  @Prop({ type: String, enum: ['standard', 'premium'], default: 'standard' })
+  verificationTier?: 'standard' | 'premium';
 
   // 3. Track custom dates
   @Prop({ default: () => new Date() })

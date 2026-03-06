@@ -1,4 +1,4 @@
-import { IsDateString, IsEmail, IsNotEmpty, IsNumber, IsOptional, IsPhoneNumber, IsString } from 'class-validator';
+import { IsDateString, IsEmail, IsIn, IsNotEmpty, IsNumber, IsOptional, IsPhoneNumber, IsString } from 'class-validator';
 
 export class CreateVerificationDto {
   @IsString()
@@ -27,6 +27,11 @@ export class CreateVerificationDto {
   @IsString()
   @IsNotEmpty()
   requestedBy: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['standard', 'premium'])
+  verificationTier?: 'standard' | 'premium';
 }
 
 

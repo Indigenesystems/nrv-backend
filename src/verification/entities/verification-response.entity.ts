@@ -153,6 +153,44 @@ export class VerificationResponse {
 
   @Prop({ default: null })
   ninVerificationDate?: Date;
+
+  @Prop({ type: Object, default: null })
+  identificationDocumentAnalysis?: Record<string, unknown> | null;
+
+  @Prop({ type: Object, default: null })
+  utilityBillAnalysis?: Record<string, unknown> | null;
+
+  @Prop({ type: Object, default: null })
+  creditSummary?: Record<string, unknown> | null;
+
+  @Prop({ type: Object, default: null })
+  phoneFraudResult?: Record<string, unknown> | null;
+
+  @Prop({ type: Object, default: null })
+  amlScreeningResult?: Record<string, unknown> | null;
+
+  /** Set when "Run all checks" has completed (all steps attempted). */
+  @Prop({ default: null })
+  allChecksCompletedAt?: Date;
+
+  /**
+   * Privacy-safe summary report for the landlord. No PII – only high-level outcomes.
+   * Regenerated when all checks complete or on demand.
+   */
+  @Prop({ type: Object, default: null })
+  landlordReport?: {
+    generatedAt: Date;
+    nin: 'verified' | 'failed' | 'not_run' | 'not_provided';
+    aml: 'low_risk' | 'medium_risk' | 'high_risk' | 'not_run' | 'error';
+    phone: 'valid' | 'invalid' | 'not_run' | 'not_provided';
+    creditSummary: 'available' | 'not_available' | 'not_run' | 'not_provided';
+    idDocument: 'verified' | 'failed' | 'not_run' | 'not_provided';
+    utilityBill: 'verified' | 'failed' | 'not_run' | 'not_provided';
+    personalSection: 'approved' | 'pending' | 'rejected' | 'not_reviewed';
+    employmentSection: 'approved' | 'pending' | 'rejected' | 'not_reviewed';
+    guarantorSection: 'approved' | 'pending' | 'rejected' | 'not_reviewed';
+    documentsSection: 'approved' | 'pending' | 'rejected' | 'not_reviewed';
+  } | null;
 }
 
 export const VerificationResponseSchema = SchemaFactory.createForClass(VerificationResponse);

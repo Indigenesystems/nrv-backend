@@ -22,6 +22,7 @@ import { CloudinaryService } from 'src/upload/cloudinary.service';
 import config from 'src/config/config';
 import axios from 'axios';
 import { UserVerification } from './entities/userVerification';
+import { PlansService } from '../plans/plans.service';
 const baseURL = config.web.youVerifyNIN;
 const token = config.web.token;
 
@@ -46,8 +47,118 @@ export class UserService {
     private emailService: EmailService,
     private propertiesService: PropertiesService,
     private cloudinaryService: CloudinaryService,
-    
+    private plansService: PlansService,
   ) {}
+
+  /**
+   * Assign default (Premium) plan to a user. Used for existing users without a plan.
+   */
+  async assignDefaultPlan(userId: string): Promise<void> {
+    const defaultPlan = await this.plansService.getDefaultPlan();
+    await this.userModel.findByIdAndUpdate(userId, {
+      planId: (defaultPlan as any)._id,
+    });
+  }
+
+  /**
+   * Update a user's plan (e.g. upgrade to Premium).
+   */
+  async updatePlan(userId: string, planId: string): Promise<User> {
+    await this.plansService.findById(planId);
+    const user = await this.userModel.findByIdAndUpdate(
+      userId,
+      { planId },
+      { new: true },
+    );
+    if (!user) throw new NotFoundException('User not found');
+    return user.toObject ? user.toObject() : user;
+  }
+
+  /**
+   * Consume one standard verification credit. Throws if none left.
+   */
+  async consumeStandardVerification(userId: string): Promise<void> {
+    const user = await this.userModel.findById(userId).lean();
+    if (!user) throw new NotFoundException('User not found');
+    const u = user as any;
+    const available = (u.standardVerificationBalance ?? 0) - (u.standardVerificationUsed ?? 0);
+    if (available < 1) {
+      throw new BadRequestException(
+        'No standard verification credits left. Purchase more credits to run standard screening.',
+      );
+    }
+    await this.userModel.findByIdAndUpdate(userId, {
+      $inc: { standardVerificationUsed: 1 },
+    });
+  }
+
+  /**
+   * Consume one premium verification credit. Throws if none left.
+   */
+  async consumePremiumVerification(userId: string): Promise<void> {
+    const user = await this.userModel.findById(userId).lean();
+    if (!user) throw new NotFoundException('User not found');
+    const u = user as any;
+    const available = (u.premiumVerificationBalance ?? 0) - (u.premiumVerificationUsed ?? 0);
+    if (available < 1) {
+      throw new BadRequestException(
+        'No premium verification credits left. Purchase more credits to run premium screening.',
+      );
+    }
+    await this.userModel.findByIdAndUpdate(userId, {
+      $inc: { premiumVerificationUsed: 1 },
+    });
+  }
+
+  /**
+   * Add credits one-by-one (or in quantity) for affordability. Each field is optional.
+   */
+  async addCredits(
+    userId: string,
+    payload: { standardVerification?: number; premiumVerification?: number },
+  ): Promise<User> {
+    const user = await this.userModel.findById(userId);
+    if (!user) throw new NotFoundException('User not found');
+    const updates: any = {};
+    if (payload.standardVerification != null && payload.standardVerification > 0) {
+      updates.$inc = updates.$inc || {};
+      updates.$inc.standardVerificationBalance = payload.standardVerification;
+    }
+    if (payload.premiumVerification != null && payload.premiumVerification > 0) {
+      updates.$inc = updates.$inc || {};
+      updates.$inc.premiumVerificationBalance = payload.premiumVerification;
+    }
+    if (Object.keys(updates).length === 0) {
+      throw new BadRequestException('At least one credit type with quantity > 0 is required.');
+    }
+    const updated = await this.userModel.findByIdAndUpdate(userId, updates, { new: true });
+    if (!updated) throw new NotFoundException('User not found');
+    return updated.toObject ? updated.toObject() : updated;
+  }
+
+  /**
+   * One-time purchase: add pack credits to user balances (stackable).
+   */
+  async purchasePack(userId: string, planId: string): Promise<User> {
+    const plan = await this.plansService.findById(planId) as any;
+    const user = await this.userModel.findById(userId).lean();
+    if (!user) throw new NotFoundException('User not found');
+    const current = user as any;
+    // Pack purchase adds only verification credits, not property licenses
+    const standardBalance = (current.standardVerificationBalance ?? 0) + (plan.standardVerificationAdded ?? plan.verificationLimit ?? 0);
+    const premiumBalance = (current.premiumVerificationBalance ?? 0) + (plan.premiumVerificationAdded ?? plan.verificationLimit ?? 0);
+    const updated = await this.userModel.findByIdAndUpdate(
+      userId,
+      {
+        planId,
+        standardVerificationBalance: standardBalance,
+        premiumVerificationBalance: premiumBalance,
+      },
+      { new: true },
+    );
+    if (!updated) throw new NotFoundException('User not found');
+    return updated.toObject ? updated.toObject() : updated;
+  }
 
   /**
    * Find all users
@@ -179,6 +290,8 @@ export class UserService {
     }
 
     user.confirmationCode = confirmationCode;
+    const defaultPlan = await this.plansService.getDefaultPlan();
+    (user as any).planId = (defaultPlan as any)._id;
     const newUser = new this.userModel(user);
 
     try {
@@ -232,6 +345,8 @@ export class UserService {
     user.confirmationCode = confirmationCode;
     user.password = generateConfirmationCode();
     user.status = 'active';
+    const defaultPlan = await this.plansService.getDefaultPlan();
+    (user as any).planId = (defaultPlan as any)._id;
     const newUser = new this.userModel(user);
    console.log({user});
    

@@ -1,11 +1,6 @@
 import {
   IsString,
-  IsEmail,
   IsNotEmpty,
-  IsNumberString,
-  Length,
-  IsEnum,
-  IsBoolean,
 } from 'class-validator';
 import { UploadedFile } from '@nestjs/common';
 import { Express } from 'express';
@@ -26,11 +21,6 @@ export class CreatePropertyDto {
   @IsNotEmpty()
   
   state: string;
-
-  @IsString()
-  @IsNotEmpty()
-  
-  zipCode: string;
 
   @IsString()
   @IsNotEmpty()

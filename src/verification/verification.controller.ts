@@ -17,6 +17,8 @@ import {
   Query,
 } from '@nestjs/common';
 import { VerificationService } from './verification.service';
+import { DojahTierService } from './dojah-tier.service';
+import { UserService } from '../users/users.service';
 import {
   CreateTenantVerificationDto,
   CreateVerificationDto,
@@ -38,7 +40,11 @@ function errorResponse(res: Response, error: any, defaultMsg: string, status = H
 
 @Controller('verification')
 export class VerificationController {
-  constructor(private readonly verificationService: VerificationService) {}
+  constructor(
+    private readonly verificationService: VerificationService,
+    private readonly dojahTierService: DojahTierService,
+    private readonly userService: UserService,
+  ) {}
 
   /**
    * Submit a tenant verification request
@@ -170,6 +176,84 @@ export class VerificationController {
   }
 
   /**
+   * Fetch Credit Summary (Credit Bureau) using Dojah API (basic)
+   * @param bvn
+   * @returns Dojah API response
+   */
+  @Get('/credit-summary')
+  async getCreditSummary(@Query('bvn') bvn: string, @Query('responseId') responseId?: string) {
+    if (!bvn) {
+      throw new BadRequestException('bvn query parameter is required');
+    }
+    try {
+      const result = await this.dojahTierService.creditSummary(bvn);
+      if (responseId) {
+        // Fire-and-forget style: store snapshot on the verification response, but still return raw Dojah payload
+        await this.verificationService.storeCreditSummary(responseId, result);
+      }
+      return verificationSuccessResponse('Credit summary fetched successfully', result);
+    } catch (error) {
+      throw new BadRequestException(
+        error?.response || error?.message || 'Failed to fetch credit summary',
+      );
+    }
+  }
+
+  /**
+   * Screen phone number for fraud risk using Dojah API
+   * @param phone
+   * @returns Dojah API response
+   */
+  @Get('/phone-fraud')
+  async screenPhoneFraud(@Query('phone') phone: string, @Query('responseId') responseId?: string) {
+    if (!phone) {
+      throw new BadRequestException('phone query parameter is required');
+    }
+    try {
+      const result = await this.dojahTierService.phoneFraudScreen(phone);
+      if (responseId) {
+        await this.verificationService.storePhoneFraudResult(responseId, result);
+      }
+      return verificationSuccessResponse('Phone fraud screening successful', result);
+    } catch (error) {
+      throw new BadRequestException(
+        error?.response || error?.message || 'Failed to screen phone for fraud',
+      );
+    }
+  }
+
+  /**
+   * Run AML screening (v2) for the applicant and store result on the verification response.
+   */
+  @Post('/aml-screening/:responseId')
+  async runAmlScreeningAndStore(@Param('responseId') responseId: string) {
+    try {
+      const result = await this.verificationService.runAmlScreeningAndStore(responseId);
+      return verificationSuccessResponse('AML screening completed and stored', result);
+    } catch (error) {
+      throw new BadRequestException(
+        error?.response || error?.message || 'Failed to run AML screening',
+      );
+    }
+  }
+
+  /**
+   * Run all verification checks in one call: phone fraud, credit summary, AML screening,
+   * ID document and utility bill analysis. Results are stored on the verification response.
+   */
+  @Post('/run-all-checks/:responseId')
+  async runAllVerificationChecks(@Param('responseId') responseId: string) {
+    try {
+      const result = await this.verificationService.runAllVerificationChecks(responseId);
+      return verificationSuccessResponse('All verification checks completed', result);
+    } catch (error) {
+      throw new BadRequestException(
+        error?.response || error?.message || 'Failed to run all checks',
+      );
+    }
+  }
+
+  /**
    * Verify NIN and store result in verification response
    * @param responseId
    * @param nin
@@ -188,6 +272,36 @@ export class VerificationController {
       return verificationSuccessResponse('NIN verification completed and stored', result);
     } catch (error) {
       throw new BadRequestException(error?.response || error?.message || 'Failed to verify and store NIN');
+    }
+  }
+
+  /**
+   * Run Dojah document analysis for the tenant's identification document and store result.
+   */
+  @Post('/documents/identity/:responseId')
+  async analyzeIdentificationDocument(@Param('responseId') responseId: string) {
+    try {
+      const result = await this.verificationService.analyzeIdentificationDocument(responseId);
+      return verificationSuccessResponse('Identification document analysis completed and stored', result);
+    } catch (error) {
+      throw new BadRequestException(
+        error?.response || error?.message || 'Failed to analyze identification document',
+      );
+    }
+  }
+
+  /**
+   * Run Dojah utility bill analysis for the tenant's uploaded utility bill and store result.
+   */
+  @Post('/documents/utility-bill/:responseId')
+  async analyzeUtilityBill(@Param('responseId') responseId: string) {
+    try {
+      const result = await this.verificationService.analyzeUtilityBill(responseId);
+      return verificationSuccessResponse('Utility bill analysis completed and stored', result);
+    } catch (error) {
+      throw new BadRequestException(
+        error?.response || error?.message || 'Failed to analyze utility bill',
+      );
     }
   }
 
@@ -227,6 +341,78 @@ export class VerificationController {
       }
     }
 
+  /**
+   * Run Standard tier screening (NIN Advanced, Selfie+NIN, Liveness, AML, PEP/sanctions).
+   * Recommended for platform launch.
+   */
+  @Post('screening/standard')
+  async runStandardScreening(
+    @Body()
+    body: {
+      requestedBy: string;
+      nin: string;
+      firstName: string;
+      lastName: string;
+      dateOfBirth: string;
+      middleName?: string;
+      selfieImageBase64?: string;
+      livenessImageBase64?: string;
+    },
+  ) {
+    if (!body.nin || !body.firstName || !body.lastName || !body.dateOfBirth) {
+      throw new BadRequestException('nin, firstName, lastName, dateOfBirth are required');
+    }
+    if (body.requestedBy) {
+      await this.userService.consumeStandardVerification(body.requestedBy);
+    }
+    const result = await this.dojahTierService.runStandardScreening({
+      nin: body.nin,
+      firstName: body.firstName,
+      lastName: body.lastName,
+      dateOfBirth: body.dateOfBirth,
+      middleName: body.middleName,
+      selfieImageBase64: body.selfieImageBase64,
+      livenessImageBase64: body.livenessImageBase64,
+    });
+    return verificationSuccessResponse('Standard screening completed', result);
+  }
+
+  /**
+   * Run Premium tier screening (Standard + Credit Score). Requires BVN for credit score.
+   */
+  @Post('screening/premium')
+  async runPremiumScreening(
+    @Body()
+    body: {
+      requestedBy: string;
+      nin: string;
+      firstName: string;
+      lastName: string;
+      dateOfBirth: string;
+      middleName?: string;
+      bvn?: string;
+      selfieImageBase64?: string;
+      livenessImageBase64?: string;
+    },
+  ) {
+    if (!body.nin || !body.firstName || !body.lastName || !body.dateOfBirth) {
+      throw new BadRequestException('nin, firstName, lastName, dateOfBirth are required');
+    }
+    if (body.requestedBy) {
+      await this.userService.consumePremiumVerification(body.requestedBy);
+    }
+    const result = await this.dojahTierService.runPremiumScreening({
+      nin: body.nin,
+      firstName: body.firstName,
+      lastName: body.lastName,
+      dateOfBirth: body.dateOfBirth,
+      middleName: body.middleName,
+      bvn: body.bvn,
+      selfieImageBase64: body.selfieImageBase64,
+      livenessImageBase64: body.livenessImageBase64,
+    });
+    return verificationSuccessResponse('Premium screening completed', result);
+  }
 
   /**
    * Get all verifications for a user with search and filtering
@@ -386,14 +572,21 @@ export class VerificationController {
     @Param('verificationId') verificationId: string,
     @Query('email') email: string,
   ) {
-    if (!email) {
+    if (!email?.trim()) {
       throw new BadRequestException('Email query parameter is required');
     }
-    const result = await this.verificationService.getVerificationResponseByRequestAndEmail(verificationId, email);
-    return verificationSuccessResponse(
-      result ? 'Verification response fetched successfully' : 'No verification response yet',
-      result ?? null,
-    );
+    try {
+      const result = await this.verificationService.getVerificationResponseByRequestAndEmail(verificationId, email);
+      return verificationSuccessResponse(
+        result ? 'Verification response fetched successfully' : 'No verification response yet',
+        result ?? null,
+      );
+    } catch (error) {
+      console.error('getVerificationResponseByRequestAndEmail error:', error);
+      throw new InternalServerErrorException(
+        error?.message || 'Failed to fetch verification response',
+      );
+    }
   }
 
   /**
@@ -443,20 +636,26 @@ export class VerificationController {
   }
 
   /**
-   * AML Screening Individual using Dojah API
-   * @param body
-   * @returns Dojah API response
+   * AML Screening (v2) Individual – PEP, sanctions, adverse media via Dojah.
+   * Body: first_name, last_name, date_of_birth required; middle_name, gender, nationality, id_number, match_threshold optional.
    */
   @Post('/aml-screening')
   async amlScreening(@Body() body: {
     first_name: string;
-    middle_name: string;
+    middle_name?: string;
     last_name: string;
     date_of_birth: string;
-    match_score: number;
+    match_score?: number;
+    match_threshold?: number;
+    gender?: string;
+    nationality?: string;
+    id_number?: string;
+    pep_check?: boolean;
+    sanction?: boolean;
+    adverse_media_check?: boolean;
   }) {
-    if (!body.first_name || !body.middle_name || !body.last_name || !body.date_of_birth || typeof body.match_score !== 'number') {
-      throw new BadRequestException('All fields (first_name, middle_name, last_name, date_of_birth, match_score) are required');
+    if (!body.first_name || !body.last_name || !body.date_of_birth) {
+      throw new BadRequestException('first_name, last_name and date_of_birth are required');
     }
     try {
       const result = await this.verificationService.amlScreeningIndividual(body);

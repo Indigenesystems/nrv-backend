@@ -9,9 +9,12 @@ import { CloudinaryService } from 'src/upload/cloudinary.service';
 import { HttpModule } from '@nestjs/axios';
 import { VerificationHistory, VerificationHistorySchema } from './entities/verification-history.entity';
 import { UsersModule } from '../users/users.module';
+import { DojahTierService } from './dojah-tier.service';
+import { PlansModule } from '../plans/plans.module';
 
 @Module({
   imports: [
+    PlansModule,
     MongooseModule.forFeature([
       { name: "Verification", schema: VerificationSchema },
       { name: "VerificationResponse", schema: VerificationResponseSchema },
@@ -21,6 +24,7 @@ import { UsersModule } from '../users/users.module';
     UsersModule,
   ],
   controllers: [VerificationController],
-  providers: [VerificationService, EmailService, CloudinaryService],
+  providers: [VerificationService, EmailService, CloudinaryService, DojahTierService],
+  exports: [DojahTierService],
 })
 export class VerificationModule {}

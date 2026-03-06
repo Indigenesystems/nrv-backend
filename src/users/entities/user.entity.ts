@@ -1,6 +1,7 @@
 import * as bcrypt from 'bcryptjs';
 import { Schema, Prop, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Document, Types } from 'mongoose';
+import * as mongoose from 'mongoose';
 
 
 @Schema({ timestamps: true }) // Enable timestamps
@@ -88,6 +89,26 @@ export class User {
   @Prop()
   
   dateOfBirth?: string;
+
+  /** Plan (licence) – display/last purchased pack. */
+  @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'Plan', default: null })
+  planId?: Types.ObjectId;
+
+  /** One-time purchase: total standard verification credits (stackable). */
+  @Prop({ default: 0 })
+  standardVerificationBalance?: number;
+
+  /** One-time purchase: total premium verification credits (stackable). */
+  @Prop({ default: 0 })
+  premiumVerificationBalance?: number;
+
+  /** Standard verification credits used. */
+  @Prop({ default: 0 })
+  standardVerificationUsed?: number;
+
+  /** Premium verification credits used. */
+  @Prop({ default: 0 })
+  premiumVerificationUsed?: number;
 }
 
 export type UserDocument = User & Document;

@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
+  NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -18,6 +19,8 @@ import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { VerificationHistory, VerificationHistoryDocument } from './entities/verification-history.entity';
 import { UserService } from '../users/users.service';
+import { PlansService } from '../plans/plans.service';
+import { DojahTierService } from './dojah-tier.service';
 
 @Injectable()
 export class VerificationService {
@@ -32,7 +35,24 @@ export class VerificationService {
     private emailService: EmailService,
     private readonly httpService: HttpService,
     private readonly userService: UserService,
+    private readonly plansService: PlansService,
+    private readonly dojahTierService: DojahTierService,
   ) {}
+
+  /** Generate a random 5-digit number (10000–99999) that is not already used. */
+  private async generateUniqueVerificationId(): Promise<number> {
+    const min = 10000;
+    const max = 99999;
+    const maxAttempts = 20;
+    for (let i = 0; i < maxAttempts; i++) {
+      const candidate = Math.floor(Math.random() * (max - min + 1)) + min;
+      const existing = await this.verificationModel.findOne({ uniqueId: candidate });
+      if (!existing) return candidate;
+    }
+    throw new InternalServerErrorException(
+      'Unable to generate unique verification ID. Please try again.',
+    );
+  }
 
   /**
    * Create a new tenant verification response
@@ -48,14 +68,29 @@ export class VerificationService {
   }
 
   /**
-   * Update employment info for a verification response
-   * @param id
-   * @param dto
-   * @returns Updated verification response or null
+   * Update employment info for a verification response.
+   * Only sets employment-related fields so other response data is preserved.
    */
   async updateEmployment(id: string, dto: UpdateEmploymentDto): Promise<VerificationResponse | null> {
-    console.log({ id, dto });
-    return this.verificationResponseModel.findByIdAndUpdate(id, dto, { new: true });
+    const update: Record<string, unknown> = {};
+    if (dto.employmentStatus !== undefined) update.employmentStatus = dto.employmentStatus;
+    if (dto.roleInCompany !== undefined) update.roleInCompany = dto.roleInCompany;
+    if (dto.companyName !== undefined) update.companyName = dto.companyName;
+    if (dto.companyAddress !== undefined) update.companyAddress = dto.companyAddress;
+    if (dto.monthlyIncome !== undefined) update.monthlyIncome = dto.monthlyIncome;
+    if (dto.dateJoined !== undefined) update.dateJoined = dto.dateJoined;
+    if (Object.keys(update).length === 0) {
+      const existing = await this.verificationResponseModel.findById(id);
+      if (!existing) throw new NotFoundException('Verification response not found');
+      return existing;
+    }
+    const updated = await this.verificationResponseModel.findByIdAndUpdate(
+      id,
+      { $set: update },
+      { new: true },
+    );
+    if (!updated) throw new NotFoundException('Verification response not found');
+    return updated;
   }
 
   /**
@@ -120,16 +155,37 @@ export class VerificationService {
   async createVerificationRequest(
     dto: CreateVerificationDto,
   ): Promise<{ message: string; data: Verification }> {
-    // Step 1: Check if verification already exists (commented out for now)
-    // const existing = await this.verificationModel.findOne({
-    //   $or: [{ email: dto.email }, { phone: dto.phone }],
-    // });
-    // if (existing) {
-    //   throw new BadRequestException('Tenant verification already exists.');
-    // }
+    const requestedBy = typeof dto.requestedBy === 'string' ? dto.requestedBy : (dto.requestedBy as any)?.toString?.();
+    if (!requestedBy) {
+      throw new BadRequestException('requestedBy (landlord id) is required.');
+    }
+    const user = await this.userService.findUserById(requestedBy);
+    if (!user) {
+      throw new BadRequestException('User not found.');
+    }
+    const u = user as any;
+    const standardAvail = (u.standardVerificationBalance ?? 0) - (u.standardVerificationUsed ?? 0);
+    const premiumAvail = (u.premiumVerificationBalance ?? 0) - (u.premiumVerificationUsed ?? 0);
+    const totalCredits = standardAvail + premiumAvail;
+    const currentCount = await this.verificationModel.countDocuments({ requestedBy });
+    let verificationLimit: number;
+    if (totalCredits > 0) {
+      verificationLimit = totalCredits;
+    } else {
+      const plan = u.planId
+        ? await this.plansService.findById(u.planId.toString())
+        : await this.plansService.getDefaultPlan();
+      verificationLimit = plan.verificationLimit ?? 20;
+    }
+    if (currentCount >= verificationLimit) {
+      throw new BadRequestException(
+        `Verification limit reached (${verificationLimit}). Purchase more credits to run more verifications.`,
+      );
+    }
+
     try {
-      // Step 2: Create and save new verification entry
-      const created = new this.verificationModel(dto);
+      const uniqueId = await this.generateUniqueVerificationId();
+      const created = new this.verificationModel({ ...dto, uniqueId });
       await created.save();
 
       // Step 3: If tenant doesn't have an account yet, create one and send them their password
@@ -332,9 +388,13 @@ export class VerificationService {
    * @returns VerificationResponse or null
    */
   async getVerificationResponseByRequestAndEmail(verificationId: string, email: string) {
-    console.log({ verificationId, email });
-    
-    return this.verificationResponseModel.findOne({ verificationId: verificationId, email: email });
+    if (!verificationId?.trim() || !email?.trim()) {
+      return null;
+    }
+    return this.verificationResponseModel.findOne({
+      verificationId: verificationId.trim(),
+      email: { $regex: new RegExp(`^${email.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+    });
   }
 
   /**
@@ -464,19 +524,89 @@ export class VerificationService {
    * @param nin
    * @returns Updated verification response with NIN verification result
    */
+  /** Dojah sandbox test NIN (used in development so NIN check does not fail). */
+  private static readonly DOJAH_SANDBOX_TEST_NIN = '70123456789';
+
+  /**
+   * Normalize name for comparison: trim, lowercase, collapse spaces.
+   */
+  private normalizeName(name: string | null | undefined): string {
+    if (name == null || typeof name !== 'string') return '';
+    return name.trim().toLowerCase().replace(/\s+/g, ' ');
+  }
+
+  /**
+   * Normalize date to YYYY-MM-DD for comparison.
+   */
+  private normalizeDob(value: string | Date | null | undefined): string {
+    if (value == null) return '';
+    if (typeof value === 'string') {
+      const d = new Date(value);
+      return isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
+    }
+    if (value instanceof Date) return value.toISOString().slice(0, 10);
+    return '';
+  }
+
+  /**
+   * Check if NIN entity name and DOB align with applicant-provided fullName and dateOfBirth.
+   */
+  private checkNinAlignment(
+    entity: Record<string, unknown> | null | undefined,
+    applicantFullName: string | null | undefined,
+    applicantDob: string | Date | null | undefined,
+  ): { namesMatch: boolean; dobMatch: boolean } {
+    const applicantNameNorm = this.normalizeName(applicantFullName);
+    const applicantDobNorm = this.normalizeDob(applicantDob);
+
+    let namesMatch = false;
+    let dobMatch = false;
+
+    if (entity && typeof entity === 'object') {
+      const first = (entity.first_name as string) ?? '';
+      const middle = (entity.middle_name as string) ?? '';
+      const last = (entity.last_name as string) ?? '';
+      const ninFullName = [first, middle, last].filter(Boolean).join(' ');
+      namesMatch = applicantNameNorm !== '' && this.normalizeName(ninFullName) === applicantNameNorm;
+
+      const ninDob = entity.date_of_birth as string | undefined;
+      dobMatch = applicantDobNorm !== '' && this.normalizeDob(ninDob) === applicantDobNorm;
+    }
+
+    return { namesMatch, dobMatch };
+  }
+
   async verifyNinAndStoreResult(responseId: string, nin: string) {
     if (!nin || !nin.trim()) {
       throw new BadRequestException('NIN is required');
     }
+    const submittedNin = nin.trim();
+    const isDev = process.env.NODE_ENV !== 'production';
+    const envTestNin = process.env.DOJAH_TEST_NIN?.trim();
+    const validTestNin = envTestNin && /^\d{11}$/.test(envTestNin) ? envTestNin : VerificationService.DOJAH_SANDBOX_TEST_NIN;
+    const ninToVerify = isDev ? validTestNin : submittedNin;
+
+    const existingResponse = await this.verificationResponseModel.findById(responseId);
+    if (!existingResponse) {
+      throw new BadRequestException('Verification response not found');
+    }
+    const applicantFullName = existingResponse.fullName;
+    const applicantDob = existingResponse.dateOfBirth;
+
     try {
-      const verificationResult = await this.verifyNinBasic(nin.trim());
+      const verificationResult = await this.verifyNinBasic(ninToVerify);
+      const entity = (verificationResult?.entity ?? verificationResult?.data?.entity) as Record<string, unknown> | undefined;
+      const { namesMatch, dobMatch } = this.checkNinAlignment(entity, applicantFullName, applicantDob);
+
       const updateData = {
-        nin: nin.trim(),
+        nin: submittedNin,
         ninVerificationResult: {
           status: verificationResult?.status || 'success',
           data: verificationResult?.data ?? verificationResult,
           entity: verificationResult?.entity ?? null,
-          originalNin: nin.trim(),
+          originalNin: submittedNin,
+          namesMatch,
+          dobMatch,
           ...verificationResult,
         },
         ninVerificationDate: new Date(),
@@ -492,14 +622,15 @@ export class VerificationService {
       }
       return updatedResponse;
     } catch (error) {
+      const errorMessage = this.getNinErrorMessage(error);
       const errorData = {
-        nin: nin.trim(),
+        nin: submittedNin,
         ninVerificationResult: {
           status: 'failed',
-          error: error?.response?.data || error?.message || 'NIN verification failed',
+          error: errorMessage,
           timestamp: new Date(),
           originalError: error,
-          originalNin: nin.trim(),
+          originalNin: submittedNin,
         },
         ninVerificationDate: new Date(),
         ninVerificationStatus: 'failed',
@@ -516,13 +647,362 @@ export class VerificationService {
     }
   }
 
+  /**
+   * Store credit summary result on a verification response (side-effect for Dojah call).
+   */
+  async storeCreditSummary(responseId: string, creditSummary: any) {
+    if (!responseId) {
+      return null;
+    }
+    const updated = await this.verificationResponseModel.findByIdAndUpdate(
+      responseId,
+      { creditSummary },
+      { new: true },
+    );
+    if (!updated) {
+      throw new BadRequestException('Verification response not found');
+    }
+    return updated;
+  }
+
+  /**
+   * Store AML screening result on a verification response.
+   */
+  async storeAmlScreeningResult(responseId: string, amlScreeningResult: any) {
+    if (!responseId) return null;
+    const updated = await this.verificationResponseModel.findByIdAndUpdate(
+      responseId,
+      { amlScreeningResult },
+      { new: true },
+    );
+    if (!updated) {
+      throw new BadRequestException('Verification response not found');
+    }
+    return updated;
+  }
+
+  /** Sample PEP/AML payload for development (Dojah v2 screening). */
+  private static readonly AML_DEV_PAYLOAD = {
+    names: 'John Doe',
+    gender: 'male',
+    date_of_birth: '1990-01-01',
+    nationality: '',
+    id_number: 'AD45UIOO123',
+    pep_check: true,
+    sanction: true,
+    adverse_media_check: true,
+    watchlists: ['OFAC_SDN', 'EU_Terrorist'],
+    match_threshold: 0.85,
+    unique_reference: '123450987qwergoi',
+  };
+
+  /**
+   * Run AML v2 screening for the tenant on the given response and store the result.
+   * In development, uses a sample payload for consistent PEP/sanctions testing.
+   */
+  async runAmlScreeningAndStore(responseId: string) {
+    const response = await this.verificationResponseModel.findById(responseId);
+    if (!response) {
+      throw new BadRequestException('Verification response not found');
+    }
+    const isDev = process.env.NODE_ENV === 'development';
+    const params = isDev
+      ? VerificationService.AML_DEV_PAYLOAD
+      : {
+          names: (response.fullName || '').trim(),
+          date_of_birth: response.dateOfBirth
+            ? new Date(response.dateOfBirth).toISOString().slice(0, 10)
+            : undefined,
+          gender: response.gender?.toLowerCase(),
+          pep_check: true,
+          sanction: true,
+          adverse_media_check: true,
+          match_threshold: 0.85,
+        };
+    if (!isDev && !params.names) {
+      throw new BadRequestException('Applicant name is required for AML screening');
+    }
+    const result = await this.dojahTierService.amlScreeningV2Individual(params);
+    await this.storeAmlScreeningResult(responseId, result);
+    return result;
+  }
+
+  /**
+   * Store phone fraud screening result on a verification response (side-effect for Dojah call).
+   */
+  async storePhoneFraudResult(responseId: string, phoneFraudResult: any) {
+    if (!responseId) {
+      return null;
+    }
+    const updated = await this.verificationResponseModel.findByIdAndUpdate(
+      responseId,
+      { phoneFraudResult },
+      { new: true },
+    );
+    if (!updated) {
+      throw new BadRequestException('Verification response not found');
+    }
+    return updated;
+  }
+
+  /**
+   * Run Dojah document analysis on the tenant's identification document and store the result.
+   * Fetches the image and sends it to Dojah as base64 (required for document analysis).
+   */
+  async analyzeIdentificationDocument(responseId: string) {
+    const response = await this.verificationResponseModel.findById(responseId);
+    if (!response) {
+      throw new BadRequestException('Verification response not found');
+    }
+    if (!response.identificationDocumentUrl) {
+      throw new BadRequestException('No identification document uploaded for this response');
+    }
+
+    try {
+      // Fetch image and convert to base64 (Dojah expects base64 without data URL prefix)
+      const imageResponse = await firstValueFrom(
+        this.httpService.get(response.identificationDocumentUrl, {
+          responseType: 'arraybuffer',
+        }),
+      );
+      const buffer = Buffer.from(imageResponse.data);
+      const base64Image = buffer.toString('base64');
+
+      const analysis = await this.dojahTierService.documentAnalysis({
+        input_type: 'base64',
+        imagefrontside: base64Image,
+      });
+
+      const updated = await this.verificationResponseModel.findByIdAndUpdate(
+        responseId,
+        {
+          identificationDocumentAnalysis: {
+            ...analysis,
+            timestamp: new Date(),
+          },
+        },
+        { new: true },
+      );
+      if (!updated) {
+        throw new BadRequestException('Verification response not found');
+      }
+      return updated;
+    } catch (error: any) {
+      const updated = await this.verificationResponseModel.findByIdAndUpdate(
+        responseId,
+        {
+          identificationDocumentAnalysis: {
+            status: 'failed',
+            error: error?.response?.data || error?.message || 'Document analysis failed',
+            timestamp: new Date(),
+          },
+        },
+        { new: true },
+      );
+      if (!updated) {
+        throw new BadRequestException('Verification response not found');
+      }
+      return updated;
+    }
+  }
+
+  /**
+   * Run Dojah utility bill analysis on the tenant's uploaded utility bill and store the result.
+   */
+  async analyzeUtilityBill(responseId: string) {
+    const response = await this.verificationResponseModel.findById(responseId);
+    if (!response) {
+      throw new BadRequestException('Verification response not found');
+    }
+    if (!response.utilityBillUrl) {
+      throw new BadRequestException('No utility bill uploaded for this response');
+    }
+
+    try {
+      const analysis = await this.dojahTierService.utilityBillAnalysis({
+        input_type: 'url',
+        input_value: response.utilityBillUrl,
+      });
+
+      const updated = await this.verificationResponseModel.findByIdAndUpdate(
+        responseId,
+        {
+          utilityBillAnalysis: {
+            ...analysis,
+            timestamp: new Date(),
+          },
+        },
+        { new: true },
+      );
+      if (!updated) {
+        throw new BadRequestException('Verification response not found');
+      }
+      return updated;
+    } catch (error: any) {
+      const updated = await this.verificationResponseModel.findByIdAndUpdate(
+        responseId,
+        {
+          utilityBillAnalysis: {
+            status: 'failed',
+            error: error?.response?.data || error?.message || 'Utility bill analysis failed',
+            timestamp: new Date(),
+          },
+        },
+        { new: true },
+      );
+      if (!updated) {
+        throw new BadRequestException('Verification response not found');
+      }
+      return updated;
+    }
+  }
+
+  /**
+   * Build a privacy-safe landlord summary report from a verification response (no PII).
+   */
+  private buildLandlordReport(doc: VerificationResponse & { landlordReport?: any }): NonNullable<VerificationResponse['landlordReport']> {
+    const ninStatus = doc.nin
+      ? (doc.ninVerificationStatus === 'completed' || doc.ninVerificationResult?.status === 'success' ? 'verified' : 'failed')
+      : 'not_provided';
+    const amlEntity = doc.amlScreeningResult?.entity as { risk_level?: string } | undefined;
+    const amlRisk = amlEntity?.risk_level === 'low' ? 'low_risk' : amlEntity?.risk_level === 'high' ? 'high_risk' : amlEntity?.risk_level === 'medium' ? 'medium_risk' : doc.amlScreeningResult ? 'low_risk' : 'not_run';
+    const amlFinal = doc.amlScreeningResult ? (amlRisk === 'low_risk' || amlRisk === 'medium_risk' || amlRisk === 'high_risk' ? amlRisk : 'low_risk') : 'not_run';
+    const phoneStatus = doc.phone
+      ? (doc.phoneFraudResult ? (doc.phoneFraudResult as any)?.entity?.valid === true ? 'valid' : 'invalid' : 'not_run')
+      : 'not_provided';
+    const creditStatus = doc.creditSummary ? 'available' : (doc.nin || (doc as any).bvn) ? 'not_available' : 'not_run';
+    const idDocStatus = !doc.identificationDocumentUrl ? 'not_provided' : doc.identificationDocumentAnalysis ? (doc.identificationDocumentAnalysis as any)?.status === 'failed' ? 'failed' : 'verified' : 'not_run';
+    const utilStatus = !doc.utilityBillUrl ? 'not_provided' : doc.utilityBillAnalysis ? (doc.utilityBillAnalysis as any)?.status === 'failed' ? 'failed' : 'verified' : 'not_run';
+    const section = (r: { status?: string } | null | undefined) => (r?.status === 'approved' ? 'approved' : r?.status === 'rejected' ? 'rejected' : r ? 'pending' : 'not_reviewed');
+    return {
+      generatedAt: new Date(),
+      nin: ninStatus,
+      aml: amlFinal,
+      phone: phoneStatus,
+      creditSummary: creditStatus,
+      idDocument: idDocStatus,
+      utilityBill: utilStatus,
+      personalSection: section(doc.personalReport),
+      employmentSection: section(doc.employmentReport),
+      guarantorSection: section(doc.guarantorReport),
+      documentsSection: section(doc.documentsReport),
+    };
+  }
+
+  /**
+   * Run all verification checks in one flow. Respects the verification request's tier:
+   * - Standard: NIN, phone fraud, AML, ID document, utility bill (no credit score).
+   * - Premium: All of the above plus credit summary (BVN).
+   * Skips steps when data is missing. Sets allChecksCompletedAt and landlord report when done.
+   */
+  async runAllVerificationChecks(responseId: string): Promise<{
+    summary: { nin: string; phoneFraud: string; creditSummary: string; aml: string; idDocument: string; utilityBill: string };
+    response: VerificationResponse;
+  }> {
+    const response = await this.verificationResponseModel.findById(responseId);
+    if (!response) {
+      throw new BadRequestException('Verification response not found');
+    }
+    const verificationRequest = response.verificationId
+      ? await this.verificationModel.findById(response.verificationId).lean()
+      : null;
+    const tier: 'standard' | 'premium' = (verificationRequest as any)?.verificationTier ?? 'standard';
+
+    const summary = {
+      nin: 'skipped',
+      phoneFraud: 'skipped',
+      creditSummary: 'skipped',
+      aml: 'skipped',
+      idDocument: 'skipped',
+      utilityBill: 'skipped',
+    } as { nin: string; phoneFraud: string; creditSummary: string; aml: string; idDocument: string; utilityBill: string };
+
+    if (response.nin?.trim()) {
+      try {
+        await this.verifyNinAndStoreResult(responseId, response.nin.trim());
+        summary.nin = 'ok';
+      } catch {
+        summary.nin = 'error';
+      }
+    }
+
+    if (response.phone) {
+      try {
+        const result = await this.dojahTierService.phoneFraudScreen(response.phone);
+        await this.storePhoneFraudResult(responseId, result);
+        summary.phoneFraud = 'ok';
+      } catch {
+        summary.phoneFraud = 'error';
+      }
+    }
+
+    const bvnOrNin = (response as any).bvn ?? response.nin;
+    if (tier === 'premium' && bvnOrNin) {
+      try {
+        const result = await this.dojahTierService.creditSummary(bvnOrNin);
+        await this.storeCreditSummary(responseId, result);
+        summary.creditSummary = 'ok';
+      } catch {
+        summary.creditSummary = 'error';
+      }
+    }
+
+    try {
+      await this.runAmlScreeningAndStore(responseId);
+      summary.aml = 'ok';
+    } catch {
+      summary.aml = 'error';
+    }
+
+    if (response.identificationDocumentUrl) {
+      try {
+        await this.analyzeIdentificationDocument(responseId);
+        summary.idDocument = 'ok';
+      } catch {
+        summary.idDocument = 'error';
+      }
+    }
+
+    if (response.utilityBillUrl) {
+      try {
+        await this.analyzeUtilityBill(responseId);
+        summary.utilityBill = 'ok';
+      } catch {
+        summary.utilityBill = 'error';
+      }
+    }
+
+    const updatedDoc = await this.verificationResponseModel.findById(responseId);
+    if (!updatedDoc) return { summary, response: response as VerificationResponse };
+    const landlordReport = this.buildLandlordReport(updatedDoc as VerificationResponse & { landlordReport?: any });
+    await this.verificationResponseModel.findByIdAndUpdate(responseId, {
+      allChecksCompletedAt: new Date(),
+      landlordReport,
+    });
+    const updated = await this.verificationResponseModel.findById(responseId);
+    return { summary, response: updated! };
+  }
+
+  /** Extract a user-friendly error string from Dojah/Nest error. */
+  private getNinErrorMessage(error: any): string {
+    const data = error?.response?.data;
+    if (data != null) {
+      if (typeof data === 'string') return data;
+      if (typeof data?.error === 'string') return data.error;
+      if (typeof data?.message === 'string') return data.message;
+    }
+    const msg = error?.message;
+    if (typeof msg === 'string' && msg !== 'Bad Request Exception') return msg;
+    return 'Failed to verify NIN with Dojah';
+  }
+
   async verifyNinBasic(nin: string) {
     const appId = process.env.DOJAH_APP_ID;
     const authKey = process.env.DOJAH_AUTH_KEY;
     if (!appId || !authKey) {
       throw new InternalServerErrorException('Dojah API credentials not set');
     }
-    const url = `https://sandbox.dojah.io/api/v1/kyc/nin?nin=${nin}`;
+    const url = `https://sandbox.dojah.io/api/v1/kyc/nin?nin=${encodeURIComponent(nin)}`;
     try {
       const response$ = this.httpService.get(url, {
         headers: {
@@ -533,7 +1013,7 @@ export class VerificationService {
       const response = await firstValueFrom(response$);
       return response.data;
     } catch (error) {
-      throw new BadRequestException(error?.response?.data || 'Failed to verify NIN with Dojah');
+      throw new BadRequestException(this.getNinErrorMessage(error));
     }
   }
 
@@ -579,31 +1059,35 @@ export class VerificationService {
     }
   }
 
+  /**
+   * AML Screening (v2) for individual – PEP, sanctions, adverse media via Dojah.
+   */
   async amlScreeningIndividual(body: {
     first_name: string;
-    middle_name: string;
+    middle_name?: string;
     last_name: string;
     date_of_birth: string;
-    match_score: number;
+    match_score?: number;
+    gender?: string;
+    nationality?: string;
+    id_number?: string;
+    pep_check?: boolean;
+    sanction?: boolean;
+    adverse_media_check?: boolean;
+    match_threshold?: number;
   }) {
-    const appId = process.env.DOJAH_APP_ID;
-    const authKey = process.env.DOJAH_AUTH_KEY;
-    if (!appId || !authKey) {
-      throw new InternalServerErrorException('Dojah API credentials not set');
-    }
-    const url = `https://sandbox.dojah.io/api/v1/aml/screening`;
-    try {
-      const response$ = this.httpService.post(url, body, {
-        headers: {
-          'AppId': appId,
-          'Authorization': authKey,
-        },
-      });
-      const response = await firstValueFrom(response$);
-      return response.data;
-    } catch (error) {
-      throw new BadRequestException(error?.response?.data || 'Failed to perform AML screening with Dojah');
-    }
+    const names = [body.first_name, body.middle_name, body.last_name].filter(Boolean).join(' ');
+    return this.dojahTierService.amlScreeningV2Individual({
+      names,
+      date_of_birth: body.date_of_birth,
+      gender: body.gender,
+      nationality: body.nationality,
+      id_number: body.id_number,
+      match_threshold: body.match_threshold ?? body.match_score ?? 0.85,
+      pep_check: body.pep_check ?? true,
+      sanction: body.sanction ?? true,
+      adverse_media_check: body.adverse_media_check ?? true,
+    });
   }
 
   async getAllVerificationsWithQuery(

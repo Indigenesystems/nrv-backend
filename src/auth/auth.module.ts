@@ -37,10 +37,12 @@ import {
 
 import { UserVerification, UserVerificationSchema } from 'src/users/entities/userVerification';
 import { ActivitiesModule } from '../activities/activities.module';
+import { PlansModule } from '../plans/plans.module';
 
 @Module({
   imports: [
     ActivitiesModule,
+    PlansModule,
     MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
       { name: Room.name, schema: RoomSchema },

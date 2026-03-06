@@ -37,7 +37,6 @@ export const createPropertySchema = Joi.object({
   streetAddress: Joi.string().required(),
   city: Joi.string().required(),
   state: Joi.string().required(),
-  zipCode: Joi.string().optional().allow('null', 0, ''),
   createdBy: Joi.string().required(),
   file: Joi.any().optional(),
 
@@ -48,7 +47,6 @@ export const createPropertySchema = Joi.object({
 
   // New optional fields
   preferredTenants: Joi.array().items(Joi.string()).optional(), // Assuming array of strings (e.g., ['Families', 'Professionals'])
-  propertyName: Joi.string().optional(), // Property name, e.g., 'Babajide Ojo'
   propertyType: Joi.any().optional(), // Assuming this is an object with 'value' and 'label'
   rentCollection: Joi.any().optional(), // Assuming this is an object with 'value' and 'label'
 });
@@ -57,14 +55,12 @@ export const updatePropertySchema = Joi.object({
   streetAddress: Joi.string().optional(),
   city: Joi.string().optional(),
   state: Joi.string().optional(),
-  zipCode: Joi.string().optional(),
   createdBy: Joi.string().optional(),
   file: Joi.any().optional(),
   images: Joi.any().optional(),
   unit: Joi.any().optional(),
   propertyType: Joi.any().optional(),
   rentCollection: Joi.any().optional(),
-  propertyName: Joi.any().optional(),
   landlordInsurancePolicy: Joi.any().optional(),
   utilityAndMaintenance: Joi.any().optional(),
   otherDocuments: Joi.any().optional(),

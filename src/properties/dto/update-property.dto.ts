@@ -22,15 +22,11 @@ export class UpdatePropertyDto {
   state?: string;
 
   @IsString()
-  zipCode?: string;
-
-  @IsString()
   createdBy: string;
 
   // Optional structured fields
   rentCollection?: any;
   propertyType?: any;
-  propertyName?: string;
 
   // File fields are handled by Multer/interceptor, not class-validator
   file?: Express.Multer.File;

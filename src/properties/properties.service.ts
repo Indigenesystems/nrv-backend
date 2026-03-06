@@ -19,6 +19,7 @@ import { randomInt } from 'crypto';
 
 import { populate } from 'dotenv';
 import { ActivitiesService } from '../activities/activities.service';
+import { PlansService } from '../plans/plans.service';
 
 @Injectable()
 export class PropertiesService {
@@ -38,9 +39,17 @@ export class PropertiesService {
     private roomService: RoomsService,
     private emailService: EmailService,
     private activitiesService: ActivitiesService,
+    private plansService: PlansService,
   ) {}
 
   async createProperty(createPropertyDto: any) {
+    const createdByUserId = createPropertyDto.createdBy;
+    const user = await this.userModel.findById(createdByUserId).lean();
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+    // Properties can be added without purchasing credits; no limit enforced.
+
     let landlordInsurancePolicyUrls: any = null;
     let utilityAndMaintenanceUrls: any = null;
     let otherDocumentsUrls: any = null;
@@ -85,7 +94,6 @@ export class PropertiesService {
       city: createPropertyDto.city,
       streetAddress: createPropertyDto.location,
       state: createPropertyDto.state,
-      zipCode: createPropertyDto.zipCode,
       propertyType: createPropertyDto.propertyType,
       createdBy: createPropertyDto.createdBy,
       landlordInsurancePolicy: landlordInsurancePolicyUrls,
@@ -93,7 +101,6 @@ export class PropertiesService {
       otherDocuments: otherDocumentsUrls,
       imageUrls: [], // Remove property-level images, will be handled at room level
       preferredTenants: createPropertyDto.preferredTenants || [],
-      propertyName: createPropertyDto.propertyName || createPropertyDto.nameOfProperty || '',
       rentCollection: createPropertyDto.rentCollection || {
         value: '',
         label: '',
@@ -163,9 +170,9 @@ export class PropertiesService {
     }
 
     // Log activity
-    const createdBy = createdProperty.createdBy as any;
+    const createdByRef = createdProperty.createdBy as any;
     const userId =
-      typeof createdBy === 'object' ? createdBy?._id?.toString() : createdBy?.toString();
+      typeof createdByRef === 'object' ? createdByRef?._id?.toString() : createdByRef?.toString();
     if (userId) {
       await this.activitiesService.create({
         type: 'Property Added',
@@ -288,17 +295,11 @@ export class PropertiesService {
         singleProperty.rentCollection = updatePropertyDto.rentCollection;
       }
     }
-    if (updatePropertyDto.propertyName) {
-      singleProperty.propertyName = updatePropertyDto.propertyName;
-    }
     if (updatePropertyDto.streetAddress) {
       singleProperty.streetAddress = updatePropertyDto.streetAddress;
     }
     if (updatePropertyDto.state) {
       singleProperty.state = updatePropertyDto.state;
-    }
-    if (updatePropertyDto.zipCode) {
-      singleProperty.zipCode = updatePropertyDto.zipCode;
     }
 
     // Update the property in the database
@@ -446,11 +447,9 @@ export class PropertiesService {
       const searchRegex = new RegExp(search, 'i');
       query = {
         $or: [
-          { propertyName: searchRegex },
           { streetAddress: searchRegex },
           { city: searchRegex },
           { state: searchRegex },
-          { zipCode: searchRegex },
         ],
       };
     }
@@ -535,7 +534,6 @@ export class PropertiesService {
       streetAddress: property.streetAddress,
       city: property.city,
       state: property.state,
-      zipCode: property.zipCode,
       otherDocuments: property.otherDocuments,
       utilityAndMaintenance: property.utilityAndMaintenance,
       landlordInsurancePolicy: property.landlordInsurancePolicy,
@@ -543,7 +541,6 @@ export class PropertiesService {
       file: property.file,
       createdBy: property.createdBy,
       preferredTenants: property.preferredTenants || [],
-      propertyName: property.propertyName || '',
       rentCollection: property.rentCollection || { value: '', label: '' },
       rooms,
       apartments: rooms,
@@ -569,7 +566,6 @@ export class PropertiesService {
       result.unit = property.unit;
       result.city = property.city;
       result.state = property.state;
-      result.zipCode = property.zipCode;
       result.otherDocuments = property.otherDocuments;
       result.utilityAndMaintenance = property.utilityAndMaintenance;
       result.landlordInsurancePolicy = property.landlordInsurancePolicy;
@@ -589,7 +585,6 @@ export class PropertiesService {
       result.unit = property.unit;
       result.city = property.city;
       result.state = property.state;
-      result.zipCode = property.zipCode;
       result.otherDocuments = property.otherDocuments;
       result.utilityAndMaintenance = property.utilityAndMaintenance;
       result.landlordInsurancePolicy = property.landlordInsurancePolicy;

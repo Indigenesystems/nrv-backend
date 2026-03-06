@@ -49,6 +49,10 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
+    if (!user.planId) {
+      await this.userService.assignDefaultPlan(user._id.toString());
+    }
+
     const notificationSettings = await this.notificationSettingsModel.findOne({
       userId: user._id,
     });
