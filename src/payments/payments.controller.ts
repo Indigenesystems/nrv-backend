@@ -18,9 +18,9 @@ export class PaymentsController {
   @Post('initialize-pack')
   async initializePack(
     @Body()
-    body: { userId: string; planId: string; amountNaira: number },
+    body: { userId: string; planId: string; amountNaira: number; quantity?: number },
   ) {
-    const { userId, planId, amountNaira } = body;
+    const { userId, planId, amountNaira, quantity = 1 } = body;
 
     const user = await this.userService.findUserById(userId);
     if (!user) {
@@ -51,6 +51,7 @@ export class PaymentsController {
       reference,
       amountNaira,
       amountKobo: Math.round(amountNaira * 100),
+      quantity,
     });
 
     return {
@@ -91,8 +92,9 @@ export class PaymentsController {
       type?: string;
     };
 
-    if (type === 'pack' && userId && planId) {
-      await this.userService.purchasePack(userId, planId);
+    if (type === 'pack' && userId && planId && paymentRecord) {
+      const quantity = (paymentRecord as any).quantity ?? 1;
+      await this.userService.purchasePackWithQuantity(userId, planId, quantity);
     }
 
     return {

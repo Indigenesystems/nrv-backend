@@ -23,6 +23,10 @@ export class Payment {
   @Prop({ required: true })
   amountNaira: number;
 
+  /** Number of packs purchased (default 1). */
+  @Prop({ default: 1 })
+  quantity: number;
+
   /** Amount in kobo (Paystack). */
   @Prop()
   amountKobo: number;

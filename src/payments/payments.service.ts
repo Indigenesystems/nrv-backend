@@ -22,6 +22,7 @@ export class PaymentsService {
     amountNaira: number;
     amountKobo?: number;
     currency?: string;
+    quantity?: number;
   }): Promise<PaymentDocument> {
     let planName: string | undefined;
     try {
@@ -40,6 +41,7 @@ export class PaymentsService {
       currency: data.currency ?? 'NGN',
       status: 'pending',
       planName,
+      quantity: data.quantity ?? 1,
     });
     return doc;
   }

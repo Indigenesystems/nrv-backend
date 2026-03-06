@@ -140,13 +140,22 @@ export class UserService {
    * One-time purchase: add pack credits to user balances (stackable).
    */
   async purchasePack(userId: string, planId: string): Promise<User> {
+    return this.purchasePackWithQuantity(userId, planId, 1);
+  }
+
+  /**
+   * Add pack credits to user balances for a given quantity (stackable).
+   */
+  async purchasePackWithQuantity(userId: string, planId: string, quantity: number): Promise<User> {
     const plan = await this.plansService.findById(planId) as any;
     const user = await this.userModel.findById(userId).lean();
     if (!user) throw new NotFoundException('User not found');
     const current = user as any;
-    // Pack purchase adds only verification credits, not property licenses
-    const standardBalance = (current.standardVerificationBalance ?? 0) + (plan.standardVerificationAdded ?? plan.verificationLimit ?? 0);
-    const premiumBalance = (current.premiumVerificationBalance ?? 0) + (plan.premiumVerificationAdded ?? plan.verificationLimit ?? 0);
+    const qty = Math.max(1, Math.floor(quantity));
+    const standardAdd = (plan.standardVerificationAdded ?? plan.verificationLimit ?? 0) * qty;
+    const premiumAdd = (plan.premiumVerificationAdded ?? plan.verificationLimit ?? 0) * qty;
+    const standardBalance = (current.standardVerificationBalance ?? 0) + standardAdd;
+    const premiumBalance = (current.premiumVerificationBalance ?? 0) + premiumAdd;
     const updated = await this.userModel.findByIdAndUpdate(
       userId,
       {

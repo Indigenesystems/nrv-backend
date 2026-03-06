@@ -5,9 +5,22 @@ import { firstValueFrom } from 'rxjs';
 @Injectable()
 export class PaystackService {
   private readonly baseUrl = process.env.PAYSTACK_BASE_URL || 'https://api.paystack.co';
-  private readonly secret = process.env.PAYSTACK_SECRET_KEY || '';
+  private readonly secret = (process.env.PAYSTACK_SECRET_KEY || '').trim();
 
   constructor(private readonly http: HttpService) {}
+
+  private getAuthHeader(): string {
+    if (!this.secret) {
+      throw new HttpException(
+        {
+          message: 'Paystack secret key is not configured. Set PAYSTACK_SECRET_KEY in your environment.',
+          code: 'secret_key_invalid',
+        },
+        500,
+      );
+    }
+    return `Bearer ${this.secret}`;
+  }
 
   async initializeTransaction(params: {
     email: string;
@@ -31,7 +44,7 @@ export class PaystackService {
       const res = await firstValueFrom(
         this.http.post(url, payload, {
           headers: {
-            Authorization: `Bearer sk_test_9abe45e6cedf9a8254b99d4d9c09ddd677c77730`,
+            Authorization: this.getAuthHeader(),
             'Content-Type': 'application/json',
           },
         }),
@@ -60,7 +73,7 @@ export class PaystackService {
       const res = await firstValueFrom(
         this.http.get(url, {
           headers: {
-            Authorization: `Bearer ${this.secret}`,
+            Authorization: this.getAuthHeader(),
           },
         }),
       );

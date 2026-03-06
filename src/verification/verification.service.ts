@@ -167,6 +167,20 @@ export class VerificationService {
     const standardAvail = (u.standardVerificationBalance ?? 0) - (u.standardVerificationUsed ?? 0);
     const premiumAvail = (u.premiumVerificationBalance ?? 0) - (u.premiumVerificationUsed ?? 0);
     const totalCredits = standardAvail + premiumAvail;
+    const tier = dto.verificationTier ?? 'standard';
+
+    // Require at least 1 credit of the requested tier
+    if (tier === 'standard' && standardAvail < 1) {
+      throw new BadRequestException(
+        'No standard verification credits left. Purchase more standard credits to request a standard verification.',
+      );
+    }
+    if (tier === 'premium' && premiumAvail < 1) {
+      throw new BadRequestException(
+        'No premium verification credits left. Purchase more premium credits to request a premium verification.',
+      );
+    }
+
     const currentCount = await this.verificationModel.countDocuments({ requestedBy });
     let verificationLimit: number;
     if (totalCredits > 0) {
