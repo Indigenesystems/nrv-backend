@@ -190,7 +190,15 @@ export class VerificationResponse {
     employmentSection: 'approved' | 'pending' | 'rejected' | 'not_reviewed';
     guarantorSection: 'approved' | 'pending' | 'rejected' | 'not_reviewed';
     documentsSection: 'approved' | 'pending' | 'rejected' | 'not_reviewed';
+    /** Tenant Trust Score 0–100 (computed from verification outcomes). */
+    riskScore?: number;
+    /** Risk category from score bands. */
+    riskCategory?: string;
+    /** Landlord-facing recommendation. */
+    recommendation?: string;
   } | null;
 }
 
 export const VerificationResponseSchema = SchemaFactory.createForClass(VerificationResponse);
+
+VerificationResponseSchema.index({ verificationId: 1, email: 1 });

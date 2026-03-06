@@ -405,10 +405,14 @@ export class VerificationService {
     if (!verificationId?.trim() || !email?.trim()) {
       return null;
     }
-    return this.verificationResponseModel.findOne({
-      verificationId: verificationId.trim(),
-      email: { $regex: new RegExp(`^${email.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
-    });
+    const vid = verificationId.trim();
+    const em = email.trim();
+    const doc = await this.verificationResponseModel
+      .findOne({ verificationId: vid, email: new RegExp(`^${em.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') })
+      .select('-__v')
+      .lean()
+      .exec();
+    return doc ?? null;
   }
 
   /**
@@ -872,6 +876,52 @@ export class VerificationService {
   }
 
   /**
+   * Compute Tenant Trust Score (0–100), risk category, and recommendation from verification outcomes.
+   * Weights: Identity 25, Contact & Address 15, Employment & Income 20, Rental Reliability 20, Guarantor 10, Compliance 10.
+   */
+  private computeTenantTrustScore(
+    doc: VerificationResponse & { ninVerificationResult?: { namesMatch?: boolean; dobMatch?: boolean }; landlordReport?: any },
+    report: { nin: string; aml: string; phone: string; idDocument: string; utilityBill: string; personalSection: string; employmentSection: string; guarantorSection: string; documentsSection: string },
+  ): { riskScore: number; riskCategory: string; recommendation: string } {
+    const sectionScore = (s: string) => (s === 'approved' ? 1 : s === 'pending' ? 0.5 : s === 'rejected' ? 0 : 0.25);
+    const ninOk = report.nin === 'verified';
+    const namesMatch = doc.ninVerificationResult?.namesMatch === true;
+    const dobMatch = doc.ninVerificationResult?.dobMatch === true;
+    const idOk = report.idDocument === 'verified';
+    const identityScore = (ninOk ? 0.4 : 0) + (namesMatch ? 0.2 : 0) + (dobMatch ? 0.2 : 0) + (idOk ? 0.2 : 0);
+    const contactScore = (report.phone === 'valid' ? 0.35 : report.phone === 'invalid' ? 0 : 0.2)
+      + (report.utilityBill === 'verified' ? 0.35 : report.utilityBill === 'failed' ? 0 : 0.15)
+      + (doc.email ? 0.15 : 0) + (doc.address ? 0.15 : 0);
+    const employmentScore = sectionScore(report.employmentSection) * 0.5
+      + (doc.monthlyIncome != null && doc.monthlyIncome > 0 ? 0.25 : 0)
+      + (doc.companyName ? 0.25 : 0);
+    const rentalScore = sectionScore(report.documentsSection) * 0.5 + sectionScore(report.personalSection) * 0.5;
+    const guarantorScore = sectionScore(report.guarantorSection) * 0.6
+      + (doc.guarantorFirstName || doc.guarantorLastName ? 0.2 : 0)
+      + (doc.guarantorPhone || doc.guarantorEmail ? 0.2 : 0);
+    // Compliance: AML only (no idDocument/utilityBill – those are in Identity and Contact)
+    const complianceScore = report.aml === 'low_risk' ? 1 : report.aml === 'medium_risk' ? 0.6 : report.aml === 'high_risk' ? 0.2 : 0.3;
+    const raw = identityScore * 25 + Math.min(1, contactScore) * 15 + employmentScore * 20 + rentalScore * 20 + guarantorScore * 10 + Math.min(1, complianceScore) * 10;
+    const riskScore = Math.round(Math.max(0, Math.min(100, raw)));
+    let riskCategory: string;
+    let recommendation: string;
+    if (riskScore >= 80) {
+      riskCategory = 'Low Risk';
+      recommendation = 'Approve – tenant meets verification standards.';
+    } else if (riskScore >= 65) {
+      riskCategory = 'Moderate Risk';
+      recommendation = 'Proceed with caution – consider additional checks if needed.';
+    } else if (riskScore >= 45) {
+      riskCategory = 'Elevated Risk';
+      recommendation = 'Request clarification or additional documentation before deciding.';
+    } else {
+      riskCategory = 'High Risk';
+      recommendation = 'Recommend further verification or decline.';
+    }
+    return { riskScore, riskCategory, recommendation };
+  }
+
+  /**
    * Build a privacy-safe landlord summary report from a verification response (no PII).
    */
   private buildLandlordReport(doc: VerificationResponse & { landlordReport?: any }): NonNullable<VerificationResponse['landlordReport']> {
@@ -888,7 +938,11 @@ export class VerificationService {
     const idDocStatus = !doc.identificationDocumentUrl ? 'not_provided' : doc.identificationDocumentAnalysis ? (doc.identificationDocumentAnalysis as any)?.status === 'failed' ? 'failed' : 'verified' : 'not_run';
     const utilStatus = !doc.utilityBillUrl ? 'not_provided' : doc.utilityBillAnalysis ? (doc.utilityBillAnalysis as any)?.status === 'failed' ? 'failed' : 'verified' : 'not_run';
     const section = (r: { status?: string } | null | undefined) => (r?.status === 'approved' ? 'approved' : r?.status === 'rejected' ? 'rejected' : r ? 'pending' : 'not_reviewed');
-    return {
+    const personalSection = section(doc.personalReport);
+    const employmentSection = section(doc.employmentReport);
+    const guarantorSection = section(doc.guarantorReport);
+    const documentsSection = section(doc.documentsReport);
+    const report = {
       generatedAt: new Date(),
       nin: ninStatus,
       aml: amlFinal,
@@ -896,11 +950,18 @@ export class VerificationService {
       creditSummary: creditStatus,
       idDocument: idDocStatus,
       utilityBill: utilStatus,
-      personalSection: section(doc.personalReport),
-      employmentSection: section(doc.employmentReport),
-      guarantorSection: section(doc.guarantorReport),
-      documentsSection: section(doc.documentsReport),
+      personalSection,
+      employmentSection,
+      guarantorSection,
+      documentsSection,
     };
+    const { riskScore, riskCategory, recommendation } = this.computeTenantTrustScore(doc, report);
+    return {
+      ...report,
+      riskScore,
+      riskCategory,
+      recommendation,
+    } as NonNullable<VerificationResponse['landlordReport']>;
   }
 
   /**
