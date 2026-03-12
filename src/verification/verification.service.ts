@@ -154,7 +154,7 @@ export class VerificationService {
    */
   async createVerificationRequest(
     dto: CreateVerificationDto,
-  ): Promise<{ message: string; data: Verification }> {
+  ): Promise<{ message: string; data: Verification; user: any }> {
     const requestedBy = typeof dto.requestedBy === 'string' ? dto.requestedBy : (dto.requestedBy as any)?.toString?.();
     if (!requestedBy) {
       throw new BadRequestException('requestedBy (landlord id) is required.');
@@ -166,7 +166,6 @@ export class VerificationService {
     const u = user as any;
     const standardAvail = (u.standardVerificationBalance ?? 0) - (u.standardVerificationUsed ?? 0);
     const premiumAvail = (u.premiumVerificationBalance ?? 0) - (u.premiumVerificationUsed ?? 0);
-    const totalCredits = standardAvail + premiumAvail;
     const tier = dto.verificationTier ?? 'standard';
 
     // Require at least 1 credit of the requested tier
@@ -181,26 +180,23 @@ export class VerificationService {
       );
     }
 
-    const currentCount = await this.verificationModel.countDocuments({ requestedBy });
-    let verificationLimit: number;
-    if (totalCredits > 0) {
-      verificationLimit = totalCredits;
-    } else {
-      const plan = u.planId
-        ? await this.plansService.findById(u.planId.toString())
-        : await this.plansService.getDefaultPlan();
-      verificationLimit = plan.verificationLimit ?? 20;
-    }
-    if (currentCount >= verificationLimit) {
-      throw new BadRequestException(
-        `Verification limit reached (${verificationLimit}). Purchase more credits to run more verifications.`,
-      );
-    }
-
     try {
       const uniqueId = await this.generateUniqueVerificationId();
       const created = new this.verificationModel({ ...dto, uniqueId });
       await created.save();
+
+      // Step 2.5: Consume the verification credit based on tier
+      console.log(`[createVerificationRequest] About to consume ${tier} credit for user ${requestedBy}`);
+      if (tier === 'premium') {
+        await this.userService.consumePremiumVerification(requestedBy);
+      } else {
+        await this.userService.consumeStandardVerification(requestedBy);
+      }
+      console.log(`[createVerificationRequest] Credit consumed, fetching updated user...`);
+
+      // Fetch the updated user data (with reduced credits)
+      const updatedUser = await this.userService.findUserById(requestedBy);
+      console.log(`[createVerificationRequest] Updated user standardVerificationUsed=${(updatedUser as any)?.standardVerificationUsed}, premiumVerificationUsed=${(updatedUser as any)?.premiumVerificationUsed}`);
 
       // Step 3: If tenant doesn't have an account yet, create one and send them their password
       const existingUser = await this.userService.findUserByEmail(dto.email);
@@ -244,6 +240,7 @@ export class VerificationService {
       return {
         message: 'Tenant verification request submitted successfully.',
         data: created,
+        user: updatedUser,
       };
     } catch (err) {
       console.error('Verification save failed:', err);

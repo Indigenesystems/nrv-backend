@@ -82,14 +82,16 @@ export class UserService {
     if (!user) throw new NotFoundException('User not found');
     const u = user as any;
     const available = (u.standardVerificationBalance ?? 0) - (u.standardVerificationUsed ?? 0);
+    console.log(`[consumeStandardVerification] userId=${userId}, balance=${u.standardVerificationBalance}, used=${u.standardVerificationUsed}, available=${available}`);
     if (available < 1) {
       throw new BadRequestException(
         'No standard verification credits left. Purchase more credits to run standard screening.',
       );
     }
-    await this.userModel.findByIdAndUpdate(userId, {
+    const result = await this.userModel.findByIdAndUpdate(userId, {
       $inc: { standardVerificationUsed: 1 },
-    });
+    }, { new: true });
+    console.log(`[consumeStandardVerification] After update: used=${(result as any)?.standardVerificationUsed}`);
   }
 
   /**
