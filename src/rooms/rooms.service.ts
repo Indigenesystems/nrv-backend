@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import mongoose, { Model } from 'mongoose';
+import axios from 'axios';
 import { Room } from './entities/room.entity';
 import { Property } from '../properties/entities/property.entity';
 import {
@@ -12,6 +13,7 @@ import { LandlordAssignedTenant } from '../properties/entities/landlord_assigned
 import { AgreementDocuments } from 'src/properties/entities/agreement_documents.entity';
 import { randomInt } from 'crypto';
 import { ActivitiesService } from '../activities/activities.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class RoomsService {
@@ -26,6 +28,7 @@ export class RoomsService {
     private readonly applicationModel: Model<Application>,
     private cloudinaryService: CloudinaryService,
     private activitiesService: ActivitiesService,
+    private notificationsService: NotificationsService,
   ) {}
 
   async createRooms(createRoomDTO: any) {
@@ -91,6 +94,11 @@ export class RoomsService {
       paymentOption,
       otherAmentities,
       imageUrls: imageUrls || [],
+      listRoom: false,
+      assignedToTenant: false,
+      approved: false,
+      approvalRequested: false,
+      approvalRequestedAt: null,
     };
 
     try {
@@ -173,6 +181,127 @@ export class RoomsService {
     }
   }
 
+  /**
+   * Landlord: request admin approval for this room to be publicly listed.
+   * Sets approvalRequested=true and ensures listRoom=true so the admin can approve it.
+   */
+  async requestRoomApproval(id: string): Promise<any> {
+    const room = await this.roomModel.findByIdAndUpdate(
+      id,
+      {
+        approvalRequested: true,
+        approvalRequestedAt: new Date(),
+        listRoom: true,
+      },
+      { new: true },
+    );
+    if (!room) throw new NotFoundException('Room not found');
+
+    // Populate related data for notification + webhook payload
+    let property: any = null;
+    try {
+      const populated = await this.roomModel
+        .findById(id)
+        .populate({
+          path: 'propertyId',
+          populate: { path: 'createdBy' },
+        })
+        .lean();
+      property = populated?.propertyId ?? null;
+    } catch {
+      // best-effort; don't fail the main request
+    }
+
+    const roomId = room?._id?.toString?.() ?? String(id);
+    const propertyId = property?._id?.toString?.() ?? null;
+    const landlordId =
+      property?.createdBy?._id?.toString?.() ||
+      property?.createdBy?.toString?.() ||
+      null;
+    const timestamp = new Date().toISOString();
+
+    // 1) In-app notification (admin)
+    try {
+      await this.notificationsService.create({
+        targetRole: 'admin',
+        type: 'listing_approval_requested',
+        title: 'Listing approval requested',
+        body: `A landlord requested listing approval for a unit. Room ID: ${roomId}${
+          propertyId ? `, Property ID: ${propertyId}` : ''
+        }.`,
+        metadata: { roomId, propertyId, landlordId, timestamp },
+      });
+    } catch (err: any) {
+      // best-effort
+      // eslint-disable-next-line no-console
+      console.error(
+        '[RoomsService] Failed to create approval notification:',
+        err?.message || err,
+      );
+    }
+
+    // 2) Outbound webhook (optional)
+    const webhookUrl = process.env.LISTING_APPROVAL_WEBHOOK_URL;
+    if (webhookUrl && webhookUrl.trim()) {
+      try {
+        await axios.post(
+          webhookUrl.trim(),
+          { roomId, propertyId, landlordId, timestamp },
+          {
+            headers: { 'Content-Type': 'application/json' },
+            timeout: 10000,
+          },
+        );
+      } catch (err: any) {
+        // best-effort
+        // eslint-disable-next-line no-console
+        console.error(
+          '[RoomsService] Listing approval webhook failed:',
+          err?.message || err,
+        );
+      }
+    }
+
+    return room;
+  }
+
+  /**
+   * Admin: approve/unapprove a room for public visibility.
+   * When approving (approved=true), require:
+   * - room.approvalRequested === true
+   * - property.status === 'active'
+   */
+  async setRoomApproval(id: string, approved: boolean): Promise<any> {
+    const room: any = await this.roomModel
+      .findById(id)
+      .populate('propertyId')
+      .lean();
+    if (!room) throw new NotFoundException('Room not found');
+
+    if (approved) {
+      const approvalRequested = room.approvalRequested === true;
+      const propertyActive =
+        room.propertyId &&
+        (room.propertyId.status ?? 'active').toLowerCase() === 'active';
+
+      if (!approvalRequested) {
+        throw new BadRequestException(
+          'Cannot approve: landlord must request approval first.',
+        );
+      }
+      if (!propertyActive) {
+        throw new BadRequestException('Cannot approve: property is not active.');
+      }
+    }
+
+    const updated: any = await this.roomModel.findByIdAndUpdate(
+      id,
+      { approved },
+      { new: true },
+    );
+    return updated;
+  }
+
   async findAllApartments(
     page: number = 1,
     limit: number = 10,
@@ -202,6 +331,8 @@ export class RoomsService {
         .find()
         .populate('propertyId')
         .where('listRoom')
+        .equals(true)
+        .where('approved')
         .equals(true)
         .where('assignedToTenant')
         .equals(false); // Only show unoccupied rooms
@@ -263,6 +394,8 @@ export class RoomsService {
     let query = this.roomModel
       .find()
       .where('listRoom')
+      .equals(true)
+      .where('approved')
       .equals(true)
       .where('assignedToTenant')
       .equals(false);

@@ -55,6 +55,17 @@ export class Room {
   @Prop({ default: false })
   assignedToTenant: boolean;
 
+  // Admin-controlled: becomes true only when admin approves the landlord's listing request
+  @Prop({ default: false })
+  approved: boolean;
+
+  // Landlord-controlled: becomes true when landlord requests approval for public listing
+  @Prop({ default: false })
+  approvalRequested: boolean;
+
+  @Prop({ default: null })
+  approvalRequestedAt?: Date;
+
   @Prop({ type: Types.ObjectId, ref: 'Property' })
   propertyId: Property;
 }

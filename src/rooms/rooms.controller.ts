@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   Post,
+  Patch,
   Put,
   Query,
   UploadedFiles,
@@ -179,6 +180,49 @@ export class RoomsController {
       };
     } catch (error) {
       throw new BadRequestException(error.message);
+    }
+  }
+
+  /**
+   * Landlord: request admin approval to list this room publicly.
+   */
+  @Post('/:id/request-approval')
+  async requestApproval(@Param('id') id: string) {
+    try {
+      const room = await this.roomsService.requestRoomApproval(id);
+      return {
+        status: 'success',
+        message: 'Approval requested successfully',
+        data: room,
+      };
+    } catch (error: any) {
+      throw new BadRequestException(
+        error?.message || 'Failed to request approval',
+      );
+    }
+  }
+
+  /**
+   * Admin: approve/unapprove a room for public visibility.
+   * Example: PATCH /rooms/:id/approve?approved=true
+   */
+  @Patch('/:id/approve')
+  async approveRoom(
+    @Param('id') id: string,
+    @Query('approved') approved: string,
+  ) {
+    try {
+      const isApproved = approved === 'true';
+      const room = await this.roomsService.setRoomApproval(id, isApproved);
+      return {
+        status: 'success',
+        message: `Room ${isApproved ? 'approved' : 'unapproved'} successfully`,
+        data: room,
+      };
+    } catch (error: any) {
+      throw new BadRequestException(
+        error?.message || 'Failed to update room approval status',
+      );
     }
   }
 

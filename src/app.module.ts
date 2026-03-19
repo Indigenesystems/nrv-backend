@@ -45,6 +45,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { StaffModule } from './staff/staff.module';
 import { PlansModule } from './plans/plans.module';
 import { PaymentsModule } from './payments/payments.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { PaymentsModule } from './payments/payments.module';
     PaymentsModule,
     UsersModule,
     EmailServiceModule,
+    NotificationsModule,
     // MyMulterModule,
     MongooseModule.forFeature([
       { name: 'AgreementDocuments', schema: UserSchema },

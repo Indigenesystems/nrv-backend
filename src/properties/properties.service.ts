@@ -534,6 +534,7 @@ export class PropertiesService {
       streetAddress: property.streetAddress,
       city: property.city,
       state: property.state,
+      status: property.status ?? 'active',
       otherDocuments: property.otherDocuments,
       utilityAndMaintenance: property.utilityAndMaintenance,
       landlordInsurancePolicy: property.landlordInsurancePolicy,

@@ -38,11 +38,13 @@ import {
 import  { UserVerification, UserVerificationSchema } from './entities/userVerification';
 import { ActivitiesModule } from '../activities/activities.module';
 import { PlansModule } from '../plans/plans.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
     ActivitiesModule,
     PlansModule,
+    NotificationsModule,
     MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
       { name: Maintenance.name, schema: MaintenanceSchema },

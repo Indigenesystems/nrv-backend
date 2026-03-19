@@ -46,6 +46,10 @@ export class Property {
   
   createdBy: User;
 
+  // Used by admin to allow/deny unit approvals
+  @Prop({ default: 'active' })
+  status: string;
+
   // Optional fields
   @Prop({ required: false })
   
