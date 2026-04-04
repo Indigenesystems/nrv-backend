@@ -11,10 +11,12 @@ import { VerificationHistory, VerificationHistorySchema } from './entities/verif
 import { UsersModule } from '../users/users.module';
 import { DojahTierService } from './dojah-tier.service';
 import { PlansModule } from '../plans/plans.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
     PlansModule,
+    NotificationsModule,
     MongooseModule.forFeature([
       { name: "Verification", schema: VerificationSchema },
       { name: "VerificationResponse", schema: VerificationResponseSchema },

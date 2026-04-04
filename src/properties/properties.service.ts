@@ -16,6 +16,7 @@ import { Maintenance } from 'src/maintenance/entities/maintenance.entity';
 import { AgreementDocuments } from './entities/agreement_documents.entity';
 import { Room } from 'src/rooms/entities/room.entity';
 import { randomInt } from 'crypto';
+import axios from 'axios';
 
 import { populate } from 'dotenv';
 import { ActivitiesService } from '../activities/activities.service';
@@ -1351,6 +1352,475 @@ export class PropertiesService {
       return application;
     } catch (error) {
       throw new Error(`Failed to fetch landlord application: ${error.message}`);
+    }
+  }
+
+  /**
+   * Returns average annual rent by Lagos neighborhood (grouped by `Property.city`).
+   * Note: the optional `year` filter uses `Room.createdAt` as the time bucket.
+   */
+  async getRentHeatmap(params: {
+    state?: string;
+    year?: number;
+    includeAllListings?: boolean;
+  }): Promise<{
+    state: string;
+    year?: number;
+    areas: Array<{
+      city: string;
+      avgAnnualRent: number;
+      listingsCount: number;
+    }>;
+    minAvgAnnualRent: number;
+    maxAvgAnnualRent: number;
+  }> {
+    const state = String(params?.state || 'Lagos').trim() || 'Lagos';
+    const year = params?.year;
+    const includeAllListings = params?.includeAllListings === true;
+    const yearNum =
+      year === undefined || year === null || Number.isNaN(Number(year))
+        ? undefined
+        : Number(year);
+
+    const match: any = includeAllListings
+      ? {
+          rentAmount: { $exists: true, $ne: null },
+        }
+      : {
+          listRoom: true,
+          approved: true,
+          assignedToTenant: false,
+          rentAmount: { $exists: true, $ne: null },
+        };
+
+    if (yearNum !== undefined) {
+      const start = new Date(Date.UTC(yearNum, 0, 1, 0, 0, 0));
+      const end = new Date(Date.UTC(yearNum + 1, 0, 1, 0, 0, 0));
+      match.createdAt = { $gte: start, $lt: end };
+    }
+
+    const stateRegex = new RegExp(`^${state}\\s*$`, 'i');
+
+    const areas = await this.roomModel
+      .aggregate([
+        { $match: match },
+        {
+          $lookup: {
+            from: 'properties',
+            localField: 'propertyId',
+            foreignField: '_id',
+            as: 'property',
+          },
+        },
+        { $unwind: '$property' },
+        {
+          $match: {
+            'property.state': stateRegex,
+            'property.status': { $ne: 'inactive' },
+          },
+        },
+        {
+          $match: {
+            'property.city': { $exists: true, $nin: [null, ''] },
+          },
+        },
+        {
+          $group: {
+            _id: '$property.city',
+            avgAnnualRent: { $avg: '$rentAmount' },
+            listingsCount: { $sum: 1 },
+          },
+        },
+        {
+          $project: {
+            _id: 0,
+            city: '$_id',
+            avgAnnualRent: { $round: ['$avgAnnualRent', 0] },
+            listingsCount: 1,
+          },
+        },
+        { $sort: { avgAnnualRent: -1 } },
+      ])
+      .exec();
+
+    const safeAreas: Array<{
+      city: string;
+      avgAnnualRent: number;
+      listingsCount: number;
+    }> = Array.isArray(areas) ? areas : [];
+
+    const avgValues = safeAreas.map((a) => a.avgAnnualRent).filter((n) => Number.isFinite(n));
+    const minAvgAnnualRent = avgValues.length ? Math.min(...avgValues) : 0;
+    const maxAvgAnnualRent = avgValues.length ? Math.max(...avgValues) : 0;
+
+    return {
+      state,
+      year: yearNum,
+      areas: safeAreas,
+      minAvgAnnualRent,
+      maxAvgAnnualRent,
+    };
+  }
+
+  async getRentHeatmapInsights(params: {
+    state?: string;
+    year?: number;
+    includeAllListings?: boolean;
+  }): Promise<{
+    state: string;
+    year?: number;
+    generatedAt: string;
+    provider: 'gemini' | 'fallback';
+    summary: string;
+    bullets: string[];
+    disclaimer: string;
+    metadata: {
+      totalAreas: number;
+      totalListings: number;
+      medianAreaAvgRent: number;
+      weightedAverageRent: number;
+      minAvgRent: number;
+      maxAvgRent: number;
+      spreadPercent: number;
+    };
+    marketSegments: {
+      premium: string[];
+      midMarket: string[];
+      valueAreas: string[];
+    };
+    areaInsights: Array<{
+      city: string;
+      avgAnnualRent: number;
+      listingsCount: number;
+      shareOfListingsPercent: number;
+      relativeToStateAveragePercent: number;
+      affordabilityBand: 'premium' | 'mid-market' | 'value';
+    }>;
+    aiNarrative: {
+      headline: string;
+      demandSignals: string[];
+      opportunities: string[];
+      riskNotes: string[];
+    };
+    aiDebug?: {
+      providerTried: 'gemini';
+      lastErrorMessage?: string;
+    };
+  }> {
+    const heatmap = await this.getRentHeatmap({
+      ...params,
+      includeAllListings: params.includeAllListings ?? true,
+    });
+    const generatedAt = new Date().toISOString();
+
+    const top = heatmap.areas.slice(0, 5);
+    const bottom = heatmap.areas.slice(-5).reverse();
+    const totalListings = heatmap.areas.reduce(
+      (acc, area) => acc + (Number(area.listingsCount) || 0),
+      0,
+    );
+
+    const weightedAverageRent = totalListings
+      ? Math.round(
+          heatmap.areas.reduce(
+            (acc, area) =>
+              acc + (Number(area.avgAnnualRent) || 0) * (Number(area.listingsCount) || 0),
+            0,
+          ) / totalListings,
+        )
+      : 0;
+
+    const sortedRents = heatmap.areas
+      .map((a) => Number(a.avgAnnualRent) || 0)
+      .sort((a, b) => a - b);
+    const medianAreaAvgRent =
+      sortedRents.length === 0
+        ? 0
+        : sortedRents.length % 2 === 1
+          ? sortedRents[Math.floor(sortedRents.length / 2)]
+          : Math.round(
+              (sortedRents[sortedRents.length / 2 - 1] + sortedRents[sortedRents.length / 2]) / 2,
+            );
+
+    const spreadPercent =
+      weightedAverageRent > 0
+        ? Math.round(
+            ((heatmap.maxAvgAnnualRent - heatmap.minAvgAnnualRent) / weightedAverageRent) * 100,
+          )
+        : 0;
+
+    const fallbackDisclaimer =
+      'AI-generated insights based on aggregated listing data. Estimates are indicative; actual rent varies by property condition, amenities, building age, and street location.';
+
+    const buildAreaInsights = () =>
+      heatmap.areas.map((area) => {
+        const avg = Number(area.avgAnnualRent) || 0;
+        const listings = Number(area.listingsCount) || 0;
+        const shareOfListingsPercent = totalListings
+          ? Math.round((listings / totalListings) * 100)
+          : 0;
+        const relativeToStateAveragePercent = weightedAverageRent
+          ? Math.round(((avg - weightedAverageRent) / weightedAverageRent) * 100)
+          : 0;
+        const affordabilityBand: 'premium' | 'mid-market' | 'value' =
+          avg >= weightedAverageRent * 1.2
+            ? 'premium'
+            : avg <= weightedAverageRent * 0.85
+              ? 'value'
+              : 'mid-market';
+
+        return {
+          city: area.city,
+          avgAnnualRent: avg,
+          listingsCount: listings,
+          shareOfListingsPercent,
+          relativeToStateAveragePercent,
+          affordabilityBand,
+        };
+      });
+
+    const areaInsights = buildAreaInsights();
+    const marketSegments = {
+      premium: areaInsights
+        .filter((a) => a.affordabilityBand === 'premium')
+        .slice(0, 6)
+        .map((a) => a.city),
+      midMarket: areaInsights
+        .filter((a) => a.affordabilityBand === 'mid-market')
+        .slice(0, 6)
+        .map((a) => a.city),
+      valueAreas: areaInsights
+        .filter((a) => a.affordabilityBand === 'value')
+        .slice(0, 6)
+        .map((a) => a.city),
+    };
+
+    const fallback = (): {
+      provider: 'fallback';
+      summary: string;
+      bullets: string[];
+      disclaimer: string;
+      aiNarrative: {
+        headline: string;
+        demandSignals: string[];
+        opportunities: string[];
+        riskNotes: string[];
+      };
+    } => {
+      const summary = `Across ${heatmap.state}, average annual rent varies widely by area. The highest-priced areas are typically concentrated in premium neighborhoods, while more affordable options appear in outer/local districts.`;
+      const bullets: string[] = [
+        top[0]
+          ? `Most expensive area: ${top[0].city} (~₦${Number(top[0].avgAnnualRent).toLocaleString()}/yr, ${top[0].listingsCount} listings).`
+          : 'Most expensive area: not enough listings yet.',
+        bottom[0]
+          ? `Most affordable area: ${bottom[0].city} (~₦${Number(bottom[0].avgAnnualRent).toLocaleString()}/yr, ${bottom[0].listingsCount} listings).`
+          : 'Most affordable area: not enough listings yet.',
+        `Shown areas: ${heatmap.areas.length}. Filter by year to view recent listing patterns.`,
+      ];
+
+      return {
+        provider: 'fallback',
+        summary,
+        bullets,
+        disclaimer: fallbackDisclaimer,
+        aiNarrative: {
+          headline: `${heatmap.state} rent market snapshot`,
+          demandSignals: [
+            top[0]
+              ? `${top[0].city} leads premium pricing; likely high demand for prime locations.`
+              : 'Premium-demand signal unavailable due to low data volume.',
+            `Market spread is about ${spreadPercent}% between lowest and highest area averages.`,
+          ],
+          opportunities: [
+            bottom[0]
+              ? `${bottom[0].city} stands out as a value area for cost-sensitive renters.`
+              : 'Value-area opportunities currently limited by low listings.',
+            'Use area + year filters to identify neighborhoods with stable average rents.',
+          ],
+          riskNotes: [
+            'Averages may hide street-level variations and property quality differences.',
+            'Low listing counts can reduce reliability for some neighborhoods.',
+          ],
+        },
+      };
+    };
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey || !apiKey.trim()) {
+      const fb = fallback();
+      return {
+        ...heatmap,
+        generatedAt,
+        ...fb,
+        metadata: {
+          totalAreas: heatmap.areas.length,
+          totalListings,
+          medianAreaAvgRent,
+          weightedAverageRent,
+          minAvgRent: heatmap.minAvgAnnualRent,
+          maxAvgRent: heatmap.maxAvgAnnualRent,
+          spreadPercent,
+        },
+        marketSegments,
+        areaInsights,
+      };
+    }
+
+    const configuredModel = (process.env.GEMINI_MODEL || 'gemini-2.0-flash').trim();
+    const modelCandidates = Array.from(
+      new Set([
+        configuredModel,
+        'gemini-2.0-flash',
+        'gemini-flash-latest',
+        'gemini-2.5-flash',
+      ]),
+    ).filter(Boolean);
+
+    const prompt = {
+      state: heatmap.state,
+      year: heatmap.year ?? null,
+      areas_count: heatmap.areas.length,
+      min_avg_annual_rent: heatmap.minAvgAnnualRent,
+      max_avg_annual_rent: heatmap.maxAvgAnnualRent,
+      top_5: top,
+      bottom_5: bottom,
+      notes: [
+        'These are aggregated averages from approved, publicly listed, unoccupied units.',
+        'Write insights for Nigerian renters/landlords; keep it practical and cautious.',
+        'Return JSON with keys: summary, bullets, disclaimer, aiNarrative where aiNarrative has: headline, demandSignals[], opportunities[], riskNotes[].',
+      ],
+    };
+
+    let lastGeminiError: string | undefined;
+    try {
+      let res: any = null;
+      let lastError: any = null;
+      for (const candidate of modelCandidates) {
+        try {
+          res = await axios.post(
+            `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+              candidate,
+            )}:generateContent?key=${encodeURIComponent(apiKey.trim())}`,
+            {
+              generationConfig: {
+                temperature: 0.4,
+                responseMimeType: 'application/json',
+              },
+              contents: [
+                {
+                  role: 'user',
+                  parts: [
+                    {
+                      text:
+                        'You generate short, safe property rent market insights. Return ONLY valid JSON with keys: summary (string), bullets (string[]), disclaimer (string), aiNarrative (object with headline, demandSignals, opportunities, riskNotes). No markdown.',
+                    },
+                    {
+                      text: `Generate AI-powered rent insights from this aggregated dataset:\n${JSON.stringify(
+                        prompt,
+                      )}`,
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              timeout: 12000,
+            },
+          );
+          if (res) break;
+        } catch (err: any) {
+          lastError = err;
+        }
+      }
+      if (!res) {
+        lastGeminiError = lastError?.message || 'Gemini request failed';
+        throw lastError || new Error('Gemini request failed');
+      }
+
+      const content = res?.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      const parsed = content ? JSON.parse(content) : null;
+
+      const summary =
+        typeof parsed?.summary === 'string' && parsed.summary.trim()
+          ? parsed.summary.trim()
+          : fallback().summary;
+      const bullets =
+        Array.isArray(parsed?.bullets) && parsed.bullets.every((b: any) => typeof b === 'string')
+          ? parsed.bullets.map((b: string) => b.trim()).filter(Boolean).slice(0, 6)
+          : fallback().bullets;
+      const disclaimer =
+        typeof parsed?.disclaimer === 'string' && parsed.disclaimer.trim()
+          ? parsed.disclaimer.trim()
+          : fallbackDisclaimer;
+      const fallbackNarrative = fallback().aiNarrative;
+      const aiNarrative = {
+        headline:
+          typeof parsed?.aiNarrative?.headline === 'string' &&
+          parsed.aiNarrative.headline.trim()
+            ? parsed.aiNarrative.headline.trim()
+            : fallbackNarrative.headline,
+        demandSignals:
+          Array.isArray(parsed?.aiNarrative?.demandSignals) &&
+          parsed.aiNarrative.demandSignals.every((x: any) => typeof x === 'string')
+            ? parsed.aiNarrative.demandSignals.map((x: string) => x.trim()).filter(Boolean).slice(0, 5)
+            : fallbackNarrative.demandSignals,
+        opportunities:
+          Array.isArray(parsed?.aiNarrative?.opportunities) &&
+          parsed.aiNarrative.opportunities.every((x: any) => typeof x === 'string')
+            ? parsed.aiNarrative.opportunities.map((x: string) => x.trim()).filter(Boolean).slice(0, 5)
+            : fallbackNarrative.opportunities,
+        riskNotes:
+          Array.isArray(parsed?.aiNarrative?.riskNotes) &&
+          parsed.aiNarrative.riskNotes.every((x: any) => typeof x === 'string')
+            ? parsed.aiNarrative.riskNotes.map((x: string) => x.trim()).filter(Boolean).slice(0, 5)
+            : fallbackNarrative.riskNotes,
+      };
+
+      return {
+        ...heatmap,
+        generatedAt,
+        provider: 'gemini',
+        summary,
+        bullets,
+        disclaimer,
+        metadata: {
+          totalAreas: heatmap.areas.length,
+          totalListings,
+          medianAreaAvgRent,
+          weightedAverageRent,
+          minAvgRent: heatmap.minAvgAnnualRent,
+          maxAvgRent: heatmap.maxAvgAnnualRent,
+          spreadPercent,
+        },
+        marketSegments,
+        areaInsights,
+        aiNarrative,
+      };
+    } catch (err: any) {
+      const fb = fallback();
+      return {
+        ...heatmap,
+        generatedAt,
+        ...fb,
+        metadata: {
+          totalAreas: heatmap.areas.length,
+          totalListings,
+          medianAreaAvgRent,
+          weightedAverageRent,
+          minAvgRent: heatmap.minAvgAnnualRent,
+          maxAvgRent: heatmap.maxAvgAnnualRent,
+          spreadPercent,
+        },
+        marketSegments,
+        areaInsights,
+        aiDebug: {
+          providerTried: 'gemini',
+          lastErrorMessage: err?.message || lastGeminiError,
+        },
+      };
     }
   }
   

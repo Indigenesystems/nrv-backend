@@ -15,6 +15,7 @@ import {
   UploadedFiles,
   Put,
   Query,
+  UsePipes,
 } from '@nestjs/common';
 import { VerificationService } from './verification.service';
 import { DojahTierService } from './dojah-tier.service';
@@ -27,6 +28,7 @@ import {
   verificationSuccessResponse,
 } from './dto/create-verification.dto';
 import { UpdateVerificationDto } from './dto/update-verification.dto';
+import { RunPremiumScreeningDto, RunStandardScreeningDto } from './dto/run-screening.dto';
 import { Response } from 'express';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 
@@ -346,22 +348,14 @@ export class VerificationController {
    * Recommended for platform launch.
    */
   @Post('screening/standard')
-  async runStandardScreening(
-    @Body()
-    body: {
-      requestedBy: string;
-      nin: string;
-      firstName: string;
-      lastName: string;
-      dateOfBirth: string;
-      middleName?: string;
-      selfieImageBase64?: string;
-      livenessImageBase64?: string;
-    },
-  ) {
-    if (!body.nin || !body.firstName || !body.lastName || !body.dateOfBirth) {
-      throw new BadRequestException('nin, firstName, lastName, dateOfBirth are required');
-    }
+  @UsePipes(
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
+      forbidNonWhitelisted: false,
+    }),
+  )
+  async runStandardScreening(@Body() body: RunStandardScreeningDto) {
     if (body.requestedBy) {
       await this.userService.consumeStandardVerification(body.requestedBy);
     }
@@ -381,23 +375,14 @@ export class VerificationController {
    * Run Premium tier screening (Standard + Credit Score). Requires BVN for credit score.
    */
   @Post('screening/premium')
-  async runPremiumScreening(
-    @Body()
-    body: {
-      requestedBy: string;
-      nin: string;
-      firstName: string;
-      lastName: string;
-      dateOfBirth: string;
-      middleName?: string;
-      bvn?: string;
-      selfieImageBase64?: string;
-      livenessImageBase64?: string;
-    },
-  ) {
-    if (!body.nin || !body.firstName || !body.lastName || !body.dateOfBirth) {
-      throw new BadRequestException('nin, firstName, lastName, dateOfBirth are required');
-    }
+  @UsePipes(
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
+      forbidNonWhitelisted: false,
+    }),
+  )
+  async runPremiumScreening(@Body() body: RunPremiumScreeningDto) {
     if (body.requestedBy) {
       await this.userService.consumePremiumVerification(body.requestedBy);
     }

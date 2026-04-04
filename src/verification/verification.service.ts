@@ -21,6 +21,17 @@ import { VerificationHistory, VerificationHistoryDocument } from './entities/ver
 import { UserService } from '../users/users.service';
 import { PlansService } from '../plans/plans.service';
 import { DojahTierService } from './dojah-tier.service';
+import {
+  identificationDocumentAnalysisOutcome,
+  logDojahDbUpdate,
+  logDojahRequest,
+  logDojahResponse,
+  maskDigits,
+  summarizeError,
+  summarizeForLog,
+  utilityBillAnalysisOutcome,
+} from './dojah-logging';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class VerificationService {
@@ -37,7 +48,62 @@ export class VerificationService {
     private readonly userService: UserService,
     private readonly plansService: PlansService,
     private readonly dojahTierService: DojahTierService,
+    private readonly notificationsService: NotificationsService,
   ) {}
+
+  /** Same host selection as `DojahTierService` (sandbox vs production). */
+  private dojahApiBase(): string {
+    return process.env.DOJAH_SANDBOX === 'false'
+      ? 'https://api.dojah.io'
+      : 'https://sandbox.dojah.io';
+  }
+
+  /** Log + time direct Dojah HTTP from this service (NIN/BVN/phone basic, etc.). */
+  private async traceDojahHttpGet<T>(
+    operation: string,
+    meta: Record<string, unknown>,
+    exec: () => Promise<T>,
+  ): Promise<T> {
+    const t0 = Date.now();
+    logDojahRequest(operation, { ...meta, baseUrl: this.dojahApiBase() });
+    try {
+      const data = await exec();
+      logDojahResponse(operation, Date.now() - t0, true, summarizeForLog(data, 900));
+      return data;
+    } catch (err) {
+      logDojahResponse(operation, Date.now() - t0, false, summarizeError(err));
+      throw err;
+    }
+  }
+
+  /**
+   * Optional push / automation hook: POST JSON to NRV_VERIFICATION_EVENTS_WEBHOOK_URL
+   * (e.g. Firebase Cloud Function, OneSignal, or internal worker). No-op if unset.
+   */
+  private async emitVerificationEventWebhook(
+    event: 'verification.assigned' | 'verification.submitted' | 'verification.complete',
+    payload: Record<string, unknown>,
+  ): Promise<void> {
+    const url = process.env.NRV_VERIFICATION_EVENTS_WEBHOOK_URL?.trim();
+    if (!url) return;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const secret = process.env.NRV_VERIFICATION_EVENTS_WEBHOOK_SECRET?.trim();
+    if (secret) headers['X-Webhook-Secret'] = secret;
+    try {
+      await firstValueFrom(
+        this.httpService.post(
+          url,
+          { event, payload, sentAt: new Date().toISOString() },
+          { headers, timeout: 10000 },
+        ),
+      );
+    } catch (err: any) {
+      console.error(
+        `[VerificationService] webhook ${event} failed:`,
+        err?.message || err,
+      );
+    }
+  }
 
   /** Generate a random 5-digit number (10000–99999) that is not already used. */
   private async generateUniqueVerificationId(): Promise<number> {
@@ -64,7 +130,35 @@ export class VerificationService {
     if (!request) {
       throw new BadRequestException('Verification request not found. Invalid verificationId.');
     }
-    return this.verificationResponseModel.create(dto);
+    const existingForInvite = await this.verificationResponseModel
+      .findOne({
+        verificationId: String(dto.verificationId),
+        email: dto.email,
+      })
+      .lean();
+    const created = await this.verificationResponseModel.create(dto);
+    if (!existingForInvite) {
+      try {
+        await this.notificationsService.create({
+          targetRole: 'admin',
+          type: 'tenant_verification_personal_saved',
+          title: 'Tenant submitted verification details',
+          body: `${dto.fullName || dto.email} has started verification and saved personal information for request ${dto.verificationId}.`,
+          metadata: {
+            verificationRequestId: String(dto.verificationId),
+            verificationResponseId: String((created as any)._id),
+            tenantEmail: dto.email,
+            tenantName: dto.fullName,
+          },
+        });
+      } catch (err: any) {
+        console.error(
+          '[VerificationService.create] Admin notification failed:',
+          err?.message || err,
+        );
+      }
+    }
+    return created;
   }
 
   /**
@@ -134,8 +228,74 @@ export class VerificationService {
     }
 
     console.log({ updatePayload });
-    
-    return this.verificationResponseModel.findByIdAndUpdate(id, updatePayload, { new: true });
+
+    const prior = await this.verificationResponseModel.findById(id).lean();
+    const updated = await this.verificationResponseModel.findByIdAndUpdate(id, updatePayload, {
+      new: true,
+    });
+    if (
+      updated?.bankStatementUrl &&
+      updated.utilityBillUrl &&
+      updated.identificationDocumentUrl &&
+      !(prior as { adminDocumentsSubmittedNotifiedAt?: Date })?.adminDocumentsSubmittedNotifiedAt
+    ) {
+      try {
+        await this.notificationsService.create({
+          targetRole: 'admin',
+          type: 'tenant_verification_submitted',
+          title: 'Verification documents submitted',
+          body: `${updated.fullName || updated.email || 'A tenant'} uploaded all required documents for verification request ${updated.verificationId ?? id}.`,
+          metadata: {
+            verificationResponseId: id,
+            verificationRequestId: String(updated.verificationId ?? ''),
+            tenantEmail: updated.email,
+            tenantName: updated.fullName,
+          },
+        });
+        const vreq = updated.verificationId
+          ? await this.verificationModel.findById(updated.verificationId).lean()
+          : null;
+        const landlordUserId = (vreq as any)?.requestedBy
+          ? String((vreq as any).requestedBy)
+          : '';
+        if (landlordUserId) {
+          await this.notificationsService.create({
+            targetRole: 'landlord',
+            userId: landlordUserId,
+            type: 'verification_documents_uploaded',
+            title: 'Tenant uploaded verification documents',
+            body: `${updated.fullName || updated.email || 'Your tenant'} submitted bank statement, utility bill, and ID for your verification request.`,
+            metadata: {
+              verificationResponseId: id,
+              verificationRequestId: String(updated.verificationId ?? ''),
+              tenantEmail: updated.email,
+              tenantName: updated.fullName,
+            },
+          });
+        }
+        await this.emailService.sendVerificationDocumentsSubmittedAdminEmail({
+          tenantName: updated.fullName || '',
+          tenantEmail: updated.email || '',
+          verificationRequestId: String(updated.verificationId ?? ''),
+          verificationResponseId: id,
+        });
+        await this.emitVerificationEventWebhook('verification.submitted', {
+          verificationRequestId: String(updated.verificationId ?? ''),
+          verificationResponseId: id,
+          tenantEmail: updated.email,
+          tenantName: updated.fullName,
+        });
+        await this.verificationResponseModel.findByIdAndUpdate(id, {
+          adminDocumentsSubmittedNotifiedAt: new Date(),
+        });
+      } catch (notifyErr: any) {
+        console.error(
+          '[uploadAffordability] Notifications / email / webhook failed:',
+          notifyErr?.message || notifyErr,
+        );
+      }
+    }
+    return await this.verificationResponseModel.findById(id);
   }
 
   /**
@@ -237,6 +397,39 @@ export class VerificationService {
         console.error('Verification invite email failed (verification was saved):', emailErr?.message || emailErr);
         // Don't fail the request - verification is already saved
       }
+
+      try {
+        const tenantUser =
+          existingUser ?? (await this.userService.findUserByEmail(dto.email));
+        const tenantId = (tenantUser as any)?._id?.toString?.();
+        if (tenantId) {
+          await this.notificationsService.create({
+            targetRole: 'tenant',
+            userId: tenantId,
+            type: 'verification_assigned',
+            title: 'New verification request',
+            body: `${created.landlordDisplayName} invited you to complete a tenant verification.`,
+            metadata: {
+              verificationRequestId: String(created._id),
+              landlordName: created.landlordDisplayName,
+              uniqueId: created.uniqueId,
+            },
+          });
+          await this.emitVerificationEventWebhook('verification.assigned', {
+            verificationRequestId: String(created._id),
+            tenantUserId: tenantId,
+            tenantEmail: dto.email,
+            landlordName: created.landlordDisplayName,
+            uniqueId: created.uniqueId,
+          });
+        }
+      } catch (notifyErr: any) {
+        console.error(
+          '[createVerificationRequest] In-app / webhook notification failed:',
+          notifyErr?.message || notifyErr,
+        );
+      }
+
       return {
         message: 'Tenant verification request submitted successfully.',
         data: created,
@@ -420,7 +613,7 @@ export class VerificationService {
     return [
       { value: '', label: 'All Status' },
       { value: 'pending', label: 'Pending' },
-      { value: 'approved', label: 'Approved' },
+      { value: 'approved', label: 'Verification completed' },
       { value: 'rejected', label: 'Rejected' },
     ];
   }
@@ -431,16 +624,23 @@ export class VerificationService {
     if (!appId || !authKey) {
       throw new InternalServerErrorException('Dojah API credentials not set');
     }
-    const url = `https://sandbox.dojah.io/api/v1/kyc/bvn/advance?bvn=${bvn}`;
+    const url = `${this.dojahApiBase()}/api/v1/kyc/bvn/advance?bvn=${encodeURIComponent(bvn)}`;
     try {
-      const response$ = this.httpService.get(url, {
-        headers: {
-          'AppId': appId,
-          'Authorization': authKey,
-        },
-      });
-      const response = await firstValueFrom(response$);
-      return response.data;
+      return await this.traceDojahHttpGet(
+        'verifyBvnWithDojah',
+        { bvn: maskDigits(bvn) },
+        async () =>
+          (
+            await firstValueFrom(
+              this.httpService.get(url, {
+                headers: {
+                  AppId: appId,
+                  Authorization: authKey,
+                },
+              }),
+            )
+          ).data,
+      );
     } catch (error) {
       throw new BadRequestException(error?.response?.data || 'Failed to verify BVN with Dojah');
     }
@@ -452,16 +652,23 @@ export class VerificationService {
     if (!appId || !authKey) {
       throw new InternalServerErrorException('Dojah API credentials not set');
     }
-    const url = `https://sandbox.dojah.io/api/v1/kyc/phone_number/basic?phone_number=${phone}`;
+    const url = `${this.dojahApiBase()}/api/v1/kyc/phone_number/basic?phone_number=${encodeURIComponent(phone)}`;
     try {
-      const response$ = this.httpService.get(url, {
-        headers: {
-          'AppId': appId,
-          'Authorization': authKey,
-        },
-      });
-      const response = await firstValueFrom(response$);
-      return response.data;
+      return await this.traceDojahHttpGet(
+        'verifyPhoneNumberBasic',
+        { phone: maskDigits(phone.replace(/\D/g, ''), 4) },
+        async () =>
+          (
+            await firstValueFrom(
+              this.httpService.get(url, {
+                headers: {
+                  AppId: appId,
+                  Authorization: authKey,
+                },
+              }),
+            )
+          ).data,
+      );
     } catch (error) {
       throw new BadRequestException(error?.response?.data || 'Failed to verify phone number with Dojah');
     }
@@ -502,7 +709,11 @@ export class VerificationService {
       if (!updatedResponse) {
         throw new BadRequestException('Verification response not found');
       }
-      
+      logDojahDbUpdate('verifyPhoneAndStoreResult', {
+        responseId,
+        phoneVerificationStatus: updateData.phoneVerificationStatus,
+        preview: summarizeForLog(updateData.phoneVerificationResult, 500),
+      });
       return updatedResponse;
     } catch (error) {
       // If verification fails, still store the error result
@@ -528,7 +739,11 @@ export class VerificationService {
       if (!updatedResponse) {
         throw new BadRequestException('Verification response not found');
       }
-      
+      logDojahDbUpdate('verifyPhoneAndStoreResult_failed', {
+        responseId,
+        phoneVerificationStatus: errorData.phoneVerificationStatus,
+        preview: summarizeForLog(errorData.phoneVerificationResult, 500),
+      });
       return updatedResponse;
     }
   }
@@ -563,8 +778,38 @@ export class VerificationService {
     return '';
   }
 
+  private getNinEntityNameParts(entity: Record<string, unknown>): {
+    first: string;
+    middle: string;
+    last: string;
+  } {
+    const first =
+      (entity.first_name as string) ??
+      (entity.firstName as string) ??
+      '';
+    const middle =
+      (entity.middle_name as string) ??
+      (entity.middleName as string) ??
+      '';
+    const last =
+      (entity.last_name as string) ??
+      (entity.lastName as string) ??
+      '';
+    return { first, middle, last };
+  }
+
+  /** First and last tokens from tenant fullName (we only collect first + last on the form). */
+  private applicantFirstLastFromFullName(fullName: string | null | undefined): { first: string; last: string } {
+    const parts = (fullName || '').trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return { first: '', last: '' };
+    if (parts.length === 1) return { first: parts[0], last: '' };
+    return { first: parts[0], last: parts[parts.length - 1] };
+  }
+
   /**
    * Check if NIN entity name and DOB align with applicant-provided fullName and dateOfBirth.
+   * Name: compares tenant first + last to NIN first_name + last_name; NIN middle_name is ignored
+   * so "John Doe" still matches NIN "John Michael Doe".
    */
   private checkNinAlignment(
     entity: Record<string, unknown> | null | undefined,
@@ -578,13 +823,26 @@ export class VerificationService {
     let dobMatch = false;
 
     if (entity && typeof entity === 'object') {
-      const first = (entity.first_name as string) ?? '';
-      const middle = (entity.middle_name as string) ?? '';
-      const last = (entity.last_name as string) ?? '';
-      const ninFullName = [first, middle, last].filter(Boolean).join(' ');
-      namesMatch = applicantNameNorm !== '' && this.normalizeName(ninFullName) === applicantNameNorm;
+      const { first, middle, last } = this.getNinEntityNameParts(entity);
+      const ninFirstNorm = this.normalizeName(first);
+      const ninLastNorm = this.normalizeName(last);
+      const { first: appFirst, last: appLast } = this.applicantFirstLastFromFullName(applicantFullName);
+      const appFirstNorm = this.normalizeName(appFirst);
+      const appLastNorm = this.normalizeName(appLast);
 
-      const ninDob = entity.date_of_birth as string | undefined;
+      if (ninFirstNorm && ninLastNorm && appFirstNorm && appLastNorm) {
+        namesMatch = appFirstNorm === ninFirstNorm && appLastNorm === ninLastNorm;
+      } else {
+        const ninFullName = [first, middle, last].filter(Boolean).join(' ');
+        namesMatch =
+          applicantNameNorm !== '' &&
+          ninFullName.trim() !== '' &&
+          this.normalizeName(ninFullName) === applicantNameNorm;
+      }
+
+      const ninDob =
+        (entity.date_of_birth as string | undefined) ??
+        (entity.dateOfBirth as string | undefined);
       dobMatch = applicantDobNorm !== '' && this.normalizeDob(ninDob) === applicantDobNorm;
     }
 
@@ -635,6 +893,14 @@ export class VerificationService {
       if (!updatedResponse) {
         throw new BadRequestException('Verification response not found');
       }
+      logDojahDbUpdate('verifyNinAndStoreResult', {
+        responseId,
+        nin: maskDigits(submittedNin),
+        ninVerificationStatus: updateData.ninVerificationStatus,
+        namesMatch: updateData.ninVerificationResult?.namesMatch,
+        dobMatch: updateData.ninVerificationResult?.dobMatch,
+        preview: summarizeForLog(updateData.ninVerificationResult, 500),
+      });
       return updatedResponse;
     } catch (error) {
       const errorMessage = this.getNinErrorMessage(error);
@@ -658,6 +924,12 @@ export class VerificationService {
       if (!updatedResponse) {
         throw new BadRequestException('Verification response not found');
       }
+      logDojahDbUpdate('verifyNinAndStoreResult_failed', {
+        responseId,
+        nin: maskDigits(submittedNin),
+        ninVerificationStatus: errorData.ninVerificationStatus,
+        preview: summarizeForLog(errorData.ninVerificationResult, 500),
+      });
       return updatedResponse;
     }
   }
@@ -677,6 +949,10 @@ export class VerificationService {
     if (!updated) {
       throw new BadRequestException('Verification response not found');
     }
+    logDojahDbUpdate('storeCreditSummary', {
+      responseId,
+      preview: summarizeForLog(creditSummary, 600),
+    });
     return updated;
   }
 
@@ -693,6 +969,10 @@ export class VerificationService {
     if (!updated) {
       throw new BadRequestException('Verification response not found');
     }
+    logDojahDbUpdate('storeAmlScreeningResult', {
+      responseId,
+      preview: summarizeForLog(amlScreeningResult, 600),
+    });
     return updated;
   }
 
@@ -757,6 +1037,10 @@ export class VerificationService {
     if (!updated) {
       throw new BadRequestException('Verification response not found');
     }
+    logDojahDbUpdate('storePhoneFraudResult', {
+      responseId,
+      preview: summarizeForLog(phoneFraudResult, 600),
+    });
     return updated;
   }
 
@@ -801,6 +1085,10 @@ export class VerificationService {
       if (!updated) {
         throw new BadRequestException('Verification response not found');
       }
+      logDojahDbUpdate('analyzeIdentificationDocument', {
+        responseId,
+        outcome: identificationDocumentAnalysisOutcome(analysis),
+      });
       return updated;
     } catch (error: any) {
       const updated = await this.verificationResponseModel.findByIdAndUpdate(
@@ -817,6 +1105,16 @@ export class VerificationService {
       if (!updated) {
         throw new BadRequestException('Verification response not found');
       }
+      logDojahDbUpdate('analyzeIdentificationDocument_failed', {
+        responseId,
+        preview: summarizeForLog(
+          {
+            status: 'failed',
+            error: error?.response?.data || error?.message || 'Document analysis failed',
+          },
+          400,
+        ),
+      });
       return updated;
     }
   }
@@ -852,6 +1150,10 @@ export class VerificationService {
       if (!updated) {
         throw new BadRequestException('Verification response not found');
       }
+      logDojahDbUpdate('analyzeUtilityBill', {
+        responseId,
+        outcome: utilityBillAnalysisOutcome(analysis),
+      });
       return updated;
     } catch (error: any) {
       const updated = await this.verificationResponseModel.findByIdAndUpdate(
@@ -868,6 +1170,16 @@ export class VerificationService {
       if (!updated) {
         throw new BadRequestException('Verification response not found');
       }
+      logDojahDbUpdate('analyzeUtilityBill_failed', {
+        responseId,
+        preview: summarizeForLog(
+          {
+            status: 'failed',
+            error: error?.response?.data || error?.message || 'Utility bill analysis failed',
+          },
+          400,
+        ),
+      });
       return updated;
     }
   }
@@ -919,6 +1231,35 @@ export class VerificationService {
   }
 
   /**
+   * Map admin section review status to landlord summary bucket (case-insensitive, synonyms).
+   */
+  private normalizeSectionReportInput(report: {
+    status: string;
+    comment: string;
+    reviewedBy: string;
+    reviewedAt: Date;
+  }) {
+    return {
+      ...report,
+      status: String(report.status ?? '').trim().toLowerCase(),
+    };
+  }
+
+  private mapReportSectionToLandlordSummary(
+    r: { status?: string } | null | undefined,
+  ): 'approved' | 'rejected' | 'pending' | 'not_reviewed' {
+    if (!r) return 'not_reviewed';
+    const s = String(r.status ?? '')
+      .trim()
+      .toLowerCase();
+    if (!s) return 'pending';
+    if (['approved', 'verified', 'completed', 'complete'].includes(s)) return 'approved';
+    if (['rejected', 'failed', 'declined'].includes(s)) return 'rejected';
+    if (['pending', 'under_review', 'under review'].includes(s)) return 'pending';
+    return 'pending';
+  }
+
+  /**
    * Build a privacy-safe landlord summary report from a verification response (no PII).
    */
   private buildLandlordReport(doc: VerificationResponse & { landlordReport?: any }): NonNullable<VerificationResponse['landlordReport']> {
@@ -934,11 +1275,10 @@ export class VerificationService {
     const creditStatus = doc.creditSummary ? 'available' : (doc.nin || (doc as any).bvn) ? 'not_available' : 'not_run';
     const idDocStatus = !doc.identificationDocumentUrl ? 'not_provided' : doc.identificationDocumentAnalysis ? (doc.identificationDocumentAnalysis as any)?.status === 'failed' ? 'failed' : 'verified' : 'not_run';
     const utilStatus = !doc.utilityBillUrl ? 'not_provided' : doc.utilityBillAnalysis ? (doc.utilityBillAnalysis as any)?.status === 'failed' ? 'failed' : 'verified' : 'not_run';
-    const section = (r: { status?: string } | null | undefined) => (r?.status === 'approved' ? 'approved' : r?.status === 'rejected' ? 'rejected' : r ? 'pending' : 'not_reviewed');
-    const personalSection = section(doc.personalReport);
-    const employmentSection = section(doc.employmentReport);
-    const guarantorSection = section(doc.guarantorReport);
-    const documentsSection = section(doc.documentsReport);
+    const personalSection = this.mapReportSectionToLandlordSummary(doc.personalReport);
+    const employmentSection = this.mapReportSectionToLandlordSummary(doc.employmentReport);
+    const guarantorSection = this.mapReportSectionToLandlordSummary(doc.guarantorReport);
+    const documentsSection = this.mapReportSectionToLandlordSummary(doc.documentsReport);
     const report = {
       generatedAt: new Date(),
       nin: ninStatus,
@@ -979,6 +1319,12 @@ export class VerificationService {
       ? await this.verificationModel.findById(response.verificationId).lean()
       : null;
     const tier: 'standard' | 'premium' = (verificationRequest as any)?.verificationTier ?? 'standard';
+
+    logDojahRequest('runAllVerificationChecks', {
+      responseId,
+      tier,
+      verificationRequestId: String(response.verificationId ?? ''),
+    });
 
     const summary = {
       nin: 'skipped',
@@ -1051,6 +1397,116 @@ export class VerificationService {
       allChecksCompletedAt: new Date(),
       landlordReport,
     });
+    logDojahDbUpdate('runAllVerificationChecks_complete', {
+      responseId,
+      tier,
+      summary,
+      riskScore: landlordReport.riskScore,
+      riskCategory: landlordReport.riskCategory,
+      idDocumentOutcome: identificationDocumentAnalysisOutcome(updatedDoc.identificationDocumentAnalysis),
+      utilityBillOutcome: utilityBillAnalysisOutcome(updatedDoc.utilityBillAnalysis),
+    });
+
+    const adminScreeningAlreadyNotified = !!(updatedDoc as { adminScreeningCompleteNotifiedAt?: Date })
+      .adminScreeningCompleteNotifiedAt;
+    if (!adminScreeningAlreadyNotified) {
+      try {
+        await this.notificationsService.create({
+          targetRole: 'admin',
+          type: 'verification_ready_for_admin_review',
+          title: 'Tenant verification screening complete',
+          body: `${updatedDoc.fullName || updatedDoc.email}: automated checks finished. Risk: ${landlordReport.riskCategory ?? 'n/a'}. Ready for admin review.`,
+          metadata: {
+            verificationResponseId: responseId,
+            verificationRequestId: String(updatedDoc.verificationId ?? ''),
+            tenantEmail: updatedDoc.email,
+            tenantName: updatedDoc.fullName,
+            riskCategory: landlordReport.riskCategory,
+          },
+        });
+        await this.verificationResponseModel.findByIdAndUpdate(responseId, {
+          adminScreeningCompleteNotifiedAt: new Date(),
+        });
+      } catch (adminNotifyErr: any) {
+        console.error(
+          '[runAllVerificationChecks] Admin hub notification failed:',
+          adminNotifyErr?.message || adminNotifyErr,
+        );
+      }
+    }
+
+    try {
+      const landlordRef = (verificationRequest as any)?.requestedBy;
+      const landlordId = landlordRef
+        ? typeof landlordRef === 'object' && landlordRef && '_id' in landlordRef
+          ? String((landlordRef as any)._id)
+          : String(landlordRef)
+        : '';
+      const alreadyNotified = !!(updatedDoc as { landlordScreeningCompleteNotifiedAt?: Date })
+        .landlordScreeningCompleteNotifiedAt;
+      if (landlordId && !alreadyNotified) {
+        await this.notificationsService.create({
+          targetRole: 'landlord',
+          userId: landlordId,
+          type: 'verification_complete',
+          title: 'Tenant verification complete',
+          body: `Automated screening finished for ${updatedDoc.fullName || 'your tenant'}. Review the verification report in your dashboard.`,
+          metadata: {
+            verificationResponseId: responseId,
+            verificationRequestId: String(updatedDoc.verificationId ?? ''),
+            tenantEmail: updatedDoc.email,
+          },
+        });
+        try {
+          const tenantAcct = await this.userService.findUserByEmail(updatedDoc.email || '');
+          const tenantUid = (tenantAcct as any)?._id?.toString?.();
+          if (tenantUid) {
+            await this.notificationsService.create({
+              targetRole: 'tenant',
+              userId: tenantUid,
+              type: 'verification_screening_complete',
+              title: 'Your verification screening is complete',
+              body: 'Automated checks have finished. Your landlord can review the report; you may check your verification status in the app.',
+              metadata: {
+                verificationResponseId: responseId,
+                verificationRequestId: String(updatedDoc.verificationId ?? ''),
+              },
+            });
+          }
+        } catch {
+          // best-effort tenant notify
+        }
+        const landlordUser = await this.userService.findUserById(landlordId);
+        const lu = landlordUser as any;
+        const landlordEmail = lu?.email ? String(lu.email) : '';
+        const landlordName = [lu?.firstName, lu?.lastName].filter(Boolean).join(' ') || 'there';
+        const fe = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/+$/, '');
+        const tenantEmailEnc = encodeURIComponent(updatedDoc.email || '');
+        const actionUrl = `${fe}/dashboard/landlord/properties/verification/response/${encodeURIComponent(responseId)}?email=${tenantEmailEnc}`;
+        await this.emailService.sendVerificationScreeningCompleteLandlordEmail({
+          landlordEmail,
+          landlordName,
+          tenantName: updatedDoc.fullName || updatedDoc.email || 'Tenant',
+          actionUrl,
+        });
+        await this.emitVerificationEventWebhook('verification.complete', {
+          verificationRequestId: String(updatedDoc.verificationId ?? ''),
+          verificationResponseId: responseId,
+          landlordUserId: landlordId,
+          tenantEmail: updatedDoc.email,
+          tenantName: updatedDoc.fullName,
+        });
+        await this.verificationResponseModel.findByIdAndUpdate(responseId, {
+          landlordScreeningCompleteNotifiedAt: new Date(),
+        });
+      }
+    } catch (notifyErr: any) {
+      console.error(
+        '[runAllVerificationChecks] Landlord notifications / email / webhook failed:',
+        notifyErr?.message || notifyErr,
+      );
+    }
+
     const updated = await this.verificationResponseModel.findById(responseId);
     return { summary, response: updated! };
   }
@@ -1074,16 +1530,23 @@ export class VerificationService {
     if (!appId || !authKey) {
       throw new InternalServerErrorException('Dojah API credentials not set');
     }
-    const url = `https://sandbox.dojah.io/api/v1/kyc/nin?nin=${encodeURIComponent(nin)}`;
+    const url = `${this.dojahApiBase()}/api/v1/kyc/nin?nin=${encodeURIComponent(nin)}`;
     try {
-      const response$ = this.httpService.get(url, {
-        headers: {
-          'AppId': appId,
-          'Authorization': authKey,
-        },
-      });
-      const response = await firstValueFrom(response$);
-      return response.data;
+      return await this.traceDojahHttpGet(
+        'verifyNinBasic',
+        { nin: maskDigits(nin) },
+        async () =>
+          (
+            await firstValueFrom(
+              this.httpService.get(url, {
+                headers: {
+                  AppId: appId,
+                  Authorization: authKey,
+                },
+              }),
+            )
+          ).data,
+      );
     } catch (error) {
       throw new BadRequestException(this.getNinErrorMessage(error));
     }
@@ -1095,16 +1558,23 @@ export class VerificationService {
     if (!appId || !authKey) {
       throw new InternalServerErrorException('Dojah API credentials not set');
     }
-    const url = `https://sandbox.dojah.io/api/v1/kyc/dl?dl=${dl}`;
+    const url = `${this.dojahApiBase()}/api/v1/kyc/dl?dl=${encodeURIComponent(dl)}`;
     try {
-      const response$ = this.httpService.get(url, {
-        headers: {
-          'AppId': appId,
-          'Authorization': authKey,
-        },
-      });
-      const response = await firstValueFrom(response$);
-      return response.data;
+      return await this.traceDojahHttpGet(
+        'verifyDriversLicence',
+        { dl: maskDigits(dl.replace(/\s/g, ''), 4) },
+        async () =>
+          (
+            await firstValueFrom(
+              this.httpService.get(url, {
+                headers: {
+                  AppId: appId,
+                  Authorization: authKey,
+                },
+              }),
+            )
+          ).data,
+      );
     } catch (error) {
       throw new BadRequestException(error?.response?.data || 'Failed to verify Driver\'s Licence with Dojah');
     }
@@ -1116,16 +1586,23 @@ export class VerificationService {
     if (!appId || !authKey) {
       throw new InternalServerErrorException('Dojah API credentials not set');
     }
-    const url = `https://sandbox.dojah.io/api/v1/kyc/vin?vin=${vin}`;
+    const url = `${this.dojahApiBase()}/api/v1/kyc/vin?vin=${encodeURIComponent(vin)}`;
     try {
-      const response$ = this.httpService.get(url, {
-        headers: {
-          'AppId': appId,
-          'Authorization': authKey,
-        },
-      });
-      const response = await firstValueFrom(response$);
-      return response.data;
+      return await this.traceDojahHttpGet(
+        'verifyVotersId',
+        { vin: maskDigits(vin.replace(/\s/g, ''), 4) },
+        async () =>
+          (
+            await firstValueFrom(
+              this.httpService.get(url, {
+                headers: {
+                  AppId: appId,
+                  Authorization: authKey,
+                },
+              }),
+            )
+          ).data,
+      );
     } catch (error) {
       throw new BadRequestException(error?.response?.data || 'Failed to verify Voter\'s ID with Dojah');
     }
@@ -1256,27 +1733,43 @@ export class VerificationService {
    * Update personal report for a verification response
    */
   async updatePersonalReport(id: string, report: { status: string; comment: string; reviewedBy: string; reviewedAt: Date }) {
-    return this.verificationResponseModel.findByIdAndUpdate(id, { personalReport: report }, { new: true });
+    const payload = this.normalizeSectionReportInput(report);
+    const updated = await this.verificationResponseModel.findByIdAndUpdate(id, { personalReport: payload }, { new: true });
+    if (!updated) return null;
+    const landlordReport = this.buildLandlordReport(updated as VerificationResponse & { landlordReport?: any });
+    return this.verificationResponseModel.findByIdAndUpdate(id, { $set: { landlordReport } }, { new: true });
   }
 
   /**
    * Update employment report for a verification response
    */
   async updateEmploymentReport(id: string, report: { status: string; comment: string; reviewedBy: string; reviewedAt: Date }) {
-    return this.verificationResponseModel.findByIdAndUpdate(id, { employmentReport: report }, { new: true });
+    const payload = this.normalizeSectionReportInput(report);
+    const updated = await this.verificationResponseModel.findByIdAndUpdate(id, { employmentReport: payload }, { new: true });
+    if (!updated) return null;
+    const landlordReport = this.buildLandlordReport(updated as VerificationResponse & { landlordReport?: any });
+    return this.verificationResponseModel.findByIdAndUpdate(id, { $set: { landlordReport } }, { new: true });
   }
 
   /**
    * Update guarantor report for a verification response
    */
   async updateGuarantorReport(id: string, report: { status: string; comment: string; reviewedBy: string; reviewedAt: Date }) {
-    return this.verificationResponseModel.findByIdAndUpdate(id, { guarantorReport: report }, { new: true });
+    const payload = this.normalizeSectionReportInput(report);
+    const updated = await this.verificationResponseModel.findByIdAndUpdate(id, { guarantorReport: payload }, { new: true });
+    if (!updated) return null;
+    const landlordReport = this.buildLandlordReport(updated as VerificationResponse & { landlordReport?: any });
+    return this.verificationResponseModel.findByIdAndUpdate(id, { $set: { landlordReport } }, { new: true });
   }
 
   /**
    * Update documents report for a verification response
    */
   async updateDocumentsReport(id: string, report: { status: string; comment: string; reviewedBy: string; reviewedAt: Date }) {
-    return this.verificationResponseModel.findByIdAndUpdate(id, { documentsReport: report }, { new: true });
+    const payload = this.normalizeSectionReportInput(report);
+    const updated = await this.verificationResponseModel.findByIdAndUpdate(id, { documentsReport: payload }, { new: true });
+    if (!updated) return null;
+    const landlordReport = this.buildLandlordReport(updated as VerificationResponse & { landlordReport?: any });
+    return this.verificationResponseModel.findByIdAndUpdate(id, { $set: { landlordReport } }, { new: true });
   }
 }

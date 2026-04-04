@@ -35,6 +35,10 @@ export class Plan {
   @Prop({ required: true, default: 5 })
   premiumVerificationAdded: number;
 
+  /** Naira charged per verification credit for Paystack (quantity × this = expected amount). */
+  @Prop({ type: Number })
+  unitPriceNaira?: number;
+
   /** Human-readable list of verification features (for display). */
   @Prop({ type: [String], default: [] })
   features: string[];

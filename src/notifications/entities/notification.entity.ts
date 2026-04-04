@@ -1,10 +1,14 @@
 import { Schema, Prop, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Document, Types } from 'mongoose';
 
 @Schema({ timestamps: true })
 export class Notification {
   @Prop({ required: true, default: 'admin' })
   targetRole: string;
+
+  /** When set, only this app user (tenant/landlord) should see the notification. Omitted for global admin feed. */
+  @Prop({ type: Types.ObjectId, ref: 'User', required: false, default: null })
+  userId?: Types.ObjectId | null;
 
   @Prop({ required: true })
   type: string;

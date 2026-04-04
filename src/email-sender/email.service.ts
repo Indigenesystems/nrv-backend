@@ -10,13 +10,21 @@ export class EmailService {
   private transporter: nodemailer.Transporter;
 
   constructor() {
-    const host = process.env.SMTP_HOST || 'smtp.zoho.com';
+    const host = (process.env.SMTP_HOST || 'smtp.zoho.com').trim();
     const port = parseInt(process.env.SMTP_PORT || '587', 10);
     const secureFromEnv = process.env.SMTP_SECURE;
     const secure =
       secureFromEnv === undefined || secureFromEnv === ''
         ? port === 465
         : secureFromEnv === 'true';
+    const smtpUser = (process.env.SMTP_USER || '').trim();
+    const smtpPass = (process.env.SMTP_PASS || '').trim();
+
+    if (!smtpUser || !smtpPass) {
+      console.warn(
+        '[EmailService] SMTP_USER or SMTP_PASS is missing — outbound mail will fail with EAUTH until set.',
+      );
+    }
 
     // Helpful warning for a very common misconfiguration:
     // - Port 465 expects implicit TLS (secure=true)
@@ -37,8 +45,8 @@ export class EmailService {
       secure, // true for 465, false for 587 (STARTTLS)
       requireTLS: !secure,
       auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
+        user: smtpUser,
+        pass: smtpPass,
       },
       connectionTimeout: 15000,
       greetingTimeout: 15000,
@@ -1376,12 +1384,12 @@ export class EmailService {
     });
   }
 
-async sendTenantVerificationInviteEmail(payload: {
-  recipientName: string;
-  recipientEmail: string;
-  landlordName: string;
-  formLink: string;
-}) {
+  async sendTenantVerificationInviteEmail(payload: {
+    recipientName: string;
+    recipientEmail: string;
+    landlordName: string;
+    formLink: string;
+  }) {
   const emailTemplate = `<!DOCTYPE html>
 <html>
 <head>
@@ -1455,20 +1463,118 @@ async sendTenantVerificationInviteEmail(payload: {
 </body>
 </html>`;
 
-  try {
-    await this.transporter.sendMail({
-      from: 'hello@naijarentverify.com',
-      to: payload.recipientEmail,
-      subject: `Action Required: Verification Request from ${payload.landlordName}`,
-      html: emailTemplate,
+    try {
+      await this.transporter.sendMail({
+        from: 'hello@naijarentverify.com',
+        to: payload.recipientEmail,
+        subject: `Action Required: Verification Request from ${payload.landlordName}`,
+        html: emailTemplate,
+      });
+
+      console.log('Tenant verification invite email sent');
+    } catch (err) {
+      console.error('Error sending tenant invite:', err);
+      throw new InternalServerErrorException('Could not send tenant invite email.');
+    }
+  }
+
+  /**
+   * Comma- or semicolon-separated list from env. Used for verification ops alerts.
+   */
+  private getVerificationAdminRecipientEmails(): string[] {
+    const raw =
+      process.env.VERIFICATION_ADMIN_EMAILS ||
+      process.env.NRV_VERIFICATION_ADMIN_EMAILS ||
+      '';
+    return raw
+      .split(/[,;]/)
+      .map((e) => e.trim().toLowerCase())
+      .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+  }
+
+  /**
+   * Email admins when a tenant has uploaded all required verification documents.
+   * Skips silently when VERIFICATION_ADMIN_EMAILS / NRV_VERIFICATION_ADMIN_EMAILS is unset.
+   */
+  async sendVerificationDocumentsSubmittedAdminEmail(payload: {
+    tenantName: string;
+    tenantEmail: string;
+    verificationRequestId: string;
+    verificationResponseId: string;
+    adminActionUrl?: string;
+  }): Promise<void> {
+    const recipients = this.getVerificationAdminRecipientEmails();
+    if (recipients.length === 0) {
+      return;
+    }
+    const adminUrl =
+      payload.adminActionUrl ||
+      `${(process.env.ADMIN_HUB_URL || process.env.NRV_ADMIN_HUB_URL || this.getFrontendUrl()).replace(/\/+$/, '')}/verifications/${encodeURIComponent(payload.verificationRequestId)}`;
+
+    const html = this.renderSimpleEmail({
+      title: 'Tenant submitted verification documents',
+      preheader: `${payload.tenantName || payload.tenantEmail} completed document upload.`,
+      contentHtml: `
+        <p style="margin:0 0 12px;">A tenant has uploaded all required verification documents (bank statement, utility bill, and ID).</p>
+        <p style="margin:0 0 6px;"><strong>Tenant:</strong> ${payload.tenantName || '—'}</p>
+        <p style="margin:0 0 6px;"><strong>Email:</strong> ${payload.tenantEmail}</p>
+        <p style="margin:0 0 12px;"><strong>Request ID:</strong> ${payload.verificationRequestId}</p>
+        <p style="margin:16px 0 0;">
+          <a href="${adminUrl}" target="_blank" style="display:inline-block;background:#03442C;color:#ffffff;text-decoration:none;padding:12px 16px;border-radius:8px;font-weight:600;">
+            Open in admin hub
+          </a>
+        </p>
+        <p style="margin:12px 0 0;font-size:13px;color:#667085;">If the button doesn’t work: <a href="${adminUrl}" target="_blank" style="color:#03442C;">${adminUrl}</a></p>
+      `,
     });
 
-    console.log('Tenant verification invite email sent');
-  } catch (err) {
-    console.error('Error sending tenant invite:', err);
-    throw new InternalServerErrorException('Could not send tenant invite email.');
+    try {
+      await this.transporter.sendMail({
+        from: 'hello@naijarentverify.com',
+        to: recipients.join(','),
+        subject: `[NRV] Verification documents submitted — ${payload.tenantName || payload.tenantEmail}`,
+        html,
+      });
+    } catch (err) {
+      console.error('[EmailService] sendVerificationDocumentsSubmittedAdminEmail failed:', err);
+    }
   }
-}
 
+  /**
+   * Email landlord when automated screening / report is ready.
+   */
+  async sendVerificationScreeningCompleteLandlordEmail(payload: {
+    landlordEmail: string;
+    landlordName: string;
+    tenantName: string;
+    actionUrl: string;
+  }): Promise<void> {
+    if (!payload.landlordEmail?.trim()) return;
 
+    const html = this.renderSimpleEmail({
+      title: 'Tenant verification screening complete',
+      preheader: `Results are ready for ${payload.tenantName}.`,
+      contentHtml: `
+        <p style="margin:0 0 12px;">Hello ${payload.landlordName},</p>
+        <p style="margin:0 0 12px;">Automated verification checks have finished for <strong>${payload.tenantName}</strong>. You can review the report in your landlord dashboard.</p>
+        <p style="margin:16px 0 0;">
+          <a href="${payload.actionUrl}" target="_blank" style="display:inline-block;background:#03442C;color:#ffffff;text-decoration:none;padding:12px 16px;border-radius:8px;font-weight:600;">
+            View verification report
+          </a>
+        </p>
+        <p style="margin:12px 0 0;font-size:13px;color:#667085;">If the button doesn’t work: <a href="${payload.actionUrl}" target="_blank" style="color:#03442C;">${payload.actionUrl}</a></p>
+      `,
+    });
+
+    try {
+      await this.transporter.sendMail({
+        from: 'hello@naijarentverify.com',
+        to: payload.landlordEmail.trim(),
+        subject: `[NRV] Verification complete — ${payload.tenantName}`,
+        html,
+      });
+    } catch (err) {
+      console.error('[EmailService] sendVerificationScreeningCompleteLandlordEmail failed:', err);
+    }
+  }
 }

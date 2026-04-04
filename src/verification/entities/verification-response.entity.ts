@@ -173,6 +173,18 @@ export class VerificationResponse {
   @Prop({ default: null })
   allChecksCompletedAt?: Date;
 
+  /** Email/webhook to admins already sent for “all documents uploaded” (dedupe). */
+  @Prop({ default: null })
+  adminDocumentsSubmittedNotifiedAt?: Date;
+
+  /** Email/webhook to landlord already sent for screening complete (dedupe). */
+  @Prop({ default: null })
+  landlordScreeningCompleteNotifiedAt?: Date;
+
+  /** In-app admin notification already sent when screening / report finished (dedupe). */
+  @Prop({ default: null })
+  adminScreeningCompleteNotifiedAt?: Date;
+
   /**
    * Privacy-safe summary report for the landlord. No PII – only high-level outcomes.
    * Regenerated when all checks complete or on demand.

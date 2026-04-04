@@ -2,6 +2,11 @@ import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { PaystackService } from './paystack.service';
 import { PaymentsService } from './payments.service';
 import { UserService } from '../users/users.service';
+import { PlansService } from '../plans/plans.service';
+
+/** Where landlords start a tenant verification after buying credits. */
+export const LANDLORD_VERIFICATION_REQUEST_PATH =
+  '/dashboard/landlord/properties/verification/request';
 
 @Controller('payments')
 export class PaymentsController {
@@ -9,11 +14,12 @@ export class PaymentsController {
     private readonly paystackService: PaystackService,
     private readonly paymentsService: PaymentsService,
     private readonly userService: UserService,
+    private readonly plansService: PlansService,
   ) {}
 
   /**
-   * Initialize a Paystack transaction to purchase a pack (5 credits).
-   * Body: { userId, planId, amountNaira }
+   * Initialize a Paystack transaction to purchase verification credits (quantity × unit price).
+   * Body: { userId, planId, amountNaira, quantity }
    */
   @Post('initialize-pack')
   async initializePack(
@@ -25,6 +31,24 @@ export class PaymentsController {
     const user = await this.userService.findUserById(userId);
     if (!user) {
       return { status: 'error', message: 'User not found' };
+    }
+
+    let plan: any;
+    try {
+      plan = await this.plansService.findById(planId);
+    } catch {
+      return { status: 'error', message: 'Plan not found' };
+    }
+
+    const qty = Math.max(1, Math.floor(Number(quantity)));
+    const unitPrice =
+      plan.unitPriceNaira ?? (plan.slug === 'premium' ? 400 : 200);
+    const expected = qty * unitPrice;
+    if (Math.abs(Number(amountNaira) - expected) > 0.01) {
+      return {
+        status: 'error',
+        message: `Invalid amount. Expected ₦${expected} for ${qty} credit(s) at ₦${unitPrice} each.`,
+      };
     }
 
     const reference = `pack_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -69,6 +93,7 @@ export class PaymentsController {
   async verify(@Param('reference') reference: string) {
     const result = await this.paystackService.verifyTransaction(reference);
     const paymentRecord = await this.paymentsService.findByReference(reference);
+    const alreadyCredited = paymentRecord?.status === 'success';
 
     if (!result?.status || result.data?.status !== 'success') {
       if (paymentRecord) {
@@ -77,7 +102,7 @@ export class PaymentsController {
       return { status: 'error', message: 'Payment not successful' };
     }
 
-    if (paymentRecord) {
+    if (paymentRecord && !alreadyCredited) {
       await this.paymentsService.updatePaymentStatus(
         reference,
         'success',
@@ -92,7 +117,7 @@ export class PaymentsController {
     const type = record?.type ?? 'pack';
     const quantity = Math.max(1, record?.quantity ?? 1);
 
-    if (type === 'pack' && userId && planId) {
+    if (type === 'pack' && userId && planId && !alreadyCredited) {
       await this.userService.purchasePackWithQuantity(userId, planId, quantity);
     }
 
@@ -112,7 +137,10 @@ export class PaymentsController {
     return {
       status: 'success',
       message: 'Payment verified and credits added.',
-      data: { user: updatedUser },
+      data: {
+        user: updatedUser,
+        verificationRequestUrl: LANDLORD_VERIFICATION_REQUEST_PATH,
+      },
     };
   }
 

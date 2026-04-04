@@ -16,9 +16,10 @@ export class PlansService {
     await this.seedDefaultPlans();
     await this.backfillVerificationLimit();
     await this.backfillPackFields();
+    await this.backfillFriendlyCopy();
   }
 
-  /** Ensure verificationLimit is 5 (standard) and 20 (premium). */
+  /** Legacy display cap (not used for per-credit purchase math). */
   private async backfillVerificationLimit() {
     await this.planModel.updateMany(
       { slug: PLAN_SLUG_PREMIUM },
@@ -30,16 +31,59 @@ export class PlansService {
     ).exec();
   }
 
-  /** Pack = verification credits only. Standard = 5 standard; Premium = 5 premium. */
+  /** Per-credit purchase: each unit adds 1 credit; price is quantity × unitPriceNaira. */
   private async backfillPackFields() {
     await this.planModel.updateMany(
       { slug: PLAN_SLUG_STANDARD },
-      { $set: { standardVerificationAdded: 5, premiumVerificationAdded: 0 } },
+      {
+        $set: {
+          standardVerificationAdded: 1,
+          premiumVerificationAdded: 0,
+          unitPriceNaira: 200,
+        },
+      },
     ).exec();
     await this.planModel.updateMany(
       { slug: PLAN_SLUG_PREMIUM },
-      { $set: { standardVerificationAdded: 0, premiumVerificationAdded: 5 } },
+      {
+        $set: {
+          standardVerificationAdded: 0,
+          premiumVerificationAdded: 1,
+          unitPriceNaira: 400,
+        },
+      },
     ).exec();
+  }
+
+  /** Plain-language copy: one description per tier; Premium = Standard + affordability. */
+  private async backfillFriendlyCopy() {
+    await this.planModel
+      .updateMany(
+        { slug: PLAN_SLUG_STANDARD },
+        {
+          $set: {
+            name: 'Standard Verification',
+            description:
+              'We help you check who a tenant really is before you sign: identity, whether their details line up, and the usual background pieces landlords care about—rolled into one clear report you can actually read, without compliance jargon. Each credit covers one tenant.',
+            features: [],
+          },
+        },
+      )
+      .exec();
+
+    await this.planModel
+      .updateMany(
+        { slug: PLAN_SLUG_PREMIUM },
+        {
+          $set: {
+            name: 'Premium Tenant Screening',
+            description:
+              'Everything Standard includes—same identity and background picture in plain English—plus affordability checks so you can see whether the rent is realistic for them. Each credit covers one tenant.',
+            features: [],
+          },
+        },
+      )
+      .exec();
   }
 
   private async seedDefaultPlans() {
@@ -48,20 +92,15 @@ export class PlansService {
       await this.planModel.create({
         slug: PLAN_SLUG_STANDARD,
         name: 'Standard Verification',
-        description: 'Recommended for platform launch. NIN Advanced, Selfie + NIN, Liveness, AML, Fraud & PEP/sanctions screening.',
+        description:
+          'We help you check who a tenant really is before you sign: identity, whether their details line up, and the usual background pieces landlords care about—rolled into one clear report you can actually read, without compliance jargon. Each credit covers one tenant.',
         verificationTier: 'standard',
         verificationLimit: 5,
-        standardVerificationAdded: 5,
+        standardVerificationAdded: 1,
         premiumVerificationAdded: 0,
+        unitPriceNaira: 200,
         isActive: true,
-        features: [
-          'NIN Lookup Advanced',
-          'Selfie + NIN',
-          'Liveness Check',
-          'AML Screening',
-          'Fraud risk screening',
-          'Politically exposed persons & sanctions list',
-        ],
+        features: [],
       });
     }
 
@@ -70,21 +109,15 @@ export class PlansService {
       await this.planModel.create({
         slug: PLAN_SLUG_PREMIUM,
         name: 'Premium Tenant Screening',
-        description: 'High-trust tier. All Standard features plus Credit Score.',
+        description:
+          'Everything Standard includes—same identity and background picture in plain English—plus affordability checks so you can see whether the rent is realistic for them. Each credit covers one tenant.',
         verificationTier: 'premium',
         verificationLimit: 20,
         standardVerificationAdded: 0,
-        premiumVerificationAdded: 5,
+        premiumVerificationAdded: 1,
+        unitPriceNaira: 400,
         isActive: true,
-        features: [
-          'NIN Advanced',
-          'Selfie + NIN',
-          'Liveness',
-          'AML Screening',
-          'Credit Score',
-          'Fraud risk screening',
-          'PEP & sanctions list',
-        ],
+        features: [],
       });
     }
   }

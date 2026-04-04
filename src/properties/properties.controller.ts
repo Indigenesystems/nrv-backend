@@ -581,4 +581,81 @@ async fetchTenantHistoryById(
   });
 }
 
+  /**
+   * Average annual rent "heatmap" by neighborhood.
+   * Query:
+   * - `state` (optional, default: Lagos)
+   * - `year` (optional; filters by `Room.createdAt` year bucket)
+   */
+  @Get('/rent-heatmap')
+  async getRentHeatmap(
+    @Query('state') state: string = 'Lagos',
+    @Res() res: Response,
+    @Query('year') year?: string,
+    @Query('includeAllListings') includeAllListings?: string,
+  ) {
+    try {
+      const yearNum =
+        year === undefined || year === null || Number.isNaN(Number(year))
+          ? undefined
+          : Number(year);
+      const includeAll =
+        typeof includeAllListings === 'string' &&
+        ['1', 'true', 'yes'].includes(includeAllListings.toLowerCase());
+
+      const data = await this.propertiesService.getRentHeatmap({
+        state,
+        year: yearNum,
+        includeAllListings: includeAll,
+      });
+
+      return res.status(HttpStatus.OK).json({
+        status: 'success',
+        message: 'Rent heatmap fetched successfully',
+        data,
+      });
+    } catch (error: any) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        status: 'error',
+        message: error?.message || 'Failed to fetch rent heatmap',
+      });
+    }
+  }
+
+  @Get('/rent-heatmap/insights')
+  async getRentHeatmapInsights(
+    @Query('state') state: string = 'Lagos',
+    @Res() res: Response,
+    @Query('year') year?: string,
+    @Query('includeAllListings') includeAllListings?: string,
+  ) {
+    try {
+      const yearNum =
+        year === undefined || year === null || Number.isNaN(Number(year))
+          ? undefined
+          : Number(year);
+      const includeAll =
+        includeAllListings === undefined
+          ? true
+          : ['1', 'true', 'yes'].includes(String(includeAllListings).toLowerCase());
+
+      const data = await this.propertiesService.getRentHeatmapInsights({
+        state,
+        year: yearNum,
+        includeAllListings: includeAll,
+      });
+
+      return res.status(HttpStatus.OK).json({
+        status: 'success',
+        message: 'Rent heatmap insights fetched successfully',
+        data,
+      });
+    } catch (error: any) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        status: 'error',
+        message: error?.message || 'Failed to fetch rent heatmap insights',
+      });
+    }
+  }
+
 }
