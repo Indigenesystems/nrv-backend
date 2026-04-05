@@ -154,6 +154,14 @@ export class RoomsService {
       const room: any = await this.roomModel
         .findOne({ _id: id })
         .populate({ path: 'propertyId', populate: { path: 'createdBy' } });
+      if (!room) {
+        throw new NotFoundException('Room not found');
+      }
+      if (newStatus === true && room.approved !== true) {
+        throw new BadRequestException(
+          'This unit must be approved by an admin before it can be listed for tenants.',
+        );
+      }
       room.listRoom = newStatus;
       const savedRoom = await room.save();
 
