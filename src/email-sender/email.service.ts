@@ -8,6 +8,7 @@ import * as nodemailer from 'nodemailer';
 export class EmailService {
   
   private transporter: nodemailer.Transporter;
+  private readonly defaultFromAddress: string;
 
   constructor() {
     const host = (process.env.SMTP_HOST || 'smtp.zoho.com').trim();
@@ -19,10 +20,19 @@ export class EmailService {
         : secureFromEnv === 'true';
     const smtpUser = (process.env.SMTP_USER || '').trim();
     const smtpPass = (process.env.SMTP_PASS || '').trim();
+    const smtpFrom = (process.env.SMTP_FROM || smtpUser || '').trim();
+    const ignoreTlsErrors = process.env.SMTP_TLS_REJECT_UNAUTHORIZED === 'false';
+    const smtpDebug = process.env.SMTP_DEBUG === 'true';
+    this.defaultFromAddress = smtpFrom;
 
     if (!smtpUser || !smtpPass) {
       console.warn(
         '[EmailService] SMTP_USER or SMTP_PASS is missing — outbound mail will fail with EAUTH until set.',
+      );
+    }
+    if (!this.defaultFromAddress) {
+      console.warn(
+        '[EmailService] SMTP_FROM is not set and SMTP_USER is empty. Outbound mail may fail with sender relay errors.',
       );
     }
 
@@ -39,6 +49,7 @@ export class EmailService {
         '[EmailService] SMTP_PORT is 587 but SMTP_SECURE is true. Set SMTP_SECURE=false for port 587.',
       );
     }
+
     this.transporter = nodemailer.createTransport({
       host,
       port,
@@ -50,11 +61,26 @@ export class EmailService {
       },
       connectionTimeout: 15000,
       greetingTimeout: 15000,
+      socketTimeout: 20000,
+      pool: true,
+      maxConnections: 5,
+      maxMessages: 100,
+      debug: smtpDebug,
       tls: {
         // Ensures SNI is set (helps with some providers/proxies)
         servername: host,
+        rejectUnauthorized: !ignoreTlsErrors,
       },
     });
+
+    this.transporter
+      .verify()
+      .then(() => {
+        console.log(`[EmailService] SMTP ready (${host}:${port}, secure=${secure})`);
+      })
+      .catch((error: unknown) => {
+        console.error('[EmailService] SMTP verification failed:', error);
+      });
   }
 
   async sendUserCreatedEmail(payload: any): Promise<void> {
@@ -292,7 +318,7 @@ export class EmailService {
 
     try {
       const info = await this.transporter.sendMail({
-        from: 'hello@naijarentverify.com',
+        from: this.defaultFromAddress,
         to: payload.email,
         subject: 'Welcome onboard',
         html: resultEmailTemplate,
