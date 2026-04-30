@@ -1,0 +1,8 @@
+import { IsString, IsNotEmpty, MinLength } from 'class-validator';
+
+export class OnboardStaffDto {
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(6, { message: 'Password must be at least 6 characters' })
+  password: string;
+}

@@ -1,0 +1,661 @@
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  UseInterceptors,
+  UploadedFiles,
+  Query,
+  Res,
+  HttpStatus,
+} from '@nestjs/common';
+import { PropertiesService } from './properties.service';
+import { CreatePropertyDto } from './dto/create-property.dto';
+import { UpdatePropertyDto } from './dto/update-property.dto';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
+import {
+  createPropertySchema,
+  updatePropertySchema,
+} from '../validations/validator';
+import { Response } from 'express';
+
+
+@Controller('properties')
+export class PropertiesController {
+  constructor(private propertiesService: PropertiesService) {}
+
+  @Post('/add')
+  @UseInterceptors(
+    FileFieldsInterceptor([
+      { name: 'file', maxCount: 1 },
+      { name: 'images', maxCount: 10 },
+      { name: 'unitImages', maxCount: 50 }, // Allow up to 50 unit images (10 units × 5 images each)
+      { name: 'landlordInsurancePolicy', maxCount: 5 },
+      { name: 'utilityAndMaintenance', maxCount: 5 },
+      { name: 'otherDocuments', maxCount: 5 },
+    ]),
+  )
+  async create(
+    @Body() body: CreatePropertyDto,
+    @UploadedFiles()
+    files: {
+      file?: Express.Multer.File;
+    //  images?: Express.Multer.File[];
+      unitImages?: Express.Multer.File[];
+      landlordInsurancePolicy?: Express.Multer.File;
+      utilityAndMaintenance?: Express.Multer.File;
+      otherDocuments?: Express.Multer.File;
+    },
+    @Res() res: Response,
+  ) {
+
+    const createPropertyDto = { ...body, ...files };
+    try {
+      const createdProperty =
+        await this.propertiesService.createProperty(createPropertyDto);
+      return res.status(HttpStatus.CREATED).json({
+        status: 'success',
+        message: 'Property added successfully',
+        data: createdProperty,
+      });
+    } catch (error) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        status: 'error',
+        message: error.message,
+      });
+    }
+  }
+
+  @Patch('/update')
+  @UseInterceptors(
+    FileFieldsInterceptor([
+      { name: 'file', maxCount: 1 },
+      { name: 'images', maxCount: 10 },
+      { name: 'landlordInsurancePolicy', maxCount: 5 },
+      { name: 'utilityAndMaintenance', maxCount: 5 },
+      { name: 'otherDocuments', maxCount: 5 },
+    ]),
+  )
+  async update(
+    @Body() body: UpdatePropertyDto,
+    @Query('propertyId') query: string,
+    @UploadedFiles()
+    files: {
+      file?: Express.Multer.File;
+      images?: Express.Multer.File[];
+      landlordInsurancePolicy?: Express.Multer.File;
+      utilityAndMaintenance?: Express.Multer.File;
+      otherDocuments?: Express.Multer.File;
+    },
+    @Res() res: Response,
+  ) {
+    const validationResult = updatePropertySchema.validate(body);
+
+    if (validationResult.error) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        status: 'error',
+        message: validationResult.error.message,
+      });
+    }
+    const updatePropertyDto = { ...body, ...files, query };
+    try {
+      const updatedProperty =
+        await this.propertiesService.updateProperty(updatePropertyDto);
+      return res.status(HttpStatus.OK).json({
+        status: 'success',
+        message: 'Property updated successfully',
+        data: updatedProperty,
+      });
+    } catch (error) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        status: 'error',
+        message: error.message,
+      });
+    }
+  }
+
+  @Get('/all/:userId')
+  async findPropertiesByUserId(
+    @Param('userId') userId: string,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
+    @Res() res: Response,
+  ) {
+    console.log({ userId });
+
+    const result = await this.propertiesService.findAllPropertyByUserIdWithPagination({
+      userId,
+      page,
+      limit,
+    });
+
+    if (!result.data || result.data.length === 0) {
+      return res.status(HttpStatus.OK).json({
+        status: 'success',
+        message: 'No properties found',
+        data: [],
+        totalPages: result.totalPages,
+        total: result.total,
+        page: result.page,
+        limit: result.limit,
+      });
+    } else {
+      return res.status(HttpStatus.OK).json({
+        status: 'success',
+        message: 'Properties fetched',
+        data: result.data,
+        totalPages: result.totalPages,
+        total: result.total,
+        page: result.page,
+        limit: result.limit,
+      });
+    }
+  }
+
+  @Get('/all')
+  async findAllProperties(
+    @Res() res: Response,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
+    @Query('search') search?: string,
+    @Query('status') status?: string,
+    @Query('propertyType') propertyType?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: 'asc' | 'desc',
+  ) {
+    try {
+      const pageNum = parseInt(page);
+      const limitNum = parseInt(limit);
+      
+      const result = await this.propertiesService.findAllPropertyWithPagination({
+        page: pageNum,
+        limit: limitNum,
+        search,
+        status,
+        propertyType,
+        sortBy,
+        sortOrder,
+      });
+
+      return res.status(HttpStatus.OK).json({
+        status: 'success',
+        message: 'Properties fetched successfully',
+        data: result.data,
+        pagination: result.pagination,
+      });
+    } catch (error) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        status: 'error',
+        message: error.message,
+      });
+    }
+  }
+
+  @Get('/single/:id')
+  async findPropertyById(@Param('id') id: string, @Res() res: Response) {
+    const property = await this.propertiesService.findPropertyById(id);
+    if (!property) {
+      return res.status(HttpStatus.OK).json({
+        status: 'success',
+        message: 'No property found',
+        data: null,
+      });
+    } else {
+      return res.status(HttpStatus.OK).json({
+        status: 'success',
+        message: 'Property fetched',
+        data: property,
+      });
+    }
+  }
+
+  @Get('/single/tenant/:id/:tenantId')
+  async findPropertyByIdForTenant(
+    @Param('id') id: string,
+    @Param('tenantId') tenantId: string,
+    @Res() res: Response,
+  ) {
+    const property = await this.propertiesService.findPropertyByIdForTenant(
+      id,
+      tenantId,
+    );
+    if (!property) {
+      return res.status(HttpStatus.OK).json({
+        status: 'success',
+        message: 'No property found',
+        data: null,
+      });
+    } else {
+      return res.status(HttpStatus.OK).json({
+        status: 'success',
+        message: 'Property fetched',
+        data: property,
+      });
+    }
+  }
+
+  @Delete('/delete/:id')
+  async deletePropertyById(@Param('id') id: string, @Res() res: Response) {
+    const property = await this.propertiesService.deletePropertyById(id);
+    if (!property) {
+      return res.status(HttpStatus.NOT_FOUND).json({
+        status: 'error',
+        message: 'Property not found',
+        data: null,
+      });
+    } else {
+      return res.status(HttpStatus.OK).json({
+        status: 'success',
+        message: 'Property deleted successfully',
+        data: null,
+      });
+    }
+  }
+
+  @Delete('/delete-document')
+  async deleteDocument(
+    @Query('id') id: string,
+    @Query('documentUrl') documentUrl: string,
+    @Res() res: Response,
+  ) {
+    try {
+      await this.propertiesService.deleteDocument(id, documentUrl);
+      return res.status(HttpStatus.OK).json({
+        status: 'success',
+        message: 'Document deleted successfully',
+        data: null,
+      });
+    } catch (error) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        status: 'error',
+        message: error.message,
+      });
+    }
+  }
+
+  @Post('/apply')
+  @UseInterceptors(FileFieldsInterceptor([{ name: 'file', maxCount: 1 }]))
+  async createApplication(
+    @Body() body: any,
+    @UploadedFiles() files: { file?: Express.Multer.File },
+    @Res() res: Response,
+  ) {
+    try {
+      const createApplicationDTO = { ...body, ...files };
+      const createdApplication =
+        await this.propertiesService.createApplication(createApplicationDTO);
+
+      if (createdApplication.propertyId) {
+        return res.status(HttpStatus.CREATED).json({
+          status: 'success',
+          message: 'Application created successfully',
+          data: createdApplication,
+        });
+      } else {
+        return res.status(HttpStatus.BAD_REQUEST).json({
+          status: 'error',
+          message: 'Failed to create application',
+        });
+      }
+    } catch (error) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        status: 'error',
+        message: error.message,
+      });
+    }
+  }
+
+  @Get('/applications/:id')
+  async findApplicantsByLandlordId(
+    @Param('id') id: string,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
+    @Query('status') status: string,
+    @Res() res: Response,
+  ) {
+    const applications = await this.propertiesService.getLandlordApplications(
+      page,
+      limit,
+      id,
+      status,
+    );
+
+    if (!applications || applications.length === 0) {
+      return res.status(HttpStatus.OK).json({
+        status: 'success',
+        message: 'No applications found',
+        data: null,
+      });
+    } else {
+      return res.status(HttpStatus.OK).json({
+        status: 'success',
+        message: 'Applications fetched',
+        data: applications,
+      });
+    }
+  }
+
+  @Get('/tenant-applications/:id')
+  async getApplicantsByTenantId(
+    @Param('id') id: string,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
+    @Query('status') status: string = '',
+    @Res() res: Response,
+  ) {
+    const applications = await this.propertiesService.findApplicationByTenantId(
+      page,
+      limit,
+      id,
+      status,
+    );
+
+    if (!applications || applications.length === 0) {
+      return res.status(HttpStatus.OK).json({
+        status: 'success',
+        message: 'No applications found',
+        data: null,
+      });
+    } else {
+      return res.status(HttpStatus.OK).json({
+        status: 'success',
+        message: 'Applications fetched',
+        data: applications,
+      });
+    }
+  }
+
+  @Get('/application-count')
+  async findApplicantsByLandlordIdMetrics(
+    @Query('id') id: string,
+    @Res() res: Response,
+  ) {
+    const count = await this.propertiesService.getLandLordCount(id);
+
+    if (!count) {
+      return res.status(HttpStatus.NOT_FOUND).json({
+        status: 'error',
+        message: 'Landlord applications count not found',
+        data: null,
+      });
+    } else {
+      return res.status(HttpStatus.OK).json({
+        status: 'success',
+        message: 'Landlord applications count found',
+        data: count,
+      });
+    }
+  }
+
+  @Get('/tenant-metrics')
+  async findTenantMetrics(@Query('id') id: string, @Res() res: Response) {
+    const count = await this.propertiesService.getTenantMetrics(id);
+
+    if (!count) {
+      return res.status(HttpStatus.NOT_FOUND).json({
+        status: 'error',
+        message: 'Tenant metrics not loaded successfully',
+        data: null,
+      });
+    } else {
+      return res.status(HttpStatus.OK).json({
+        status: 'success',
+        message: 'Tenant metrics retrieved successfukky',
+        data: count,
+      });
+    }
+  }
+
+  @Get('/application/update-status')
+  async updateApplicationStatus(
+    @Query('id') id: string,
+    @Query('status') status: string,
+    @Res() res: Response,
+    @Query('roomId') roomId?: any,
+  ) {
+    try {
+      const application =
+        await this.propertiesService.updateApplicationStatusById(
+          id,
+          status,
+          roomId,
+        );
+      return res.status(HttpStatus.OK).json({
+        status: 'success',
+        message: 'Application status updated successfully',
+        data: application,
+      });
+    } catch (error) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        status: 'error',
+        message: error.message,
+      });
+    }
+  }
+
+  @Get('/application/invite-applicant')
+  async sendApplicationInvite(
+    @Query('name') name: string,
+    @Query('landlordId') landlordId: string,
+    @Query('email') email: string,
+    @Res() res: Response,
+  ) {
+    try {
+      const payload: any = {
+        name,
+        email,
+        landlordId,
+      };
+      await this.propertiesService.applicationInvitation(payload);
+      return res.status(HttpStatus.OK).json({
+        status: 'success',
+        message: 'Invitation sent successfully',
+      });
+    } catch (error) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        status: 'error',
+        message: 'An error occurred',
+      });
+    }
+  }
+
+  @Get('/tenant/landlord-onboarded/:id')
+  async findLandlordOnboardedTenants(
+    @Param('id') id: string,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
+    @Query('status') status: string = 'Accepted',
+    @Res() res: Response,
+  ) {
+    const tenants =await this.propertiesService.findLandlordOnboardedTenants(id, status);
+      const applications = await this.propertiesService.getLandlordApplications(
+      page,
+      limit,
+      id,
+      status,
+    );
+      return res.status(HttpStatus.OK).json({
+        status: 'success',
+        message: 'Tenants fetched successfully',
+        data: [...tenants, ...applications],
+      });
+
+  }
+
+  @Get('/tenant-history')
+  async fetchTenantHistoryByNin(
+    @Query('nin') nin: string,
+    @Query('userId') userId: string,
+    @Res() res: Response,
+  ) {
+    const tenantHistory = await this.propertiesService.findTenantHistory(
+      nin,
+      userId,
+    );
+
+    if (!tenantHistory || tenantHistory.length === 0) {
+      return res.status(HttpStatus.NOT_FOUND).json({
+        status: 'error',
+        message: 'No record found for this tenant',
+        data: null,
+      });
+    } else {
+      return res.status(HttpStatus.OK).json({
+        status: 'success',
+        message: 'Tenant rent history fetched successfully',
+        data: tenantHistory,
+      });
+    }
+  }
+
+  @Post('/upload-agreement-document')
+  @UseInterceptors(
+    FileFieldsInterceptor([
+      { name: 'unsignedDocument', maxCount: 1 },
+      { name: 'signedDocument', maxCount: 1 },
+    ]),
+  )
+  async createAgreementDocuments(
+    @Body() body: any,
+    @UploadedFiles()
+    files: {
+      unsignedDocument?: Express.Multer.File;
+      signedDocument?: Express.Multer.File;
+    },
+    @Res() res: Response,
+  ) {
+    try {
+      const data = { ...body, ...files };
+      const createdApplication =
+        await this.propertiesService.uploadAgreementDocuments(data);
+
+      if (createdApplication.propertyId) {
+        return res.status(HttpStatus.CREATED).json({
+          status: 'success',
+          message: 'Agreement document uploaded successfully',
+          data: createdApplication,
+        });
+      } else {
+        return res.status(HttpStatus.BAD_REQUEST).json({
+          status: 'error',
+          message: 'Failed to upload agreement document',
+        });
+      }
+    } catch (error) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        status: 'error',
+        message: error.message,
+      });
+    }
+  }
+
+  @Get('/single-application/:id')
+async fetchTenantHistoryById(
+  @Param('id') id: string,
+  @Res() res: Response,
+) {
+  if (!id || id === 'undefined') {
+    return res.status(HttpStatus.BAD_REQUEST).json({
+      status: 'error',
+      message: 'Invalid application id',
+      data: null,
+    });
+  }
+  const tenantHistory = await this.propertiesService.getLandlordApplicationById(id);
+
+  if (!tenantHistory) {
+    return res.status(HttpStatus.NOT_FOUND).json({
+      status: 'error',
+      message: 'Application not found',
+      data: null,
+    });
+  }
+
+  return res.status(HttpStatus.OK).json({
+    status: 'success',
+    message: 'Application fetched successfully',
+    data: tenantHistory,
+  });
+}
+
+  /**
+   * Average annual rent "heatmap" by neighborhood.
+   * Query:
+   * - `state` (optional, default: Lagos)
+   * - `year` (optional; filters by `Room.createdAt` year bucket)
+   */
+  @Get('/rent-heatmap')
+  async getRentHeatmap(
+    @Query('state') state: string = 'Lagos',
+    @Res() res: Response,
+    @Query('year') year?: string,
+    @Query('includeAllListings') includeAllListings?: string,
+  ) {
+    try {
+      const yearNum =
+        year === undefined || year === null || Number.isNaN(Number(year))
+          ? undefined
+          : Number(year);
+      const includeAll =
+        typeof includeAllListings === 'string' &&
+        ['1', 'true', 'yes'].includes(includeAllListings.toLowerCase());
+
+      const data = await this.propertiesService.getRentHeatmap({
+        state,
+        year: yearNum,
+        includeAllListings: includeAll,
+      });
+
+      return res.status(HttpStatus.OK).json({
+        status: 'success',
+        message: 'Rent heatmap fetched successfully',
+        data,
+      });
+    } catch (error: any) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        status: 'error',
+        message: error?.message || 'Failed to fetch rent heatmap',
+      });
+    }
+  }
+
+  @Get('/rent-heatmap/insights')
+  async getRentHeatmapInsights(
+    @Query('state') state: string = 'Lagos',
+    @Res() res: Response,
+    @Query('year') year?: string,
+    @Query('includeAllListings') includeAllListings?: string,
+  ) {
+    try {
+      const yearNum =
+        year === undefined || year === null || Number.isNaN(Number(year))
+          ? undefined
+          : Number(year);
+      const includeAll =
+        includeAllListings === undefined
+          ? true
+          : ['1', 'true', 'yes'].includes(String(includeAllListings).toLowerCase());
+
+      const data = await this.propertiesService.getRentHeatmapInsights({
+        state,
+        year: yearNum,
+        includeAllListings: includeAll,
+      });
+
+      return res.status(HttpStatus.OK).json({
+        status: 'success',
+        message: 'Rent heatmap insights fetched successfully',
+        data,
+      });
+    } catch (error: any) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        status: 'error',
+        message: error?.message || 'Failed to fetch rent heatmap insights',
+      });
+    }
+  }
+
+}
