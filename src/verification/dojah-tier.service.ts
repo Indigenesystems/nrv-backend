@@ -12,6 +12,7 @@ import {
   summarizeError,
   summarizeForLog,
 } from './dojah-logging';
+import { formatPhoneForDojah, getDojahApiBase } from './dojah-env.util';
 
 export type VerificationTier = 'standard' | 'premium';
 
@@ -33,9 +34,7 @@ export type VerificationTier = 'standard' | 'premium';
 @Injectable()
 export class DojahTierService {
   private get baseUrl(): string {
-    return process.env.DOJAH_SANDBOX === 'false'
-      ? 'https://api.dojah.io'
-      : 'https://sandbox.dojah.io';
+    return getDojahApiBase();
   }
 
   private get headers(): { AppId: string; Authorization: string } {
@@ -382,10 +381,11 @@ export class DojahTierService {
 
   /** Phone Number Screening for Fraud (risk signals, carrier, status). */
   async phoneFraudScreen(phone: string): Promise<any> {
-    const url = `${this.baseUrl}/api/v1/fraud/phone?phone=${encodeURIComponent(phone)}`;
+    const normalizedPhone = formatPhoneForDojah(phone);
+    const url = `${this.baseUrl}/api/v1/fraud/phone?phone=${encodeURIComponent(normalizedPhone)}`;
     return this.traceDojah(
       'phoneFraudScreen',
-      { phone: maskDigits(phone.replace(/\D/g, ''), 4) },
+      { phone: maskDigits(normalizedPhone, 4) },
       async () =>
         (await firstValueFrom(this.httpService.get(url, { headers: this.headers }))).data,
       (error) => {

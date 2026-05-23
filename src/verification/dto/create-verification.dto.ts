@@ -1,4 +1,4 @@
-import { IsDateString, IsEmail, IsIn, IsNotEmpty, IsNumber, IsOptional, IsPhoneNumber, IsString } from 'class-validator';
+import { IsDateString, IsEmail, IsIn, IsNotEmpty, IsNumber, IsOptional, IsPhoneNumber, IsString, Matches } from 'class-validator';
 
 export class CreateVerificationDto {
   @IsString()
@@ -42,11 +42,22 @@ export class CreateTenantVerificationDto {
   @IsNotEmpty() @IsEmail() email: string;
   @IsOptional() @IsString() phone?: string;
   @IsOptional() @IsString() nin?: string;
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{11}$/, { message: 'BVN must be exactly 11 digits' })
+  bvn?: string;
   @IsOptional() @IsDateString() dateOfBirth?: string;
   @IsOptional() @IsString() address?: string;
   @IsOptional() @IsString() gender?: string;
   @IsNotEmpty() @IsString() verificationId: string;
   @IsOptional() @IsString() createdBy?: string;
+}
+
+export class UpdatePersonalDto {
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{11}$/, { message: 'BVN must be exactly 11 digits' })
+  bvn?: string;
 }
 
 

@@ -1,5 +1,6 @@
 import * as dotenv from 'dotenv';
-dotenv.config();
+// Let .env win over shell/CLI defaults (e.g. nest start:dev setting NODE_ENV=development).
+dotenv.config({ override: true });
 
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
