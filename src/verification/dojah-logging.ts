@@ -74,6 +74,7 @@ export function identificationDocumentAnalysisOutcome(analysis: unknown): Record
       }
     }
   }
+  const idNin = a?.idNinAlignment as Record<string, unknown> | undefined;
   return {
     overall_status: status?.overall_status,
     reason: status?.reason,
@@ -89,6 +90,13 @@ export function identificationDocumentAnalysisOutcome(analysis: unknown): Record
     document_country_name: docType?.document_country_name,
     document_country_code: docType?.document_country_code,
     document_image_fields: Object.keys(imageFieldSummary).length ? imageFieldSummary : undefined,
+    authentic: idNin?.authentic,
+    nin_name_match: idNin?.namesMatch,
+    nin_dob_match: idNin?.dobMatch,
+    extracted_name: idNin?.extractedFullName
+      ? '[present]'
+      : undefined,
+    mismatch_reason: idNin?.mismatchReason,
   };
 }
 
