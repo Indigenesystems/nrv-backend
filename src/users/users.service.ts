@@ -23,8 +23,8 @@ import config from 'src/config/config';
 import axios from 'axios';
 import { UserVerification } from './entities/userVerification';
 import { PlansService } from '../plans/plans.service';
-const baseURL = config.web.youVerifyNIN;
-const token = config.web.token;
+const baseURL = config.web.youVerifyNinUrl;
+const token = config.web.youVerifyToken;
 
 const headers = {
     "token": `${token}`,

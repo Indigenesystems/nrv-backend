@@ -25,6 +25,7 @@ import {
   CreateVerificationDto,
   UpdateEmploymentDto,
   UpdateGuarantorDto,
+  UpdatePersonalDto,
   verificationSuccessResponse,
 } from './dto/create-verification.dto';
 import { UpdateVerificationDto } from './dto/update-verification.dto';
@@ -244,13 +245,49 @@ export class VerificationController {
    * ID document and utility bill analysis. Results are stored on the verification response.
    */
   @Post('/run-all-checks/:responseId')
-  async runAllVerificationChecks(@Param('responseId') responseId: string) {
+  async runAllVerificationChecks(
+    @Param('responseId') responseId: string,
+    @Query('forceRefresh') forceRefresh?: string,
+  ) {
     try {
-      const result = await this.verificationService.runAllVerificationChecks(responseId);
+      const force =
+        forceRefresh === 'true' || forceRefresh === '1' || forceRefresh === 'yes';
+      const result = await this.verificationService.runAllVerificationChecks(
+        responseId,
+        force,
+      );
       return verificationSuccessResponse('All verification checks completed', result);
     } catch (error) {
       throw new BadRequestException(
         error?.response || error?.message || 'Failed to run all checks',
+      );
+    }
+  }
+
+  /**
+   * Re-run only automated checks that failed or did not complete on the last run-all.
+   */
+  @Post('/retry-checks/:responseId')
+  async retryVerificationChecks(
+    @Param('responseId') responseId: string,
+    @Query('forceRefresh') forceRefresh?: string,
+  ) {
+    try {
+      const force =
+        forceRefresh === 'true' || forceRefresh === '1' || forceRefresh === 'yes';
+      const result = await this.verificationService.retryVerificationChecks(
+        responseId,
+        force,
+      );
+      const retried = result.retried ?? [];
+      const message =
+        retried.length === 0
+          ? 'No failed checks to retry'
+          : `Retried ${retried.length} check(s): ${retried.join(', ')}`;
+      return verificationSuccessResponse(message, result);
+    } catch (error) {
+      throw new BadRequestException(
+        error?.response || error?.message || 'Failed to retry verification checks',
       );
     }
   }
@@ -445,6 +482,24 @@ export class VerificationController {
       return result;
     } catch (error) {
       throw new BadRequestException(error?.response || 'Failed to create verification.');
+    }
+  }
+
+  /**
+   * Update personal fields on a verification response (e.g. BVN).
+   */
+  @Patch(':id/personal')
+  async updatePersonal(
+    @Param('id') id: string,
+    @Body(new ValidationPipe({ whitelist: true })) dto: UpdatePersonalDto,
+  ): Promise<{ status: string; message: string; data: any }> {
+    try {
+      const result = await this.verificationService.updatePersonal(id, dto);
+      return verificationSuccessResponse('Personal information updated successfully', result);
+    } catch (error) {
+      throw new BadRequestException(
+        error?.response || error?.message || 'Failed to update personal information.',
+      );
     }
   }
 

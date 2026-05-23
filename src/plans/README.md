@@ -32,5 +32,6 @@ Set in `.env` for Dojah:
 - `DOJAH_APP_ID` – Dojah app id.
 - `DOJAH_AUTH_KEY` – Dojah authorization key.
 - `DOJAH_SANDBOX` – Set to `true` (or omit) for sandbox; `false` for production.
+- `DOJAH_CHECK_CACHE_DAYS` – Reuse stored Dojah check results for this many days (default `7`). Set `0` to always call Dojah. Use `?forceRefresh=true` on run-all / retry to bypass cache.
 
 Dojah API paths in `dojah-tier.service.ts` may need to be adjusted to match the current Dojah API (e.g. face match, liveness, AML, credit score endpoints).
