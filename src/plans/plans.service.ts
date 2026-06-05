@@ -6,6 +6,12 @@ import { Plan, PlanDocument } from './entities/plan.entity';
 export const PLAN_SLUG_STANDARD = 'standard';
 export const PLAN_SLUG_PREMIUM = 'premium';
 
+/** Per verification credit (Naira). */
+export const UNIT_PRICE_NAIRA = {
+  standard: 15_000,
+  premium: 25_000,
+} as const;
+
 @Injectable()
 export class PlansService {
   constructor(
@@ -39,7 +45,7 @@ export class PlansService {
         $set: {
           standardVerificationAdded: 1,
           premiumVerificationAdded: 0,
-          unitPriceNaira: 200,
+          unitPriceNaira: UNIT_PRICE_NAIRA.standard,
         },
       },
     ).exec();
@@ -49,7 +55,7 @@ export class PlansService {
         $set: {
           standardVerificationAdded: 0,
           premiumVerificationAdded: 1,
-          unitPriceNaira: 400,
+          unitPriceNaira: UNIT_PRICE_NAIRA.premium,
         },
       },
     ).exec();
@@ -98,7 +104,7 @@ export class PlansService {
         verificationLimit: 5,
         standardVerificationAdded: 1,
         premiumVerificationAdded: 0,
-        unitPriceNaira: 200,
+        unitPriceNaira: UNIT_PRICE_NAIRA.standard,
         isActive: true,
         features: [],
       });
@@ -115,7 +121,7 @@ export class PlansService {
         verificationLimit: 20,
         standardVerificationAdded: 0,
         premiumVerificationAdded: 1,
-        unitPriceNaira: 400,
+        unitPriceNaira: UNIT_PRICE_NAIRA.premium,
         isActive: true,
         features: [],
       });
