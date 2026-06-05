@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { PaystackService } from './paystack.service';
 import { PaymentsService } from './payments.service';
 import { UserService } from '../users/users.service';
-import { PlansService } from '../plans/plans.service';
+import { PlansService, UNIT_PRICE_NAIRA } from '../plans/plans.service';
 
 /** Where landlords start a tenant verification after buying credits. */
 export const LANDLORD_VERIFICATION_REQUEST_PATH =
@@ -42,7 +42,8 @@ export class PaymentsController {
 
     const qty = Math.max(1, Math.floor(Number(quantity)));
     const unitPrice =
-      plan.unitPriceNaira ?? (plan.slug === 'premium' ? 400 : 200);
+      plan.unitPriceNaira ??
+      (plan.slug === 'premium' ? UNIT_PRICE_NAIRA.premium : UNIT_PRICE_NAIRA.standard);
     const expected = qty * unitPrice;
     if (Math.abs(Number(amountNaira) - expected) > 0.01) {
       return {
