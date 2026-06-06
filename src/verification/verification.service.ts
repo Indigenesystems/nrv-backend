@@ -48,13 +48,12 @@ import {
   toDojahUtilityBillImageUrl,
 } from './utility-bill.util';
 import {
+  alignBreakdownEarnedToTotal,
   buildRedactedVerificationCheckSummaries,
   buildTenantRiskBreakdown,
-  computeCategoryScores,
-  computeWeightedRiskRaw,
+  sumRiskBreakdownEarned,
   DocForRisk,
   LandlordReportForRisk,
-  normalizeRiskScore,
 } from './verification-risk-display.util';
 import {
   checkNinNameAlignment,
@@ -1275,17 +1274,15 @@ export class VerificationService {
 
   /**
    * Compute Tenant Trust Score (0–100), risk category, and recommendation from verification outcomes.
-   * Premium: Identity 22, Contact 13, Employment 15, Financial 15, Rental 18, Guarantor 10, Compliance 7 (= 100).
+   * Premium: Identity 27, Contact 16, Employment 18, Financial 18, Guarantor 12, Compliance 9 (= 100).
    * Standard: no rental or credit bureau; those weights scale the five included categories to 100.
    */
-  private computeTenantTrustScore(
+  private finalizeTenantTrustAssessment(
+    baseScore: number,
     doc: DocForRisk,
-    report: { nin: string; aml: string; phone: string; idDocument: string; utilityBill: string; personalSection: string; employmentSection: string; guarantorSection: string; documentsSection: string; creditSummary?: string },
     tier: 'standard' | 'premium' = 'standard',
   ): { riskScore: number; riskCategory: string; recommendation: string } {
-    const scores = computeCategoryScores(doc, report, tier);
-    const raw = computeWeightedRiskRaw(scores, tier);
-    let riskScore = normalizeRiskScore(raw, tier);
+    let riskScore = Math.max(0, Math.min(100, baseScore));
     let riskCategory: string;
     let recommendation: string;
     if (riskScore >= 80) {
@@ -1338,6 +1335,32 @@ export class VerificationService {
     }
 
     return { riskScore, riskCategory, recommendation };
+  }
+
+  private buildScoredLandlordRiskArtifacts(
+    docForRisk: DocForRisk,
+    report: LandlordReportForRisk,
+    tier: 'standard' | 'premium',
+  ) {
+    const riskBreakdown = buildTenantRiskBreakdown(docForRisk, report, tier);
+    const baseScore = sumRiskBreakdownEarned(riskBreakdown);
+    const { riskScore, riskCategory, recommendation } = this.finalizeTenantTrustAssessment(
+      baseScore,
+      docForRisk,
+      tier,
+    );
+    const finalBreakdown =
+      riskScore < baseScore
+        ? alignBreakdownEarnedToTotal(riskBreakdown, riskScore)
+        : riskBreakdown;
+    const checkSummaries = buildRedactedVerificationCheckSummaries(docForRisk, tier);
+    return {
+      riskScore,
+      riskCategory,
+      recommendation,
+      riskBreakdown: finalBreakdown,
+      checkSummaries,
+    };
   }
 
   /**
@@ -1407,13 +1430,8 @@ export class VerificationService {
     if (storedSnapshot) {
       docForRisk.creditFinancialSnapshot = storedSnapshot;
     }
-    const { riskScore, riskCategory, recommendation } = this.computeTenantTrustScore(
-      docForRisk,
-      report,
-      tier,
-    );
-    const riskBreakdown = buildTenantRiskBreakdown(docForRisk, report, tier);
-    const checkSummaries = buildRedactedVerificationCheckSummaries(docForRisk, tier);
+    const { riskScore, riskCategory, recommendation, riskBreakdown, checkSummaries } =
+      this.buildScoredLandlordRiskArtifacts(docForRisk, report, tier);
     return {
       ...doc,
       landlordReport: {
@@ -1529,13 +1547,8 @@ export class VerificationService {
       ...buildDocForRiskFromResponse(doc as unknown as Record<string, unknown>),
       creditFinancialSnapshot: snapshot,
     };
-    const { riskScore, riskCategory, recommendation } = this.computeTenantTrustScore(
-      docForRisk,
-      report,
-      tier,
-    );
-    const riskBreakdown = buildTenantRiskBreakdown(docForRisk, report, tier);
-    const checkSummaries = buildRedactedVerificationCheckSummaries(docForRisk, tier);
+    const { riskScore, riskCategory, recommendation, riskBreakdown, checkSummaries } =
+      this.buildScoredLandlordRiskArtifacts(docForRisk, report, tier);
     return {
       ...report,
       riskScore,
