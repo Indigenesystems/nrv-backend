@@ -45,12 +45,43 @@ export type RedactedCheckSummary = {
   fields: Record<string, unknown>;
 };
 
-const round1 = (n: number) => Math.round(n * 10) / 10;
+const categoryEarned = (ratio: number, maxPoints: number) =>
+  Math.round(Math.max(0, Math.min(1, ratio)) * maxPoints);
+
+export const sumRiskBreakdownEarned = (breakdown: RiskBreakdownCategory[]): number =>
+  breakdown.reduce((sum, category) => sum + category.earnedPoints, 0);
+
+/** When credit caps lower the trust score, trim earned points so the breakdown sums to the final score. */
+export const alignBreakdownEarnedToTotal = (
+  breakdown: RiskBreakdownCategory[],
+  targetTotal: number,
+): RiskBreakdownCategory[] => {
+  let delta = sumRiskBreakdownEarned(breakdown) - targetTotal;
+  if (delta <= 0) {
+    return breakdown;
+  }
+  const trimOrder = ['financial', 'contact', 'employment', 'guarantor', 'identity', 'compliance'];
+  const result = breakdown.map((category) => ({ ...category }));
+  for (const key of trimOrder) {
+    if (delta <= 0) {
+      break;
+    }
+    const category = result.find((item) => item.key === key);
+    if (!category || category.earnedPoints <= 0) {
+      continue;
+    }
+    const reduce = Math.min(delta, category.earnedPoints);
+    category.earnedPoints -= reduce;
+    delta -= reduce;
+  }
+  return result;
+};
 
 /**
  * Category point caps (sum = 100 per tier).
  * Standard omits rental (18) and financial/credit bureau (15); those 33 pts are
  * redistributed proportionally across identity, contact, employment, guarantor, compliance.
+ * Premium omits rental (18); those points are redistributed across the six remaining categories.
  */
 export const RISK_WEIGHTS_BY_TIER = {
   standard: {
@@ -63,13 +94,13 @@ export const RISK_WEIGHTS_BY_TIER = {
     compliance: 11,
   },
   premium: {
-    identity: 22,
-    contact: 13,
-    employment: 15,
-    financial: 15,
-    rental: 18,
-    guarantor: 10,
-    compliance: 7,
+    identity: 27,
+    contact: 16,
+    employment: 18,
+    financial: 18,
+    rental: 0,
+    guarantor: 12,
+    compliance: 9,
   },
 } as const;
 
@@ -322,7 +353,7 @@ export const buildTenantRiskBreakdown = (
       key: 'identity',
       label: 'Identity Integrity',
       maxPoints: w.identity,
-      earnedPoints: round1(scores.identityScore * w.identity),
+      earnedPoints: categoryEarned(scores.identityScore, w.identity),
       statusSummary: `${report.nin} · ${report.idDocument}`,
       checks: identityChecks,
     },
@@ -330,7 +361,7 @@ export const buildTenantRiskBreakdown = (
       key: 'contact',
       label: 'Contact & Address Verifiability',
       maxPoints: w.contact,
-      earnedPoints: round1(scores.contactScore * w.contact),
+      earnedPoints: categoryEarned(scores.contactScore, w.contact),
       statusSummary: `${report.phone} · ${report.utilityBill}`,
       checks: contactChecks,
     },
@@ -338,7 +369,7 @@ export const buildTenantRiskBreakdown = (
       key: 'employment',
       label: 'Employment & Income Stability',
       maxPoints: w.employment,
-      earnedPoints: round1(scores.employmentScore * w.employment),
+      earnedPoints: categoryEarned(scores.employmentScore, w.employment),
       statusSummary: report.employmentSection,
       checks: [
         {
@@ -368,7 +399,7 @@ export const buildTenantRiskBreakdown = (
       key: 'financial',
       label: 'Financial Capacity (Credit)',
       maxPoints: w.financial,
-      earnedPoints: round1(scores.financialScore * w.financial),
+      earnedPoints: categoryEarned(scores.financialScore, w.financial),
       statusSummary: report.creditSummary ?? 'not_run',
       checks: financialChecks,
     });
@@ -379,7 +410,7 @@ export const buildTenantRiskBreakdown = (
       key: 'rental',
       label: 'Rental Reliability',
       maxPoints: w.rental,
-      earnedPoints: round1(scores.rentalScore * w.rental),
+      earnedPoints: categoryEarned(scores.rentalScore, w.rental),
       statusSummary: `${report.documentsSection} · ${report.personalSection}`,
       checks: [
         {
@@ -401,7 +432,7 @@ export const buildTenantRiskBreakdown = (
       key: 'guarantor',
       label: 'Guarantor Strength',
       maxPoints: w.guarantor,
-      earnedPoints: round1(scores.guarantorScore * w.guarantor),
+      earnedPoints: categoryEarned(scores.guarantorScore, w.guarantor),
       statusSummary: report.guarantorSection,
       checks: [
         {
@@ -429,7 +460,7 @@ export const buildTenantRiskBreakdown = (
       key: 'compliance',
       label: 'Compliance & Risk Signals',
       maxPoints: w.compliance,
-      earnedPoints: round1(scores.complianceScore * w.compliance),
+      earnedPoints: categoryEarned(scores.complianceScore, w.compliance),
       statusSummary: report.aml,
       checks: [
         { name: 'AML screening', outcome: report.aml, contribution: 'PEP / sanctions / media' },
