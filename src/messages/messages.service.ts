@@ -41,12 +41,19 @@ export class MessagingService {
       .populate('sender', 'firstName lastName email') // Replace fields with those in your schema
       .populate('recipient', 'firstName lastName email'); // Replace fields with those in your schema
 
-    this.emailService.sendMessageNotification({
-      recipientName: populatedResponse.recipient['firstName'],
-      senderName: populatedResponse.sender['firstName'],
-      recipientEmail: populatedResponse.recipient['email'],
-      messageContent: populatedResponse.content,
-    });
+    void this.emailService
+      .sendMessageNotification({
+        recipientName: populatedResponse.recipient['firstName'],
+        senderName: populatedResponse.sender['firstName'],
+        recipientEmail: populatedResponse.recipient['email'],
+        messageContent: populatedResponse.content,
+      })
+      .catch((emailErr: unknown) => {
+        console.error(
+          'Message notification email failed:',
+          (emailErr as Error)?.message || emailErr,
+        );
+      });
     return populatedResponse;
   }
 

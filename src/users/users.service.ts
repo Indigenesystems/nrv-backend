@@ -461,16 +461,34 @@ export class UserService {
    */
   async savePasswordResetToken(email: string): Promise<void> {
     const user: any = await this.findUserByEmail(email);
+    if (!user) {
+      return;
+    }
+
     const confirmationCode = generateConfirmationCode();
-    const _user = { ...user, passwordResetToken: confirmationCode };
 
     await this.userModel.findByIdAndUpdate(user._id, {
       passwordResetToken: confirmationCode,
       passwordResetExpires: new Date(Date.now() + 3600000), // 1 hour expiration
     });
 
-    if (user) {
-      this.emailService.sendResetPasswordToken(_user);
+    user.passwordResetToken = confirmationCode;
+
+    try {
+      await this.emailService.sendResetPasswordToken(user);
+    } catch (emailErr: any) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn(
+          `[dev] Password reset code for ${email}: ${confirmationCode}`,
+        );
+      }
+      console.error(
+        `Password reset email failed for ${email}:`,
+        emailErr?.message || emailErr,
+      );
+      throw new InternalServerErrorException(
+        'Unable to send password reset email right now. Please try again later.',
+      );
     }
   }
 
