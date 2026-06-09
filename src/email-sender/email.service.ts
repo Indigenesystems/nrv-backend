@@ -14,10 +14,14 @@ export class EmailService {
     const host = (process.env.SMTP_HOST || 'smtp.zoho.com').trim();
     const port = parseInt(process.env.SMTP_PORT || '587', 10);
     const secureFromEnv = process.env.SMTP_SECURE;
-    const secure =
+    let secure =
       secureFromEnv === undefined || secureFromEnv === ''
         ? port === 465
         : secureFromEnv === 'true';
+    // Port 465 requires implicit TLS; STARTTLS (secure=false) will time out.
+    if (port === 465 && !secure) {
+      secure = true;
+    }
     const smtpUser = (process.env.SMTP_USER || '').trim();
     const smtpPass = (process.env.SMTP_PASS || '').trim();
     const smtpFrom = (process.env.SMTP_FROM || smtpUser || '').trim();
@@ -73,6 +77,11 @@ export class EmailService {
       },
     });
 
+    if (process.env.EMAIL_DISABLED === 'true') {
+      console.warn('[EmailService] EMAIL_DISABLED=true — outbound mail will be logged, not sent.');
+      return;
+    }
+
     this.transporter
       .verify()
       .then(() => {
@@ -81,6 +90,36 @@ export class EmailService {
       .catch((error: unknown) => {
         console.error('[EmailService] SMTP verification failed:', error);
       });
+  }
+
+  private isEmailDisabled(): boolean {
+    return process.env.EMAIL_DISABLED === 'true';
+  }
+
+  private getPayloadDoc(payload: Record<string, unknown>): Record<string, unknown> {
+    const nested = payload?._doc;
+    if (nested && typeof nested === 'object') {
+      return nested as Record<string, unknown>;
+    }
+    return payload;
+  }
+
+  private async deliverMail(
+    mailOptions: nodemailer.SendMailOptions,
+  ): Promise<nodemailer.SentMessageInfo | void> {
+    if (this.isEmailDisabled()) {
+      console.log(
+        '[EmailService] EMAIL_DISABLED — skipped send:',
+        mailOptions.to,
+        mailOptions.subject,
+      );
+      return;
+    }
+
+    return this.transporter.sendMail({
+      ...mailOptions,
+      from: mailOptions.from || this.defaultFromAddress,
+    });
   }
 
   async sendUserCreatedEmail(payload: any): Promise<void> {
@@ -1054,28 +1093,28 @@ export class EmailService {
     </body>
     </html>`;
 
-    const replacements = {
-      '[userName]': payload._doc.firstName + ' ' + payload._doc.lastName,
-      '[userEmail]': payload._doc.email,
-      '[verificationToken]': payload.passwordResetToken,
-      '[accountType]': payload.accountType,
+    const doc = this.getPayloadDoc(payload as Record<string, unknown>);
+    const replacements: Record<string, string> = {
+      '[userName]': `${doc.firstName ?? ''} ${doc.lastName ?? ''}`.trim(),
+      '[userEmail]': String(doc.email ?? ''),
+      '[verificationToken]': String(payload.passwordResetToken ?? ''),
+      '[accountType]': String(payload.accountType ?? doc.accountType ?? ''),
     };
 
     const resultEmailTemplate = emailTemplate.replace(
       /\[userName\]|\[userRoleTag\]|\[userEmail\]|\[userPassword\]|\[verificationToken\]|\[accountType\]|\[loginUrl\]|\[supportTeamEmail\]/g,
-      (match) => replacements[match],
+      (match) => replacements[match] ?? match,
     );
 
     try {
-      const info = await this.transporter.sendMail({
-        from: 'hello@naijarentverify.com',
-        to: payload._doc.email,
+      await this.deliverMail({
+        to: String(doc.email ?? ''),
         subject: 'Reset Password Code',
         html: resultEmailTemplate,
       });
-      console.log('email sent successfully');
+      console.log('[EmailService] Reset password email sent successfully');
     } catch (error) {
-      console.error('Email sending error: ', error);
+      console.error('[EmailService] Reset password email failed:', error);
       throw error;
     }
   }

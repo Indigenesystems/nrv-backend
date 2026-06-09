@@ -390,6 +390,29 @@ export class PropertiesController {
     }
   }
 
+  @Get('/landlord-tenant-metrics')
+  async findLandlordTenantMetrics(
+    @Query('id') id: string,
+    @Res() res: Response,
+  ) {
+    if (!id) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        status: 'error',
+        message: 'Landlord id is required',
+        data: null,
+      });
+    }
+
+    const metrics =
+      await this.propertiesService.getLandlordTenantManagementMetrics(id);
+
+    return res.status(HttpStatus.OK).json({
+      status: 'success',
+      message: 'Landlord tenant metrics retrieved successfully',
+      data: metrics,
+    });
+  }
+
   @Get('/tenant-metrics')
   async findTenantMetrics(@Query('id') id: string, @Res() res: Response) {
     const count = await this.propertiesService.getTenantMetrics(id);
