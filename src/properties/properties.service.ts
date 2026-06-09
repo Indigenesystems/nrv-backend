@@ -12,7 +12,10 @@ import { Application, ApplicationStatus } from './entities/application.entity';
 import { EmailService } from '../email-sender/email.service';
 import { LandlordAssignedTenant } from './entities/landlord_assigned_tenant.entity';
 import { User } from '../users/entities/user.entity';
-import { Maintenance } from 'src/maintenance/entities/maintenance.entity';
+import {
+  Maintenance,
+  MaintenanceStatus,
+} from 'src/maintenance/entities/maintenance.entity';
 import { AgreementDocuments } from './entities/agreement_documents.entity';
 import { Room } from 'src/rooms/entities/room.entity';
 import { randomInt } from 'crypto';
@@ -1080,6 +1083,163 @@ export class PropertiesService {
     } catch (error) {
       throw new Error(`Failed to fetch tenant metrics: ${error}`);
     }
+  }
+
+  private async countLandlordLeaseDocuments(
+    landlordId: string,
+    query: Record<string, unknown>,
+  ): Promise<number> {
+    const ownerFilter = { ownerId: landlordId };
+    const [applicationCount, assignedCount] = await Promise.all([
+      this.applicationModel.countDocuments({ ...ownerFilter, ...query }).exec(),
+      this.landlordAssignedTenantModel
+        .countDocuments({ ...ownerFilter, ...query })
+        .exec(),
+    ]);
+    return applicationCount + assignedCount;
+  }
+
+  private async getLandlordRoomIds(landlordId: string): Promise<string[]> {
+    const properties = await this.propertyModel
+      .find({ createdBy: landlordId })
+      .select('_id')
+      .lean()
+      .exec();
+    const propertyIds = properties.map((property) => property._id);
+    if (!propertyIds.length) {
+      return [];
+    }
+    const rooms = await this.roomModel
+      .find({ propertyId: { $in: propertyIds } })
+      .select('_id')
+      .lean()
+      .exec();
+    return rooms.map((room) => String(room._id));
+  }
+
+  private percentChange(current: number, previous: number): number {
+    if (previous === 0) {
+      return current === 0 ? 0 : 100;
+    }
+    return Math.round(((current - previous) / previous) * 100);
+  }
+
+  private async getMaintenanceResolutionRate(
+    roomIds: string[],
+    from: Date,
+    to?: Date,
+  ): Promise<number | null> {
+    if (!roomIds.length) {
+      return null;
+    }
+
+    const createdAtFilter: Record<string, Date> = { $gte: from };
+    if (to) {
+      createdAtFilter.$lt = to;
+    }
+
+    const records = await this.maintenanceModel
+      .find({
+        roomId: { $in: roomIds },
+        createdAt: createdAtFilter,
+      })
+      .select('status')
+      .lean()
+      .exec();
+
+    if (!records.length) {
+      return null;
+    }
+
+    const resolved = records.filter(
+      (record) => record.status === MaintenanceStatus.RESOLVED,
+    ).length;
+
+    return Math.round((resolved / records.length) * 100);
+  }
+
+  async getLandlordTenantManagementMetrics(landlordId: string): Promise<{
+    retentionRate: number;
+    retentionRateChange: number;
+    rentCollectionRate: number;
+    rentCollectionRateChange: number;
+    complaintResolutionRate: number | null;
+    complaintResolutionRateChange: number | null;
+    tenantSatisfactionScore: number | null;
+    tenantSatisfactionChange: number | null;
+  }> {
+    const now = new Date();
+    const sixMonthsAgo = new Date(now);
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    const twelveMonthsAgo = new Date(now);
+    twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
+
+    const activeStatus = ApplicationStatus.ACTIVE_LEASE;
+    const endedStatus = ApplicationStatus.ENDED;
+
+    const countActiveAt = async (at: Date) => {
+      return this.countLandlordLeaseDocuments(landlordId, {
+        status: activeStatus,
+        rentStartDate: { $lte: at },
+        $or: [{ rentEndDate: null }, { rentEndDate: { $gte: at } }],
+      });
+    };
+
+    const [activeNow, endedLeases, activeSixMonthsAgo, currentRentLeases, rentLeasesSixMonthsAgo] =
+      await Promise.all([
+        this.countLandlordLeaseDocuments(landlordId, { status: activeStatus }),
+        this.countLandlordLeaseDocuments(landlordId, { status: endedStatus }),
+        countActiveAt(sixMonthsAgo),
+        this.countLandlordLeaseDocuments(landlordId, {
+          status: activeStatus,
+          rentStartDate: { $lte: now },
+          $or: [{ rentEndDate: null }, { rentEndDate: { $gte: now } }],
+        }),
+        this.countLandlordLeaseDocuments(landlordId, {
+          status: activeStatus,
+          rentStartDate: { $lte: sixMonthsAgo },
+          $or: [{ rentEndDate: null }, { rentEndDate: { $gte: sixMonthsAgo } }],
+        }),
+      ]);
+
+    const retentionDenominator = activeNow + endedLeases;
+    const retentionRate =
+      retentionDenominator === 0
+        ? 0
+        : Math.round((activeNow / retentionDenominator) * 100);
+    const retentionRateChange = this.percentChange(activeNow, activeSixMonthsAgo);
+
+    const rentCollectionRate =
+      activeNow === 0 ? 0 : Math.round((currentRentLeases / activeNow) * 100);
+    const priorRentCollectionRate =
+      activeSixMonthsAgo === 0
+        ? 0
+        : Math.round((rentLeasesSixMonthsAgo / activeSixMonthsAgo) * 100);
+    const rentCollectionRateChange =
+      rentCollectionRate - priorRentCollectionRate;
+
+    const roomIds = await this.getLandlordRoomIds(landlordId);
+    const [complaintResolutionRate, priorComplaintResolutionRate] =
+      await Promise.all([
+        this.getMaintenanceResolutionRate(roomIds, sixMonthsAgo),
+        this.getMaintenanceResolutionRate(roomIds, twelveMonthsAgo, sixMonthsAgo),
+      ]);
+
+    const complaintResolutionRateChange =
+      complaintResolutionRate === null || priorComplaintResolutionRate === null
+        ? null
+        : complaintResolutionRate - priorComplaintResolutionRate;
+
+    return {
+      retentionRate,
+      retentionRateChange,
+      rentCollectionRate,
+      rentCollectionRateChange,
+      complaintResolutionRate,
+      complaintResolutionRateChange,
+      tenantSatisfactionScore: null,
+      tenantSatisfactionChange: null,
+    };
   }
 
   async isPropertyMappedToActiveTenant(propertyId: string): Promise<boolean> {
