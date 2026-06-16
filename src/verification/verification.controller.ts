@@ -818,4 +818,13 @@ export class VerificationController {
     const result = await this.verificationService.updateDocumentsReport(id, report);
     return verificationSuccessResponse('Documents report updated successfully', result);
   }
+
+  /**
+   * Update financial / salary-proof report for a verification response
+   */
+  @Patch('/response/:id/financial-report')
+  async updateFinancialReport(@Param('id') id: string, @Body() report: { status: string; comment: string; reviewedBy: string; reviewedAt: Date }) {
+    const result = await this.verificationService.updateFinancialReport(id, report);
+    return verificationSuccessResponse('Financial report updated successfully', result);
+  }
 }
