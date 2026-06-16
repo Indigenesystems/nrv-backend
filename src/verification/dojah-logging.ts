@@ -75,7 +75,7 @@ export function identificationDocumentAnalysisOutcome(analysis: unknown): Record
     }
   }
   const idNin = a?.idNinAlignment as Record<string, unknown> | undefined;
-  return {
+  const outcome = {
     overall_status: status?.overall_status,
     reason: status?.reason,
     checks: status
@@ -98,6 +98,20 @@ export function identificationDocumentAnalysisOutcome(analysis: unknown): Record
       : undefined,
     mismatch_reason: idNin?.mismatchReason,
   };
+  if (idNin && typeof idNin === 'object') {
+    return {
+      ...outcome,
+      idNinAlignment: {
+        technicallyValid: idNin.technicallyValid ?? idNin.authentic != null,
+        namesMatch: idNin.namesMatch,
+        dobMatch: idNin.dobMatch,
+        authentic: idNin.authentic,
+        extractedFullName: '',
+        mismatchReason: idNin.mismatchReason,
+      },
+    };
+  }
+  return outcome;
 }
 
 /** Structured utility-bill extraction — aligns with Dojah `entity` shape in logs. */
