@@ -55,6 +55,7 @@ import {
   DocForRisk,
   LandlordReportForRisk,
 } from './verification-risk-display.util';
+import { redactVerificationResponseForAdmin } from './verification-response-redaction.util';
 import {
   checkNinNameAlignment,
   getNinAlignmentForDoc,
@@ -69,6 +70,7 @@ import {
   getIdDocumentNinAlignment,
   resolveIdDocumentLandlordStatus,
 } from './id-document.util';
+import { resolvePhoneLandlordStatus } from './phone-fraud.util';
 import {
   buildDocForRiskFromResponse,
   coerceMonthlyIncome,
@@ -657,7 +659,9 @@ export class VerificationService {
   async getVerificationResponseById(id: string): Promise<VerificationResponse | null> {
     const doc = await this.verificationResponseModel.findOne({ _id: id }).lean();
     const refreshed = await this.withFreshLandlordReportScoring(doc);
-    return (refreshed as unknown as VerificationResponse | null) ?? null;
+    return redactVerificationResponseForAdmin(
+      refreshed as Record<string, unknown> | null,
+    ) as unknown as VerificationResponse | null;
   }
 
   /**
@@ -1458,6 +1462,7 @@ export class VerificationService {
       employmentSection: String(lr.employmentSection ?? 'not_reviewed'),
       guarantorSection: String(lr.guarantorSection ?? 'not_reviewed'),
       documentsSection: String(lr.documentsSection ?? 'not_reviewed'),
+      financialSection: String(lr.financialSection ?? 'not_reviewed'),
       creditSummary: lr.creditSummary != null ? String(lr.creditSummary) : undefined,
     };
   }
@@ -1495,9 +1500,7 @@ export class VerificationService {
     const amlEntity = doc.amlScreeningResult?.entity as { risk_level?: string } | undefined;
     const amlRisk = amlEntity?.risk_level === 'low' ? 'low_risk' : amlEntity?.risk_level === 'high' ? 'high_risk' : amlEntity?.risk_level === 'medium' ? 'medium_risk' : doc.amlScreeningResult ? 'low_risk' : 'not_run';
     const amlFinal = doc.amlScreeningResult ? (amlRisk === 'low_risk' || amlRisk === 'medium_risk' || amlRisk === 'high_risk' ? amlRisk : 'low_risk') : 'not_run';
-    const phoneStatus = doc.phone
-      ? (doc.phoneFraudResult ? (doc.phoneFraudResult as any)?.entity?.valid === true ? 'valid' : 'invalid' : 'not_run')
-      : 'not_provided';
+    const phoneStatus = resolvePhoneLandlordStatus(doc.phone, doc.phoneFraudResult);
     const storedSnapshot = doc.creditFinancialSnapshot as unknown as
       | CreditFinancialSnapshot
       | null
@@ -1528,6 +1531,7 @@ export class VerificationService {
     const employmentSection = this.mapReportSectionToLandlordSummary(doc.employmentReport);
     const guarantorSection = this.mapReportSectionToLandlordSummary(doc.guarantorReport);
     const documentsSection = this.mapReportSectionToLandlordSummary(doc.documentsReport);
+    const financialSection = this.mapReportSectionToLandlordSummary(doc.financialReport);
     const report = {
       generatedAt: new Date(),
       nin: ninStatus,
@@ -1542,6 +1546,7 @@ export class VerificationService {
       employmentSection,
       guarantorSection,
       documentsSection,
+      financialSection,
     };
     const docForRisk: DocForRisk = {
       ...buildDocForRiskFromResponse(doc as unknown as Record<string, unknown>),
@@ -1718,7 +1723,7 @@ export class VerificationService {
             return 'skipped';
           }
           {
-            const phone = fresh.phone.trim();
+            const phone = formatPhoneForDojah(fresh.phone.trim());
             const result = await this.dojahTierService.phoneFraudScreen(phone);
             await this.storePhoneFraudResult(responseId, result, phone);
           }
@@ -2250,7 +2255,11 @@ export class VerificationService {
     const refreshed = await Promise.all(
       docs.map((doc) => this.withFreshLandlordReportScoring(doc)),
     );
-    return refreshed.filter((doc) => doc != null) as unknown as VerificationResponse[];
+    return refreshed
+      .filter((doc) => doc != null)
+      .map((doc) =>
+        redactVerificationResponseForAdmin(doc as Record<string, unknown>),
+      ) as unknown as VerificationResponse[];
   }
 
   /**
@@ -2304,6 +2313,21 @@ export class VerificationService {
   async updateDocumentsReport(id: string, report: { status: string; comment: string; reviewedBy: string; reviewedAt: Date }) {
     const payload = this.normalizeSectionReportInput(report);
     const updated = await this.verificationResponseModel.findByIdAndUpdate(id, { documentsReport: payload }, { new: true });
+    if (!updated) return null;
+    const tier = await this.getVerificationTierForResponse(updated.verificationId);
+    const landlordReport = this.buildLandlordReport(
+      updated as VerificationResponse & { landlordReport?: any },
+      tier,
+    );
+    return this.verificationResponseModel.findByIdAndUpdate(id, { $set: { landlordReport } }, { new: true });
+  }
+
+  /**
+   * Update financial / salary-proof report for a verification response (premium).
+   */
+  async updateFinancialReport(id: string, report: { status: string; comment: string; reviewedBy: string; reviewedAt: Date }) {
+    const payload = this.normalizeSectionReportInput(report);
+    const updated = await this.verificationResponseModel.findByIdAndUpdate(id, { financialReport: payload }, { new: true });
     if (!updated) return null;
     const tier = await this.getVerificationTierForResponse(updated.verificationId);
     const landlordReport = this.buildLandlordReport(

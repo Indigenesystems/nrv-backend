@@ -12,7 +12,7 @@ import {
   redactDeepForLog,
   utilityBillAnalysisOutcome,
 } from './dojah-logging';
-import { getNinAlignmentForDoc } from './nin-name-match.util';
+import { extractPhoneFraudEntity, isPhoneFraudEntityValid } from './phone-fraud.util';
 import { resolveUtilityBillLandlordStatus } from './utility-bill.util';
 import {
   buildDocForRiskFromResponse,
@@ -156,6 +156,7 @@ export type LandlordReportForRisk = {
   employmentSection: string;
   guarantorSection: string;
   documentsSection: string;
+  financialSection: string;
   creditSummary?: string;
 };
 
@@ -187,6 +188,7 @@ export type DocForRisk = {
   utilityBillUrl?: string | null;
   utilityBillAnalysis?: Record<string, unknown> | null;
   identificationDocumentUrl?: string | null;
+  bankStatementUrl?: string | null;
 };
 
 export const computeCategoryScores = (
@@ -225,11 +227,17 @@ export const computeCategoryScores = (
     (monthlyIncome != null ? 0.25 : 0) +
     (employerName ? 0.25 : 0);
 
-  const financialScore = creditFinancialScoreComponent(
+  const bureauComponent = creditFinancialScoreComponent(
     doc.creditFinancialSnapshot ?? null,
     tier,
     !!doc.bvn?.trim(),
   );
+  const hasSalaryProof = !!doc.bankStatementUrl?.trim();
+  const proofReviewScore = sectionScore(report.financialSection ?? 'not_reviewed');
+  const financialScore =
+    tier === 'premium' && hasSalaryProof
+      ? bureauComponent * 0.65 + proofReviewScore * 0.35
+      : bureauComponent;
 
   const rentalScore =
     sectionScore(report.documentsSection) * 0.5 +
@@ -337,6 +345,15 @@ export const buildTenantRiskBreakdown = (
                 : 'n/a',
             contribution: 'from bureau + stated income',
           },
+          ...(doc.bankStatementUrl?.trim()
+            ? [
+                {
+                  name: 'Salary proof review',
+                  outcome: report.financialSection ?? 'not_reviewed',
+                  contribution: 'manual supporting document',
+                },
+              ]
+            : []),
         ]
       : [
           {
@@ -514,21 +531,21 @@ const redactPhoneFraudForDisplay = (
   if (!pf) {
     return { ran: false, ok: false, fields: {} };
   }
-  const entity = (pf.entity ?? pf.data ?? pf) as Record<string, unknown>;
-  const valid = entity.valid === true;
+  const entity = extractPhoneFraudEntity(pf);
+  const valid = isPhoneFraudEntityValid(entity);
   return {
     ran: true,
     ok: valid && !pf.error,
     fields: redactDeepForLog({
       phone: phone?.trim() ? maskDigits(phone.replace(/\D/g, ''), 4) : undefined,
-      valid: entity.valid,
-      active: entity.active,
-      network: entity.network,
-      line_type: entity.line_type,
-      fraud_score: entity.fraud_score,
-      risk_level: entity.risk_level,
-      status: entity.status,
-      message: entity.message,
+      valid: entity?.valid ?? valid,
+      active: entity?.active,
+      network: entity?.network,
+      line_type: entity?.line_type,
+      fraud_score: entity?.fraud_score,
+      risk_level: entity?.risk_level,
+      status: entity?.status,
+      message: entity?.message,
     }) as Record<string, unknown>,
   };
 };

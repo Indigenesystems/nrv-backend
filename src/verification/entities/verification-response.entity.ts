@@ -121,6 +121,15 @@ export class VerificationResponse {
     reviewedAt: Date;
   };
 
+  /** Admin manual review of salary proof / bank statement (premium financial capacity). */
+  @Prop({ type: Object, default: null })
+  financialReport?: {
+    status: string;
+    comment: string;
+    reviewedBy: string;
+    reviewedAt: Date;
+  };
+
   @Prop({ type: Object, default: null })
   phoneVerificationResult?: {
     status?: string;
@@ -238,6 +247,8 @@ export class VerificationResponse {
     employmentSection: 'approved' | 'pending' | 'rejected' | 'not_reviewed';
     guarantorSection: 'approved' | 'pending' | 'rejected' | 'not_reviewed';
     documentsSection: 'approved' | 'pending' | 'rejected' | 'not_reviewed';
+    /** Manual review of salary proof / supporting income document (premium). */
+    financialSection: 'approved' | 'pending' | 'rejected' | 'not_reviewed';
     /** Tenant Trust Score 0–100 (computed from verification outcomes). */
     riskScore?: number;
     /** Risk category from score bands. */

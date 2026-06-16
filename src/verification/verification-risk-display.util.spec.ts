@@ -24,6 +24,7 @@ describe('buildTenantRiskBreakdown', () => {
         employmentSection: 'approved',
         guarantorSection: 'not_reviewed',
         documentsSection: 'approved',
+        financialSection: 'not_reviewed',
       },
       'standard',
     );
@@ -53,6 +54,7 @@ describe('buildTenantRiskBreakdown', () => {
         employmentSection: 'approved',
         guarantorSection: 'not_reviewed',
         documentsSection: 'approved',
+        financialSection: 'not_reviewed',
         creditSummary: 'adequate',
       },
       'premium',
@@ -89,6 +91,7 @@ describe('buildTenantRiskBreakdown', () => {
         employmentSection: 'approved',
         guarantorSection: 'approved',
         documentsSection: 'approved',
+        financialSection: 'approved',
         creditSummary: 'strong',
       },
       'premium',
@@ -111,6 +114,7 @@ describe('buildTenantRiskBreakdown', () => {
         employmentSection: 'not_reviewed',
         guarantorSection: 'not_reviewed',
         documentsSection: 'not_reviewed',
+        financialSection: 'not_reviewed',
       },
       'standard',
     );
@@ -126,6 +130,7 @@ describe('buildTenantRiskBreakdown', () => {
         employmentSection: 'not_reviewed',
         guarantorSection: 'not_reviewed',
         documentsSection: 'not_reviewed',
+        financialSection: 'not_reviewed',
       },
       'standard',
     );
@@ -133,5 +138,52 @@ describe('buildTenantRiskBreakdown', () => {
       expect(cat.earnedPoints).toBeLessThanOrEqual(cat.maxPoints);
     }
     expect(scores.identityScore).toBe(0);
+  });
+
+  it('blends bureau score with salary proof manual review when bank statement exists (premium)', () => {
+    const baseReport = {
+      nin: 'verified',
+      aml: 'low_risk',
+      phone: 'valid',
+      idDocument: 'verified',
+      utilityBill: 'verified',
+      personalSection: 'approved',
+      employmentSection: 'approved',
+      guarantorSection: 'approved',
+      documentsSection: 'approved',
+      creditSummary: 'strong',
+    };
+    const doc = {
+      monthlyIncome: 500000,
+      bvn: '12345678901',
+      bankStatementUrl: 'https://example.com/statement.pdf',
+      creditFinancialSnapshot: {
+        status: 'ok' as const,
+        affordabilityBand: 'strong' as const,
+        totalOutstandingNgn: 100_000,
+        totalActiveLoans: 1,
+        debtToIncomeRatio: 0.2,
+        landlordCreditOutcome: 'adequate' as const,
+      },
+    };
+
+    const approved = computeCategoryScores(
+      doc,
+      { ...baseReport, financialSection: 'approved' },
+      'premium',
+    );
+    const notReviewed = computeCategoryScores(
+      doc,
+      { ...baseReport, financialSection: 'not_reviewed' },
+      'premium',
+    );
+    const rejected = computeCategoryScores(
+      doc,
+      { ...baseReport, financialSection: 'rejected' },
+      'premium',
+    );
+
+    expect(approved.financialScore).toBeGreaterThan(notReviewed.financialScore);
+    expect(notReviewed.financialScore).toBeGreaterThan(rejected.financialScore);
   });
 });
