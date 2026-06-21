@@ -195,9 +195,12 @@ export class PropertiesService {
     let otherDocumentsUrls: any = [];
     let imageUrls: any = [];
 
-    const singleProperty = await this.findPropertyById(
+    const singleProperty = await this.propertyModel.findById(
       updatePropertyDto?.query,
     );
+    if (!singleProperty) {
+      throw new NotFoundException('Property not found');
+    }
 
     // Ensure properties are arrays to avoid "not iterable" errors
     singleProperty.landlordInsurancePolicy =
@@ -273,7 +276,7 @@ export class PropertiesService {
 
     // Update other properties
     if (updatePropertyDto.unit) {
-      singleProperty.unit = updatePropertyDto.unit;
+      (singleProperty as any).unit = updatePropertyDto.unit;
     }
     if (updatePropertyDto.city) {
       singleProperty.city = updatePropertyDto.city;
@@ -305,15 +308,12 @@ export class PropertiesService {
     if (updatePropertyDto.state) {
       singleProperty.state = updatePropertyDto.state;
     }
+    if (updatePropertyDto.status) {
+      singleProperty.status = updatePropertyDto.status;
+    }
 
-    // Update the property in the database
-    const updatedProperty = await this.propertyModel.findByIdAndUpdate(
-      updatePropertyDto?.query,
-      singleProperty,
-      { new: true, runValidators: true },
-    );
-
-    return updatedProperty;
+    // Persist changes on the mongoose document (avoid writing computed/join fields).
+    return await singleProperty.save();
   }
 
   async findPropertyByUserId(
@@ -432,6 +432,30 @@ export class PropertiesService {
    * @param params
    * @returns Paginated properties with metadata
    */
+  /** Property IDs with at least one unit awaiting admin listing approval. */
+  private async getPendingListingApprovalPropertyIds(): Promise<mongoose.Types.ObjectId[]> {
+    const roomPropertyIds = await this.roomModel.distinct('propertyId', {
+      approvalRequested: true,
+      approved: { $ne: true },
+    });
+    if (!roomPropertyIds.length) {
+      return [];
+    }
+    const activeProperties = await this.propertyModel
+      .find({
+        _id: { $in: roomPropertyIds },
+        $or: [{ status: 'active' }, { status: { $exists: false } }, { status: null }],
+      })
+      .select('_id')
+      .lean();
+    return activeProperties.map((p) => p._id as mongoose.Types.ObjectId);
+  }
+
+  async countPendingListingApprovals(): Promise<number> {
+    const ids = await this.getPendingListingApprovalPropertyIds();
+    return ids.length;
+  }
+
   async findAllPropertyWithPagination(params: {
     page: number;
     limit: number;
@@ -440,8 +464,10 @@ export class PropertiesService {
     propertyType?: string;
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
+    pendingListingApproval?: boolean;
   }): Promise<{ data: any[]; pagination: { total: number; page: number; limit: number } }> {
-    const { page, limit, search, status, propertyType, sortBy, sortOrder } = params;
+    const { page, limit, search, status, propertyType, sortBy, sortOrder, pendingListingApproval } =
+      params;
     
     // Build query
     let query: any = {};
@@ -466,6 +492,11 @@ export class PropertiesService {
     // Property type filter
     if (propertyType) {
       query.propertyType = propertyType;
+    }
+
+    if (pendingListingApproval) {
+      const pendingIds = await this.getPendingListingApprovalPropertyIds();
+      query._id = { $in: pendingIds.length ? pendingIds : [null] };
     }
     
     // Build sort object
@@ -621,9 +652,7 @@ export class PropertiesService {
       }
     }
 
-    const deletedProperty: any = await this.propertyModel.findByIdAndDelete({
-      _id: id,
-    });
+    const deletedProperty: any = await this.propertyModel.findByIdAndDelete(id);
     const deletedRooms: any = await this.roomService.deleteRoomByPropertyId(id);
     return deletedProperty;
   }

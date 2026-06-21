@@ -165,6 +165,7 @@ export class PropertiesController {
     @Query('propertyType') propertyType?: string,
     @Query('sortBy') sortBy?: string,
     @Query('sortOrder') sortOrder?: 'asc' | 'desc',
+    @Query('pendingListingApproval') pendingListingApproval?: string,
   ) {
     try {
       const pageNum = parseInt(page);
@@ -178,6 +179,7 @@ export class PropertiesController {
         propertyType,
         sortBy,
         sortOrder,
+        pendingListingApproval: pendingListingApproval === 'true',
       });
 
       return res.status(HttpStatus.OK).json({
