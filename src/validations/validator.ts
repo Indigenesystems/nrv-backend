@@ -52,6 +52,7 @@ export const createPropertySchema = Joi.object({
 });
 
 export const updatePropertySchema = Joi.object({
+  status: Joi.string().valid('active', 'inactive').optional(),
   streetAddress: Joi.string().optional(),
   city: Joi.string().optional(),
   state: Joi.string().optional(),
