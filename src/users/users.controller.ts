@@ -338,4 +338,27 @@ export class UserController {
     // Optionally, send the password to the tenant's email (handled in service)
     return { exists: false, created: true };
   }
+
+  /**
+   * Get user by ID (admin / detail views). Registered after static GET routes.
+   */
+  @Get(':id')
+  async getUserById(
+    @Param('id') id: string,
+  ): Promise<{ status: string; message: string; data: any }> {
+    const user = await this.userService.findUserById(id);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    const safe = (user as any).toObject?.() ?? { ...(user as any) };
+    delete safe.password;
+    delete safe.passwordResetToken;
+    delete safe.passwordResetExpires;
+    delete safe.confirmationCode;
+    return {
+      status: 'success',
+      message: 'User fetched successfully',
+      data: safe,
+    };
+  }
 }

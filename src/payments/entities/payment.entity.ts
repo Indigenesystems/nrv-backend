@@ -44,6 +44,10 @@ export class Payment {
   /** Plan name at time of purchase (for history display). */
   @Prop()
   planName: string;
+
+  /** Paystack checkout URL — used to resume abandoned payments within the pending window. */
+  @Prop()
+  authorizationUrl?: string;
 }
 
 export type PaymentDocument = Payment & Document;

@@ -12,6 +12,25 @@ export const UNIT_PRICE_NAIRA = {
   premium: 25_000,
 } as const;
 
+export const STANDARD_VERIFICATION_FEATURES = [
+  'NIN identity verification',
+  'Name and date-of-birth alignment',
+  'Government ID document check',
+  'Phone fraud screening',
+  'Utility bill / address verification',
+  'AML, PEP & sanctions screening',
+  'Employment & guarantor review',
+  'Landlord-ready trust report',
+] as const;
+
+export const PREMIUM_VERIFICATION_FEATURES = [
+  ...STANDARD_VERIFICATION_FEATURES,
+  'Credit bureau affordability check (BVN)',
+  'Debt-to-income assessment',
+  'Salary proof manual review',
+  'Enhanced financial capacity scoring',
+] as const;
+
 @Injectable()
 export class PlansService {
   constructor(
@@ -61,7 +80,7 @@ export class PlansService {
     ).exec();
   }
 
-  /** Plain-language copy: one description per tier; Premium = Standard + affordability. */
+  /** Plain-language copy and feature lists per tier. */
   private async backfillFriendlyCopy() {
     await this.planModel
       .updateMany(
@@ -71,7 +90,7 @@ export class PlansService {
             name: 'Standard Verification',
             description:
               'We help you check who a tenant really is before you sign: identity, whether their details line up, and the usual background pieces landlords care about—rolled into one clear report you can actually read, without compliance jargon. Each credit covers one tenant.',
-            features: [],
+            features: [...STANDARD_VERIFICATION_FEATURES],
           },
         },
       )
@@ -85,7 +104,7 @@ export class PlansService {
             name: 'Premium Tenant Screening',
             description:
               'Everything Standard includes—same identity and background picture in plain English—plus affordability checks so you can see whether the rent is realistic for them. Each credit covers one tenant.',
-            features: [],
+            features: [...PREMIUM_VERIFICATION_FEATURES],
           },
         },
       )
@@ -106,7 +125,7 @@ export class PlansService {
         premiumVerificationAdded: 0,
         unitPriceNaira: UNIT_PRICE_NAIRA.standard,
         isActive: true,
-        features: [],
+        features: [...STANDARD_VERIFICATION_FEATURES],
       });
     }
 
@@ -123,7 +142,7 @@ export class PlansService {
         premiumVerificationAdded: 1,
         unitPriceNaira: UNIT_PRICE_NAIRA.premium,
         isActive: true,
-        features: [],
+        features: [...PREMIUM_VERIFICATION_FEATURES],
       });
     }
   }
@@ -134,13 +153,17 @@ export class PlansService {
 
   async findById(id: string): Promise<Plan> {
     const plan = await this.planModel.findById(id).lean().exec();
-    if (!plan) throw new NotFoundException('Plan not found');
+    if (!plan) {
+      throw new NotFoundException('Plan not found');
+    }
     return plan as Plan;
   }
 
   async getDefaultPlan(): Promise<Plan> {
     const plan = await this.findBySlug(PLAN_SLUG_PREMIUM);
-    if (!plan) throw new NotFoundException('Default plan (premium) not found');
+    if (!plan) {
+      throw new NotFoundException('Default plan (premium) not found');
+    }
     return plan;
   }
 

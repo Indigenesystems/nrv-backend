@@ -51,6 +51,7 @@ import {
   alignBreakdownEarnedToTotal,
   buildRedactedVerificationCheckSummaries,
   buildTenantRiskBreakdown,
+  applyRiskScoreCaps,
   sumRiskBreakdownEarned,
   DocForRisk,
   LandlordReportForRisk,
@@ -1347,7 +1348,10 @@ export class VerificationService {
     tier: 'standard' | 'premium',
   ) {
     const riskBreakdown = buildTenantRiskBreakdown(docForRisk, report, tier);
-    const baseScore = sumRiskBreakdownEarned(riskBreakdown);
+    const baseScore = applyRiskScoreCaps(
+      sumRiskBreakdownEarned(riskBreakdown),
+      report,
+    );
     const { riskScore, riskCategory, recommendation } = this.finalizeTenantTrustAssessment(
       baseScore,
       docForRisk,

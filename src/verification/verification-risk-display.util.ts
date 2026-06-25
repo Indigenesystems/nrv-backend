@@ -145,7 +145,54 @@ export const normalizeRiskScore = (
 };
 
 const sectionScore = (s: string) =>
-  s === 'approved' ? 1 : s === 'pending' ? 0.5 : s === 'rejected' ? 0 : 0.25;
+  s === 'approved' ? 1 : s === 'pending' ? 0.25 : 0;
+
+/** Cap inflated scores when core checks failed or were never run. */
+export const applyRiskScoreCaps = (
+  rawScore: number,
+  report: LandlordReportForRisk,
+): number => {
+  let cap = 100;
+
+  if (report.nin === 'failed') {
+    cap = Math.min(cap, 35);
+  } else if (report.nin !== 'verified') {
+    cap = Math.min(cap, 45);
+  }
+
+  if (report.phone === 'invalid') {
+    cap = Math.min(cap, 35);
+  } else if (report.phone !== 'valid') {
+    cap = Math.min(cap, 50);
+  }
+
+  if (report.idDocument === 'failed') {
+    cap = Math.min(cap, 40);
+  }
+
+  if (report.aml === 'high_risk') {
+    cap = Math.min(cap, 25);
+  } else if (report.aml === 'medium_risk') {
+    cap = Math.min(cap, 45);
+  } else if (report.aml === 'not_run' || report.aml === 'error') {
+    cap = Math.min(cap, 55);
+  }
+
+  const rejectedSections = [
+    report.personalSection,
+    report.employmentSection,
+    report.guarantorSection,
+    report.documentsSection,
+  ].filter((s) => s === 'rejected').length;
+  if (rejectedSections >= 1) {
+    cap = Math.min(cap, 40);
+  }
+  if (rejectedSections >= 2) {
+    cap = Math.min(cap, 25);
+  }
+
+  return Math.min(rawScore, cap);
+};
 
 export type LandlordReportForRisk = {
   nin: string;
@@ -215,18 +262,18 @@ export const computeCategoryScores = (
     (idOk ? 0.2 : 0);
 
   const contactScore =
-    (report.phone === 'valid' ? 0.35 : report.phone === 'invalid' ? 0 : 0.2) +
-    (report.utilityBill === 'verified' ? 0.35 : report.utilityBill === 'failed' ? 0 : 0.15) +
-    (doc.email ? 0.15 : 0) +
-    (doc.address ? 0.15 : 0);
+    (report.phone === 'valid' ? 0.35 : 0) +
+    (report.utilityBill === 'verified' ? 0.35 : 0) +
+    (report.phone === 'valid' && doc.email ? 0.15 : 0) +
+    (report.utilityBill === 'verified' && doc.address ? 0.15 : 0);
 
   const docRecord = doc as unknown as Record<string, unknown>;
   const monthlyIncome = coerceMonthlyIncome(doc.monthlyIncome);
   const employerName = resolveEmployerName(docRecord);
   const employmentScore =
     sectionScore(report.employmentSection) * 0.5 +
-    (monthlyIncome != null ? 0.25 : 0) +
-    (employerName ? 0.25 : 0);
+    (report.employmentSection === 'approved' && monthlyIncome != null ? 0.25 : 0) +
+    (report.employmentSection === 'approved' && employerName ? 0.25 : 0);
 
   const bureauComponent = creditFinancialScoreComponent(
     doc.creditFinancialSnapshot ?? null,
@@ -256,7 +303,7 @@ export const computeCategoryScores = (
         ? 0.6
         : report.aml === 'high_risk'
           ? 0.2
-          : 0.3;
+          : 0;
 
   return {
     identityScore,
