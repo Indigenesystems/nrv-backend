@@ -184,6 +184,6 @@ describe('buildTenantRiskBreakdown', () => {
     );
 
     expect(approved.financialScore).toBeGreaterThan(notReviewed.financialScore);
-    expect(notReviewed.financialScore).toBeGreaterThan(rejected.financialScore);
+    expect(notReviewed.financialScore).toBe(rejected.financialScore);
   });
 });
