@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { PaystackService } from './paystack.service';
 import { PaymentsService } from './payments.service';
 import { UserService } from '../users/users.service';
@@ -77,6 +77,7 @@ export class PaymentsController {
       amountNaira,
       amountKobo: Math.round(amountNaira * 100),
       quantity,
+      authorizationUrl: data.authorization_url,
     });
 
     return {
@@ -94,35 +95,31 @@ export class PaymentsController {
   async verify(@Param('reference') reference: string) {
     const result = await this.paystackService.verifyTransaction(reference);
     const paymentRecord = await this.paymentsService.findByReference(reference);
+    const psStatus = result?.data?.status as string | undefined;
     const alreadyCredited = paymentRecord?.status === 'success';
 
-    if (!result?.status || result.data?.status !== 'success') {
-      if (paymentRecord) {
+    if (!result?.status || psStatus !== 'success') {
+      const resumable = this.paymentsService.isPaystackStatusResumable(psStatus);
+      if (paymentRecord && !resumable && psStatus && ['failed', 'reversed'].includes(psStatus)) {
         await this.paymentsService.updatePaymentStatus(reference, 'failed');
       }
-      return { status: 'error', message: 'Payment not successful' };
+      return {
+        status: 'error',
+        message: resumable
+          ? 'Payment was not completed. You can continue from purchase history.'
+          : 'Payment not successful',
+        code: resumable ? 'payment_incomplete' : 'payment_failed',
+        data: resumable ? { reference, resumable: true } : undefined,
+      };
     }
 
     if (paymentRecord && !alreadyCredited) {
-      await this.paymentsService.updatePaymentStatus(
-        reference,
-        'success',
-        new Date(),
-      );
+      await this.paymentsService.fulfillSuccessfulPayment(paymentRecord);
     }
 
-    // Use our payment record for userId/planId (Paystack metadata can be stringified or missing)
     const record = paymentRecord as any;
     const userId = record?.userId?.toString?.() ?? record?.userId;
-    const planId = record?.planId?.toString?.() ?? record?.planId;
-    const type = record?.type ?? 'pack';
-    const quantity = Math.max(1, record?.quantity ?? 1);
 
-    if (type === 'pack' && userId && planId && !alreadyCredited) {
-      await this.userService.purchasePackWithQuantity(userId, planId, quantity);
-    }
-
-    // Return updated user so frontend can refresh credits without an extra GET
     let updatedUser = null;
     if (userId) {
       try {
@@ -146,14 +143,77 @@ export class PaymentsController {
   }
 
   /**
-   * Get payment and purchase history for a user.
+   * Get payment and purchase history for a user (paginated, newest first).
    */
   @Get('history/:userId')
-  async getHistory(@Param('userId') userId: string) {
-    const payments = await this.paymentsService.findByUser(userId);
+  async getHistory(
+    @Param('userId') userId: string,
+    @Query('page') page = '1',
+    @Query('limit') limit = '10',
+  ) {
+    const result = await this.paymentsService.findByUserPaginated(userId, {
+      page: Math.max(1, parseInt(page, 10) || 1),
+      limit: Math.min(50, Math.max(1, parseInt(limit, 10) || 10)),
+    });
     return {
       status: 'success',
-      data: payments,
+      data: result.data,
+      pagination: result.pagination,
+    };
+  }
+
+  /**
+   * Latest incomplete payment the user can resume (within the pending window).
+   */
+  @Get('pending/:userId')
+  async getPending(@Param('userId') userId: string) {
+    const payment = await this.paymentsService.findLatestPendingPayment(userId);
+    return {
+      status: 'success',
+      data: payment,
+    };
+  }
+
+  /**
+   * Resume an abandoned Paystack checkout (within the pending window).
+   */
+  @Post('resume/:reference')
+  async resume(
+    @Param('reference') reference: string,
+    @Body() body: { userId: string },
+  ) {
+    const { userId } = body;
+    if (!userId) {
+      return { status: 'error', message: 'userId is required' };
+    }
+
+    const outcome = await this.paymentsService.resumePayment(reference, userId);
+
+    if (outcome.kind === 'already_paid') {
+      return {
+        status: 'success',
+        message: 'Payment already completed',
+        data: { alreadyPaid: true },
+      };
+    }
+
+    if (outcome.kind === 'expired') {
+      return {
+        status: 'error',
+        message:
+          'This payment has expired. Please start a new purchase.',
+        code: 'payment_expired',
+      };
+    }
+
+    if (outcome.kind === 'verify') {
+      return this.verify(outcome.reference);
+    }
+
+    return {
+      status: 'success',
+      message: 'Continue payment',
+      data: { authorization_url: outcome.authorization_url },
     };
   }
 }
