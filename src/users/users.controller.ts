@@ -20,6 +20,7 @@ import {
   createUserSchema,
   confirmUserSchema,
   createUserByLandlordSchema,
+  resendVerificationSchema,
 } from '../validations/validator';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UserService } from './users.service';
@@ -126,6 +127,24 @@ export class UserController {
     } catch (error) {
       throw new BadRequestException(error.message);
     }
+  }
+
+  /**
+   * Resend email verification OTP for an inactive account.
+   */
+  @Post('resend-verification')
+  async resendVerification(
+    @Body('email') email: string,
+  ): Promise<{ status: string; message: string }> {
+    const validationResult = resendVerificationSchema.validate({ email });
+    if (validationResult.error) {
+      throw new BadRequestException(validationResult.error.message);
+    }
+    const result = await this.userService.resendVerificationCode(email);
+    return {
+      status: 'success',
+      message: result.message,
+    };
   }
 
   /**
