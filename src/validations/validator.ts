@@ -28,6 +28,10 @@ export const confirmUserSchema = Joi.object({
   confirmationCode: Joi.string().required().length(6),
 });
 
+export const resendVerificationSchema = Joi.object({
+  email: Joi.string().email().required(),
+});
+
 export const loginUserSchema = Joi.object({
   email: Joi.string().email().required(),
   password: Joi.string().required(),

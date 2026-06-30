@@ -288,15 +288,15 @@ export class UserService {
   async createUser(user: User): Promise<User | { message: string }> {
     const confirmationCode = generateConfirmationCode();
     const existingUser = await this.userModel.findOne({ email: user.email });
-    const checkExistingUserByNin = await this.userModel.findOne({
-      nin: user.nin,
-    });
+    const checkExistingUserByNin = user.nin?.trim()
+      ? await this.userModel.findOne({ nin: user.nin.trim() })
+      : null;
 
     if (existingUser) {
       return { message: 'An account with this email already exists' };
     }
 
-    if (checkExistingUserByNin && checkExistingUserByNin.nin != '') {
+    if (checkExistingUserByNin && user.nin?.trim() && checkExistingUserByNin.nin?.trim()) {
       return { message: 'An account with this NIN already exists' };
     }
 
@@ -327,6 +327,11 @@ export class UserService {
             `Welcome/verification email failed for ${createdUser?.email}:`,
             emailErr?.message || emailErr,
           );
+          if (process.env.NODE_ENV !== 'production') {
+            console.warn(
+              `[dev] Verification OTP for ${createdUser?.email}: ${confirmationCode}`,
+            );
+          }
         });
       }
       return createdUser;
@@ -406,6 +411,56 @@ export class UserService {
   }
 
   /**
+   * Resend verification OTP for signup / inactive accounts.
+   */
+  async resendVerificationCode(email: string): Promise<{ message: string }> {
+    const user = await this.findUserByEmail(email?.trim());
+    if (!user) {
+      throw new NotFoundException('No account with this email exists');
+    }
+    if (user.status === 'active') {
+      throw new BadRequestException(
+        'This account is already verified. You can sign in.',
+      );
+    }
+
+    const confirmationCode = generateConfirmationCode();
+    const updatedUser = await this.userModel
+      .findOneAndUpdate(
+        { email: email?.trim() },
+        { $set: { confirmationCode } },
+        { new: true },
+      )
+      .exec();
+
+    if (!updatedUser) {
+      throw new NotFoundException('No account with this email exists');
+    }
+
+    try {
+      await this.emailService.sendUserCreatedEmail(updatedUser);
+      return { message: 'Verification code sent. Check your inbox.' };
+    } catch (emailErr: any) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn(
+          `[dev] Verification OTP for ${updatedUser.email}: ${confirmationCode}`,
+        );
+        return {
+          message:
+            'Email could not be delivered. Check the backend console for your OTP in local development.',
+        };
+      }
+      console.error(
+        `Verification email resend failed for ${updatedUser.email}:`,
+        emailErr?.message || emailErr,
+      );
+      throw new InternalServerErrorException(
+        'Unable to send verification email right now. Please try again later.',
+      );
+    }
+  }
+
+  /**
    * Confirm user account
    * @param body
    * @returns User and access token or throws
@@ -414,15 +469,15 @@ export class UserService {
     const { email, confirmationCode } = body;
     const user = await this.userModel.findOne({ email });
 
+    if (!user) {
+      throw new NotFoundException('No account with this email exists');
+    }
+
     if (user.status === 'active') {
       throw new BadRequestException('Account has already been confirmed');
     }
 
-    if (!user) {
-      throw new NotFoundException('No account with this email exist');
-    }
-
-    if (user.confirmationCode != confirmationCode) {
+    if (String(user.confirmationCode) !== String(confirmationCode)) {
       throw new BadRequestException('Incorrect confirmation code');
     }
     const payload = { email: user.email, sub: user['_id'] };
@@ -430,7 +485,12 @@ export class UserService {
     user.status = 'active';
     user.isOnboarded = false;
     await user.save();
-    return { user, accessToken };
+
+    const safeUser = (user as any).toObject?.() ?? { ...(user as any) };
+    delete safeUser.password;
+    delete safeUser.confirmationCode;
+
+    return { user: safeUser as User, accessToken };
   }
 
   /**

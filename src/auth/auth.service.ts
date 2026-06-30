@@ -63,13 +63,12 @@ export class AuthService {
 
     if (user.status === 'inactive') {
       try {
-        await this.emailService.sendUserCreatedEmail(user);
+        await this.userService.resendVerificationCode(user.email);
       } catch (emailErr: any) {
         console.error(
           `Verification email resend failed for ${user?.email}:`,
           emailErr?.message || emailErr,
         );
-        // Don't fail login just because SMTP is down.
       }
       return { user, accessToken, notificationSettings };
     }
