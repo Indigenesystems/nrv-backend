@@ -569,20 +569,24 @@ export class PropertiesService {
       streetAddress: property.streetAddress,
       city: property.city,
       state: property.state,
+      zipCode: (property as any).zipCode,
+      propertyName: (property as any).propertyName,
       status: property.status ?? 'active',
       otherDocuments: property.otherDocuments,
       utilityAndMaintenance: property.utilityAndMaintenance,
       landlordInsurancePolicy: property.landlordInsurancePolicy,
       propertyType: property.propertyType,
       file: property.file,
+      imageUrls: (property as any).imageUrls || [],
       createdBy: property.createdBy,
       preferredTenants: property.preferredTenants || [],
       rentCollection: property.rentCollection || { value: '', label: '' },
       rooms,
       apartments: rooms,
       apartmentCount: rooms.length,
-      //propertyId: property.propertyId,
       unitsLeft: rooms.filter((room: any) => !room.assignedToTenant).length,
+      createdAt: (property as any).createdAt,
+      updatedAt: (property as any).updatedAt,
     };
   }
 
@@ -880,6 +884,31 @@ export class PropertiesService {
     } catch (error) {
       throw new Error(`Failed to fetch landlord applications: ${error}`);
     }
+  }
+
+  async withdrawApplicationByTenant(
+    applicationId: string,
+    tenantId: string,
+  ): Promise<any> {
+    const application = await this.applicationModel.findById(applicationId);
+    if (!application) {
+      throw new NotFoundException('Application not found');
+    }
+
+    if (String((application as any).applicant) !== String(tenantId)) {
+      throw new BadRequestException('You can only withdraw your own application');
+    }
+
+    const status = (application as any).status as ApplicationStatus;
+    const withdrawable = [ApplicationStatus.NEW, ApplicationStatus.ACCEPTED];
+    if (!withdrawable.includes(status)) {
+      throw new BadRequestException(
+        'This application can no longer be withdrawn',
+      );
+    }
+
+    (application as any).status = ApplicationStatus.WITHDRAWN;
+    return (application as any).save();
   }
 
   async updateApplicationStatusById(
