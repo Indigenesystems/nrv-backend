@@ -434,6 +434,34 @@ export class PropertiesController {
     }
   }
 
+  @Post('/application/withdraw/:id')
+  async withdrawApplication(
+    @Param('id') id: string,
+    @Body('tenantId') tenantId: string,
+    @Res() res: Response,
+  ) {
+    try {
+      if (!tenantId) {
+        return res.status(HttpStatus.BAD_REQUEST).json({
+          status: 'error',
+          message: 'tenantId is required',
+        });
+      }
+      const application =
+        await this.propertiesService.withdrawApplicationByTenant(id, tenantId);
+      return res.status(HttpStatus.OK).json({
+        status: 'success',
+        message: 'Application withdrawn successfully',
+        data: application,
+      });
+    } catch (error) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        status: 'error',
+        message: error.message,
+      });
+    }
+  }
+
   @Get('/application/update-status')
   async updateApplicationStatus(
     @Query('id') id: string,

@@ -72,6 +72,7 @@ import {
   resolveIdDocumentLandlordStatus,
 } from './id-document.util';
 import { resolvePhoneLandlordStatus } from './phone-fraud.util';
+import { resolveAmlLandlordStatus } from './aml-status.util';
 import {
   buildDocForRiskFromResponse,
   coerceMonthlyIncome,
@@ -1501,9 +1502,9 @@ export class VerificationService {
     const ninStatus = doc.nin
       ? (doc.ninVerificationStatus === 'completed' || doc.ninVerificationResult?.status === 'success' ? 'verified' : 'failed')
       : 'not_provided';
-    const amlEntity = doc.amlScreeningResult?.entity as { risk_level?: string } | undefined;
-    const amlRisk = amlEntity?.risk_level === 'low' ? 'low_risk' : amlEntity?.risk_level === 'high' ? 'high_risk' : amlEntity?.risk_level === 'medium' ? 'medium_risk' : doc.amlScreeningResult ? 'low_risk' : 'not_run';
-    const amlFinal = doc.amlScreeningResult ? (amlRisk === 'low_risk' || amlRisk === 'medium_risk' || amlRisk === 'high_risk' ? amlRisk : 'low_risk') : 'not_run';
+    const amlFinal = resolveAmlLandlordStatus(
+      doc.amlScreeningResult as Record<string, unknown> | null | undefined,
+    );
     const phoneStatus = resolvePhoneLandlordStatus(doc.phone, doc.phoneFraudResult);
     const storedSnapshot = doc.creditFinancialSnapshot as unknown as
       | CreditFinancialSnapshot
