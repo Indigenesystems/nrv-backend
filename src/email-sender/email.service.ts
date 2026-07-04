@@ -279,7 +279,7 @@ export class EmailService {
               </tr>
               <tr>
                 <td align="left" bgcolor="#ffffff" style="padding: 24px; font-family: 'Source Sans Pro', Helvetica, Arial, sans-serif; font-size: 16px; line-height: 24px;">
-                  <p style="margin: 0;">Thank you for signing up on Naija Rent Verify as a [accountType], we are pleased to have you here, kindly us the verification code below to complete your process.</p>
+                  <p style="margin: 0;">Thank you for signing up on Naija Rent Verify as a [accountTypeLabel]. We are pleased to have you here. Kindly use the verification code below to complete your process.</p>
                 </td>
               </tr>
               <tr>
@@ -289,7 +289,7 @@ export class EmailService {
             </tr>
               <tr>
                 <td align="left" bgcolor="#ffffff" style="padding: 24px; font-family: 'Source Sans Pro', Helvetica, Arial, sans-serif; font-size: 16px; line-height: 24px;">
-                    <p style="margin: 0;">If You have any questions or encounter any issues while accessing your account, please feel free to contact our support team at <a href="mailto:hello@naijarentverify.com">hello@naijarentverify.com</a>. We are here to assist you.</p>
+                    <p style="margin: 0;">If you have any questions or encounter any issues while accessing your account, please feel free to contact our support team at <a href="mailto:hello@naijarentverify.com">hello@naijarentverify.com</a>. We are here to assist you.</p>
                 </td>
               </tr>
 
@@ -343,15 +343,23 @@ export class EmailService {
     </body>
     </html>`;
 
+    const accountTypeLabel =
+      payload.accountType === 'landlord'
+        ? 'Property Owner'
+        : payload.accountType === 'tenant'
+          ? 'Tenant'
+          : payload.accountType;
+
     const replacements = {
       '[userName]': payload.firstName + ' ' + payload.lastName,
       '[userEmail]': payload.email,
       '[verificationToken]': payload.confirmationCode,
       '[accountType]': payload.accountType,
+      '[accountTypeLabel]': accountTypeLabel,
     };
 
     const resultEmailTemplate = emailTemplate.replace(
-      /\[userName\]|\[userRoleTag\]|\[userEmail\]|\[userPassword\]|\[verificationToken\]|\[accountType\]|\[loginUrl\]|\[supportTeamEmail\]/g,
+      /\[userName\]|\[userRoleTag\]|\[userEmail\]|\[userPassword\]|\[verificationToken\]|\[accountTypeLabel\]|\[accountType\]|\[loginUrl\]|\[supportTeamEmail\]/g,
       (match) => replacements[match],
     );
 

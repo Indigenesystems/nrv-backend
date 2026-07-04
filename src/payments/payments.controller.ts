@@ -3,6 +3,7 @@ import { PaystackService } from './paystack.service';
 import { PaymentsService } from './payments.service';
 import { UserService } from '../users/users.service';
 import { PlansService, UNIT_PRICE_NAIRA } from '../plans/plans.service';
+import { calculatePackPricing } from './payment-pricing.util';
 
 /** Where landlords start a tenant verification after buying credits. */
 export const LANDLORD_VERIFICATION_REQUEST_PATH =
@@ -44,11 +45,11 @@ export class PaymentsController {
     const unitPrice =
       plan.unitPriceNaira ??
       (plan.slug === 'premium' ? UNIT_PRICE_NAIRA.premium : UNIT_PRICE_NAIRA.standard);
-    const expected = qty * unitPrice;
-    if (Math.abs(Number(amountNaira) - expected) > 0.01) {
+    const pricing = calculatePackPricing(qty, unitPrice);
+    if (Math.abs(Number(amountNaira) - pricing.totalNaira) > 0.01) {
       return {
         status: 'error',
-        message: `Invalid amount. Expected ₦${expected} for ${qty} credit(s) at ₦${unitPrice} each.`,
+        message: `Invalid amount. Expected ₦${pricing.totalNaira.toLocaleString()} (includes Paystack fee and VAT) for ${qty} credit(s).`,
       };
     }
 
