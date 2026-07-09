@@ -220,7 +220,11 @@ export class RoomsService {
       // best-effort; don't fail the main request
     }
 
-    const roomId = room?._id?.toString?.() ?? String(id);
+    const roomMongoId = room?._id?.toString?.() ?? String(id);
+    const displayRoomId =
+      room?.roomId != null && room.roomId !== undefined
+        ? String(room.roomId)
+        : roomMongoId;
     const propertyId = property?._id?.toString?.() ?? null;
     const landlordId =
       property?.createdBy?._id?.toString?.() ||
@@ -234,10 +238,16 @@ export class RoomsService {
         targetRole: 'admin',
         type: 'listing_approval_requested',
         title: 'Listing approval requested',
-        body: `A landlord requested listing approval for a unit. Room ID: ${roomId}${
-          propertyId ? `, Property ID: ${propertyId}` : ''
+        body: `A landlord requested listing approval for a unit. Room ID: ${displayRoomId}${
+          propertyId ? `, Property ID: ${propertyId.slice(-8).toUpperCase()}` : ''
         }.`,
-        metadata: { roomId, propertyId, landlordId, timestamp },
+        metadata: {
+          roomId: roomMongoId,
+          displayRoomId,
+          propertyId,
+          landlordId,
+          timestamp,
+        },
       });
     } catch (err: any) {
       // best-effort
@@ -254,7 +264,13 @@ export class RoomsService {
       try {
         await axios.post(
           webhookUrl.trim(),
-          { roomId, propertyId, landlordId, timestamp },
+          {
+            roomId: roomMongoId,
+            displayRoomId,
+            propertyId,
+            landlordId,
+            timestamp,
+          },
           {
             headers: { 'Content-Type': 'application/json' },
             timeout: 10000,

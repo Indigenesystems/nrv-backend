@@ -52,12 +52,17 @@ const categoryEarned = (ratio: number, maxPoints: number) =>
 export const sumRiskBreakdownEarned = (breakdown: RiskBreakdownCategory[]): number =>
   breakdown.reduce((sum, category) => sum + category.earnedPoints, 0);
 
-/** When credit caps lower the trust score, trim earned points so the breakdown sums to the final score. */
+/** When caps lower the trust score, trim earned points so the breakdown sums to the final score. */
 export const alignBreakdownEarnedToTotal = (
   breakdown: RiskBreakdownCategory[],
   targetTotal: number,
 ): RiskBreakdownCategory[] => {
-  let delta = sumRiskBreakdownEarned(breakdown) - targetTotal;
+  const roundedTarget = Math.round(Math.max(0, targetTotal));
+  const currentTotal = sumRiskBreakdownEarned(breakdown);
+  if (currentTotal === roundedTarget) {
+    return breakdown;
+  }
+  let delta = currentTotal - roundedTarget;
   if (delta <= 0) {
     return breakdown;
   }
@@ -146,6 +151,8 @@ export const normalizeRiskScore = (
 
 const sectionScore = (s: string) =>
   s === 'approved' ? 1 : s === 'pending' ? 0.25 : 0;
+
+const isReviewSectionApproved = (section: string) => section === 'approved';
 
 /** Cap inflated scores when core checks failed or were never run. */
 export const applyRiskScoreCaps = (
@@ -239,6 +246,60 @@ export type DocForRisk = {
   bankStatementUrl?: string | null;
 };
 
+export const IDENTITY_SCORE_WEIGHTS = {
+  nameMatch: 0.4,
+  ninVerified: 0.2,
+  dobMatch: 0.15,
+  idAuthentic: 0.25,
+  /** Partial salvage when automated name match fails but age or manual review passes. */
+  manualReview: 0.15,
+} as const;
+
+const ninWasRunForDoc = (
+  doc: DocForRisk,
+  report: LandlordReportForRisk,
+): boolean =>
+  report.nin !== 'not_provided' && report.nin !== 'not_run';
+
+/** Partial identity credit when name match fails: age match first, then manual review. */
+export const identityPartialWhenNameMismatch = (
+  report: LandlordReportForRisk,
+  dobMatch: boolean,
+): number => {
+  if (dobMatch) {
+    return IDENTITY_SCORE_WEIGHTS.dobMatch;
+  }
+  if (report.personalSection === 'approved') {
+    return IDENTITY_SCORE_WEIGHTS.manualReview;
+  }
+  return 0;
+};
+
+export const computeIdentityScore = (
+  doc: DocForRisk,
+  report: LandlordReportForRisk,
+): number => {
+  const ninAlignment = getNinAlignmentForDoc(doc);
+  const idNinAlignment = getIdDocumentNinAlignmentForDoc(doc);
+  const { namesMatch, dobMatch } = ninAlignment;
+
+  if (ninWasRunForDoc(doc, report) && !namesMatch) {
+    return identityPartialWhenNameMismatch(report, dobMatch);
+  }
+
+  const ninOk =
+    report.nin === 'verified' ||
+    doc.ninVerificationStatus === 'completed' ||
+    doc.ninVerificationResult?.status === 'success';
+
+  return (
+    (namesMatch ? IDENTITY_SCORE_WEIGHTS.nameMatch : 0) +
+    (ninOk && namesMatch ? IDENTITY_SCORE_WEIGHTS.ninVerified : 0) +
+    (dobMatch ? IDENTITY_SCORE_WEIGHTS.dobMatch : 0) +
+    (idNinAlignment.authentic ? IDENTITY_SCORE_WEIGHTS.idAuthentic : 0)
+  );
+};
+
 export const computeCategoryScores = (
   doc: DocForRisk,
   report: LandlordReportForRisk,
@@ -252,14 +313,8 @@ export const computeCategoryScores = (
   guarantorScore: number;
   complianceScore: number;
 } => {
-  const ninOk = report.nin === 'verified';
-  const { namesMatch, dobMatch } = getNinAlignmentForDoc(doc);
-  const idOk = report.idDocument === 'verified';
-  const identityScore =
-    (ninOk ? 0.4 : 0) +
-    (namesMatch ? 0.2 : 0) +
-    (dobMatch ? 0.2 : 0) +
-    (idOk ? 0.2 : 0);
+  const ninAlignment = getNinAlignmentForDoc(doc);
+  const identityScore = computeIdentityScore(doc, report);
 
   const contactScore =
     (report.phone === 'valid' ? 0.35 : 0) +
@@ -270,10 +325,13 @@ export const computeCategoryScores = (
   const docRecord = doc as unknown as Record<string, unknown>;
   const monthlyIncome = coerceMonthlyIncome(doc.monthlyIncome);
   const employerName = resolveEmployerName(docRecord);
-  const employmentScore =
-    sectionScore(report.employmentSection) * 0.5 +
-    (report.employmentSection === 'approved' && monthlyIncome != null ? 0.25 : 0) +
-    (report.employmentSection === 'approved' && employerName ? 0.25 : 0);
+  const incomeDeclared = monthlyIncome != null;
+  const employerProvided = !!employerName;
+  const employmentScore = isReviewSectionApproved(report.employmentSection)
+    ? sectionScore(report.employmentSection) * 0.5 +
+      (incomeDeclared ? 0.25 : 0) +
+      (employerProvided ? 0.25 : 0)
+    : 0;
 
   const bureauComponent = creditFinancialScoreComponent(
     doc.creditFinancialSnapshot ?? null,
@@ -291,10 +349,11 @@ export const computeCategoryScores = (
     sectionScore(report.documentsSection) * 0.5 +
     sectionScore(report.personalSection) * 0.5;
 
-  const guarantorScore =
-    sectionScore(report.guarantorSection) * 0.6 +
-    (hasGuarantorIdentity(docRecord) ? 0.2 : 0) +
-    (hasGuarantorContact(docRecord) ? 0.2 : 0);
+  const guarantorScore = isReviewSectionApproved(report.guarantorSection)
+    ? sectionScore(report.guarantorSection) * 0.6 +
+      (hasGuarantorIdentity(docRecord) ? 0.2 : 0) +
+      (hasGuarantorContact(docRecord) ? 0.2 : 0)
+    : 0;
 
   const complianceScore =
     report.aml === 'low_risk'
@@ -324,6 +383,9 @@ export const buildTenantRiskBreakdown = (
   const scores = computeCategoryScores(doc, report, tier);
   const ninAlignment = getNinAlignmentForDoc(doc);
   const idNinAlignment = getIdDocumentNinAlignmentForDoc(doc);
+  const docRecord = doc as unknown as Record<string, unknown>;
+  const incomeDeclared = coerceMonthlyIncome(doc.monthlyIncome) != null;
+  const employerProvided = !!resolveEmployerName(docRecord);
 
   const idDocumentContribution = idNinAlignment.authentic
     ? 'authentic · NIN name match'
@@ -339,23 +401,53 @@ export const buildTenantRiskBreakdown = (
     {
       name: 'NIN verification',
       outcome: report.nin,
-      contribution: ninAlignment.namesMatch ? 'name match' : '—',
+      contribution:
+        ninAlignment.namesMatch
+          ? '20% when name matches'
+          : ninWasRunForDoc(doc, report)
+            ? 'failed — name mismatch'
+            : '—',
     },
     {
       name: 'Name match',
       outcome: ninAlignment.namesMatch ? 'yes' : 'no',
-      contribution: '20% of category',
+      contribution:
+        ninWasRunForDoc(doc, report) && !ninAlignment.namesMatch
+          ? 'mismatch — NIN and ID excluded'
+          : '40% of category',
     },
     {
-      name: 'DOB match',
+      name: 'Age match',
       outcome: ninAlignment.dobMatch ? 'yes' : 'no',
-      contribution: '20% of category',
+      contribution:
+        ninWasRunForDoc(doc, report) && !ninAlignment.namesMatch && ninAlignment.dobMatch
+          ? '15% — partial credit when name mismatches'
+          : ninAlignment.namesMatch && !ninAlignment.dobMatch
+            ? 'no match — name match carries score'
+            : '15% of category',
     },
     {
       name: 'ID document',
       outcome: report.idDocument,
       contribution: idDocumentContribution,
     },
+    ...(report.personalSection !== 'not_reviewed'
+      ? [
+          {
+            name: 'Personal manual review',
+            outcome: report.personalSection,
+            contribution:
+              ninWasRunForDoc(doc, report) &&
+              !ninAlignment.namesMatch &&
+              !ninAlignment.dobMatch &&
+              report.personalSection === 'approved'
+                ? '15% — partial credit when automated checks fail'
+                : report.personalSection === 'approved'
+                  ? 'admin verified'
+                  : '—',
+          },
+        ]
+      : []),
   ];
 
   const contactChecks: RiskBreakdownCheck[] = [
@@ -419,7 +511,10 @@ export const buildTenantRiskBreakdown = (
       label: 'Identity Integrity',
       maxPoints: w.identity,
       earnedPoints: categoryEarned(scores.identityScore, w.identity),
-      statusSummary: `${report.nin} · ${report.idDocument}`,
+      statusSummary:
+        ninWasRunForDoc(doc, report) && !ninAlignment.namesMatch
+          ? `name mismatch · ${report.idDocument}`
+          : `${report.nin} · ${report.idDocument}`,
       checks: identityChecks,
     },
     {
@@ -440,20 +535,23 @@ export const buildTenantRiskBreakdown = (
         {
           name: 'Employment review',
           outcome: report.employmentSection,
-          contribution: '50% of category',
+          contribution: isReviewSectionApproved(report.employmentSection)
+            ? '50% of category'
+            : 'required — score is zero until approved',
         },
         {
           name: 'Monthly income',
-          outcome:
-            coerceMonthlyIncome(doc.monthlyIncome) != null ? 'declared' : 'missing',
-          contribution: '25% of category',
+          outcome: incomeDeclared ? 'declared' : 'missing',
+          contribution: isReviewSectionApproved(report.employmentSection)
+            ? '25% when declared'
+            : 'counts after approval',
         },
         {
           name: 'Employer',
-          outcome: resolveEmployerName(doc as unknown as Record<string, unknown>)
-            ? 'provided'
-            : 'missing',
-          contribution: '25% of category',
+          outcome: employerProvided ? 'provided' : 'missing',
+          contribution: isReviewSectionApproved(report.employmentSection)
+            ? '25% when provided'
+            : 'counts after approval',
         },
       ],
     },
@@ -503,21 +601,27 @@ export const buildTenantRiskBreakdown = (
         {
           name: 'Guarantor review',
           outcome: report.guarantorSection,
-          contribution: '60% of category',
+          contribution: isReviewSectionApproved(report.guarantorSection)
+            ? '60% of category'
+            : 'required — score is zero until approved',
         },
         {
           name: 'Guarantor identity',
           outcome: hasGuarantorIdentity(doc as unknown as Record<string, unknown>)
             ? 'provided'
             : 'missing',
-          contribution: '20% of category',
+          contribution: isReviewSectionApproved(report.guarantorSection)
+            ? '20% when provided'
+            : 'counts after approval',
         },
         {
           name: 'Guarantor contact',
           outcome: hasGuarantorContact(doc as unknown as Record<string, unknown>)
             ? 'provided'
             : 'missing',
-          contribution: '20% of category',
+          contribution: isReviewSectionApproved(report.guarantorSection)
+            ? '20% when provided'
+            : 'counts after approval',
         },
       ],
     },
@@ -604,7 +708,8 @@ const redactNinForDisplay = (
   const result = doc.ninVerificationResult;
   const alignment = getNinAlignmentForDoc(doc);
   const ok =
-    doc.ninVerificationStatus === 'completed' || result?.status === 'success';
+    (doc.ninVerificationStatus === 'completed' || result?.status === 'success') &&
+    alignment.namesMatch;
   return {
     ran: !!result || !!doc.ninVerificationStatus,
     ok,
