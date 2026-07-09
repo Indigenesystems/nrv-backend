@@ -1358,10 +1358,7 @@ export class VerificationService {
       docForRisk,
       tier,
     );
-    const finalBreakdown =
-      riskScore < baseScore
-        ? alignBreakdownEarnedToTotal(riskBreakdown, riskScore)
-        : riskBreakdown;
+    const finalBreakdown = alignBreakdownEarnedToTotal(riskBreakdown, riskScore);
     const checkSummaries = buildRedactedVerificationCheckSummaries(docForRisk, tier);
     return {
       riskScore,
@@ -1499,13 +1496,6 @@ export class VerificationService {
     doc: VerificationResponse & { landlordReport?: any },
     tier: 'standard' | 'premium' = 'standard',
   ): NonNullable<VerificationResponse['landlordReport']> {
-    const ninStatus = doc.nin
-      ? (doc.ninVerificationStatus === 'completed' || doc.ninVerificationResult?.status === 'success' ? 'verified' : 'failed')
-      : 'not_provided';
-    const amlFinal = resolveAmlLandlordStatus(
-      doc.amlScreeningResult as Record<string, unknown> | null | undefined,
-    );
-    const phoneStatus = resolvePhoneLandlordStatus(doc.phone, doc.phoneFraudResult);
     const storedSnapshot = doc.creditFinancialSnapshot as unknown as
       | CreditFinancialSnapshot
       | null
@@ -1516,6 +1506,21 @@ export class VerificationService {
         doc.creditSummary as Record<string, unknown> | null,
         coerceMonthlyIncome(doc.monthlyIncome),
       );
+    const docForRisk: DocForRisk = {
+      ...buildDocForRiskFromResponse(doc as unknown as Record<string, unknown>),
+      creditFinancialSnapshot: snapshot,
+    };
+    const ninAlignment = getNinAlignmentForDoc(docForRisk);
+    let ninStatus = doc.nin
+      ? (doc.ninVerificationStatus === 'completed' || doc.ninVerificationResult?.status === 'success' ? 'verified' : 'failed')
+      : 'not_provided';
+    if (ninStatus === 'verified' && !ninAlignment.namesMatch) {
+      ninStatus = 'failed';
+    }
+    const amlFinal = resolveAmlLandlordStatus(
+      doc.amlScreeningResult as Record<string, unknown> | null | undefined,
+    );
+    const phoneStatus = resolvePhoneLandlordStatus(doc.phone, doc.phoneFraudResult);
     const creditStatus = resolveLandlordCreditOutcome(snapshot, !!doc.bvn?.trim());
     const financialAffordability =
       snapshot.status === 'ok'
@@ -1552,10 +1557,6 @@ export class VerificationService {
       guarantorSection,
       documentsSection,
       financialSection,
-    };
-    const docForRisk: DocForRisk = {
-      ...buildDocForRiskFromResponse(doc as unknown as Record<string, unknown>),
-      creditFinancialSnapshot: snapshot,
     };
     const { riskScore, riskCategory, recommendation, riskBreakdown, checkSummaries } =
       this.buildScoredLandlordRiskArtifacts(docForRisk, report, tier);

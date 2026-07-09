@@ -43,6 +43,7 @@ describe('verification-doc-for-risk.util', () => {
         employmentSection: 'not_reviewed',
         guarantorSection: 'not_reviewed',
         documentsSection: 'not_reviewed',
+        financialSection: 'not_reviewed',
       },
       'standard',
     );
@@ -59,5 +60,7 @@ describe('verification-doc-for-risk.util', () => {
     expect(
       guarantor?.checks.find((c) => c.name === 'Guarantor contact')?.outcome,
     ).toBe('provided');
+    expect(employment?.earnedPoints).toBe(0);
+    expect(breakdown.find((c) => c.key === 'guarantor')?.earnedPoints).toBe(0);
   });
 });
