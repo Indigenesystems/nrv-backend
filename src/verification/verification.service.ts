@@ -19,7 +19,7 @@ import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { VerificationHistory, VerificationHistoryDocument } from './entities/verification-history.entity';
 import { UserService } from '../users/users.service';
-import { PlansService } from '../plans/plans.service';
+import { PlansService, UNIT_PRICE_NAIRA } from '../plans/plans.service';
 import { DojahTierService } from './dojah-tier.service';
 import {
   identificationDocumentAnalysisOutcome,
@@ -439,9 +439,29 @@ export class VerificationService {
       );
     }
 
+    const creditCostNaira =
+      tier === 'premium' ? UNIT_PRICE_NAIRA.premium : UNIT_PRICE_NAIRA.standard;
+
     try {
       const uniqueId = await this.generateUniqueVerificationId();
-      const created = new this.verificationModel({ ...dto, uniqueId });
+      const created = new this.verificationModel({
+        firstName: dto.firstName,
+        lastName: dto.lastName,
+        email: dto.email,
+        phone: dto.phone,
+        nin: dto.nin,
+        landlordDisplayName: dto.landlordDisplayName,
+        requestedBy: dto.requestedBy,
+        verificationTier: tier,
+        uniqueId,
+        creditCostNaira,
+        ...(dto.applicationId ? { applicationId: dto.applicationId } : {}),
+        ...(dto.roomId ? { roomId: dto.roomId } : {}),
+        ...(dto.propertyId ? { propertyId: dto.propertyId } : {}),
+        ...(dto.propertyLabel?.trim()
+          ? { propertyLabel: dto.propertyLabel.trim() }
+          : {}),
+      });
       await created.save();
 
       // Step 2.5: Consume the verification credit based on tier
@@ -733,7 +753,7 @@ export class VerificationService {
   async getVerificationStatuses() {
     return [
       { value: '', label: 'All Status' },
-      { value: 'pending', label: 'Pending' },
+      { value: 'pending', label: 'Verification Requested' },
       { value: 'approved', label: 'Verification completed' },
       { value: 'rejected', label: 'Rejected' },
     ];
