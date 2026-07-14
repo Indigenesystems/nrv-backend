@@ -50,6 +50,26 @@ export class Verification {
   @Prop({ type: String, enum: ['standard', 'premium'], default: 'standard' })
   verificationTier?: 'standard' | 'premium';
 
+  /** Catalog credit cost (Naira) consumed for this request. */
+  @Prop({ default: null })
+  creditCostNaira?: number;
+
+  /** Application that triggered this verification (optional). */
+  @Prop({ type: Types.ObjectId, ref: 'Application', default: null })
+  applicationId?: Types.ObjectId;
+
+  /** Unit / room linked to the request (optional). */
+  @Prop({ type: Types.ObjectId, ref: 'Room', default: null })
+  roomId?: Types.ObjectId;
+
+  /** Property listing linked to the request (optional). */
+  @Prop({ type: Types.ObjectId, ref: 'Property', default: null })
+  propertyId?: Types.ObjectId;
+
+  /** Denormalized label for unit/property (e.g. "Unit #3 · Lekki Phase 1"). */
+  @Prop({ default: null })
+  propertyLabel?: string;
+
   // 3. Track custom dates
   @Prop({ default: () => new Date() })
   dateRequested: Date;

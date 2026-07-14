@@ -49,7 +49,7 @@ export class PaymentsController {
     if (Math.abs(Number(amountNaira) - pricing.totalNaira) > 0.01) {
       return {
         status: 'error',
-        message: `Invalid amount. Expected ₦${pricing.totalNaira.toLocaleString()} (includes Paystack fee and VAT) for ${qty} credit(s).`,
+        message: `Invalid amount. Expected ₦${pricing.totalNaira.toLocaleString()} for ${qty} verification(s).`,
       };
     }
 
