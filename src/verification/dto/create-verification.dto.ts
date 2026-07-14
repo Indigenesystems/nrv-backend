@@ -1,4 +1,4 @@
-import { IsDateString, IsEmail, IsIn, IsNotEmpty, IsNumber, IsOptional, IsPhoneNumber, IsString, Matches } from 'class-validator';
+import { IsDateString, IsEmail, IsIn, IsMongoId, IsNotEmpty, IsNumber, IsOptional, IsPhoneNumber, IsString, Matches } from 'class-validator';
 
 export class CreateVerificationDto {
   @IsString()
@@ -32,6 +32,22 @@ export class CreateVerificationDto {
   @IsString()
   @IsIn(['standard', 'premium'])
   verificationTier?: 'standard' | 'premium';
+
+  @IsOptional()
+  @IsMongoId()
+  applicationId?: string;
+
+  @IsOptional()
+  @IsMongoId()
+  roomId?: string;
+
+  @IsOptional()
+  @IsMongoId()
+  propertyId?: string;
+
+  @IsOptional()
+  @IsString()
+  propertyLabel?: string;
 }
 
 
