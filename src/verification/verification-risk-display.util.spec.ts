@@ -131,6 +131,65 @@ describe('buildTenantRiskBreakdown', () => {
     expect(cappedScore).toBe(35);
     const aligned = alignBreakdownEarnedToTotal(breakdown, cappedScore);
     expect(sumRiskBreakdownEarned(aligned)).toBe(35);
+    const employment = aligned.find((c) => c.key === 'employment');
+    const contact = aligned.find((c) => c.key === 'contact');
+    // Approved / verified categories must keep some points after proportional cap.
+    expect((employment?.earnedPoints ?? 0) > 0).toBe(true);
+    expect((contact?.earnedPoints ?? 0) > 0).toBe(true);
+  });
+
+  it('alignBreakdownEarnedToTotal preserves relative share of approved categories', () => {
+    const breakdown = [
+      {
+        key: 'identity',
+        label: 'Identity',
+        maxPoints: 33,
+        earnedPoints: 5,
+        statusSummary: 'partial',
+        checks: [],
+      },
+      {
+        key: 'contact',
+        label: 'Contact',
+        maxPoints: 19,
+        earnedPoints: 19,
+        statusSummary: 'verified',
+        checks: [],
+      },
+      {
+        key: 'employment',
+        label: 'Employment',
+        maxPoints: 22,
+        earnedPoints: 22,
+        statusSummary: 'approved',
+        checks: [],
+      },
+      {
+        key: 'guarantor',
+        label: 'Guarantor',
+        maxPoints: 15,
+        earnedPoints: 15,
+        statusSummary: 'approved',
+        checks: [],
+      },
+      {
+        key: 'compliance',
+        label: 'Compliance',
+        maxPoints: 11,
+        earnedPoints: 11,
+        statusSummary: 'low',
+        checks: [],
+      },
+    ];
+    const aligned = alignBreakdownEarnedToTotal(breakdown, 35);
+    expect(sumRiskBreakdownEarned(aligned)).toBe(35);
+    expect(aligned.find((c) => c.key === 'employment')!.earnedPoints).toBeGreaterThan(0);
+    expect(aligned.find((c) => c.key === 'guarantor')!.earnedPoints).toBeGreaterThan(0);
+    expect(aligned.find((c) => c.key === 'contact')!.earnedPoints).toBeGreaterThan(0);
+    // Employment had the largest share among positive categories after identity was small.
+    expect(
+      aligned.find((c) => c.key === 'employment')!.earnedPoints,
+    ).toBeGreaterThanOrEqual(aligned.find((c) => c.key === 'identity')!.earnedPoints);
   });
 
   it('alignBreakdownEarnedToTotal is a no-op when already aligned', () => {

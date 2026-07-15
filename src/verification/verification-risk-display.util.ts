@@ -52,7 +52,9 @@ const categoryEarned = (ratio: number, maxPoints: number) =>
 export const sumRiskBreakdownEarned = (breakdown: RiskBreakdownCategory[]): number =>
   breakdown.reduce((sum, category) => sum + category.earnedPoints, 0);
 
-/** When caps lower the trust score, trim earned points so the breakdown sums to the final score. */
+/** When caps lower the trust score, scale earned points so the breakdown sums to the final score.
+ * Proportional trim keeps approved/verified categories from being wiped to zero.
+ */
 export const alignBreakdownEarnedToTotal = (
   breakdown: RiskBreakdownCategory[],
   targetTotal: number,
@@ -62,24 +64,57 @@ export const alignBreakdownEarnedToTotal = (
   if (currentTotal === roundedTarget) {
     return breakdown;
   }
-  let delta = currentTotal - roundedTarget;
-  if (delta <= 0) {
+  if (currentTotal <= 0 || roundedTarget <= 0) {
+    return breakdown.map((category) => ({
+      ...category,
+      earnedPoints: 0,
+    }));
+  }
+  if (currentTotal < roundedTarget) {
     return breakdown;
   }
-  const trimOrder = ['financial', 'contact', 'employment', 'guarantor', 'identity', 'compliance'];
-  const result = breakdown.map((category) => ({ ...category }));
-  for (const key of trimOrder) {
-    if (delta <= 0) {
+
+  const factor = roundedTarget / currentTotal;
+  const result = breakdown.map((category) => ({
+    ...category,
+    earnedPoints: Math.max(
+      0,
+      Math.min(category.maxPoints, Math.floor(category.earnedPoints * factor)),
+    ),
+  }));
+
+  let remainder = roundedTarget - sumRiskBreakdownEarned(result);
+  if (remainder <= 0) {
+    return result;
+  }
+
+  // Give leftover points back to categories that lost the most to flooring,
+  // preferring ones that already had earned credit (approved/verified paths).
+  const restoreOrder = ['identity', 'compliance', 'employment', 'guarantor', 'contact', 'financial'];
+  for (const key of restoreOrder) {
+    if (remainder <= 0) {
       break;
     }
     const category = result.find((item) => item.key === key);
-    if (!category || category.earnedPoints <= 0) {
+    if (!category) {
       continue;
     }
-    const reduce = Math.min(delta, category.earnedPoints);
-    category.earnedPoints -= reduce;
-    delta -= reduce;
+    const original = breakdown.find((item) => item.key === key);
+    if (!original || original.earnedPoints <= 0) {
+      continue;
+    }
+    const room = Math.min(
+      remainder,
+      original.earnedPoints - category.earnedPoints,
+      category.maxPoints - category.earnedPoints,
+    );
+    if (room <= 0) {
+      continue;
+    }
+    category.earnedPoints += room;
+    remainder -= room;
   }
+
   return result;
 };
 
