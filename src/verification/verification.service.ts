@@ -1456,12 +1456,53 @@ export class VerificationService {
     if (storedSnapshot) {
       docForRisk.creditFinancialSnapshot = storedSnapshot;
     }
+
+    // Recompute automated outcomes from live response fields so caps/labels
+    // match current NIN/ID/utility results (stored landlordReport can lag).
+    const ninAlignment = getNinAlignmentForDoc(docForRisk);
+    let ninStatus = doc.nin
+      ? doc.ninVerificationStatus === 'completed' ||
+        doc.ninVerificationResult?.status === 'success'
+        ? 'verified'
+        : 'failed'
+      : 'not_provided';
+    if (ninStatus === 'verified' && !ninAlignment.namesMatch) {
+      ninStatus = 'failed';
+    }
+    report.nin = ninStatus;
+    report.idDocument = resolveIdDocumentLandlordStatus(
+      doc.identificationDocumentUrl,
+      doc.identificationDocumentAnalysis as Record<string, unknown> | null | undefined,
+      doc.ninVerificationResult,
+    );
+    report.utilityBill = resolveUtilityBillLandlordStatus(
+      doc.utilityBillUrl,
+      doc.utilityBillAnalysis as Record<string, unknown> | null | undefined,
+    );
+    report.phone = resolvePhoneLandlordStatus(doc.phone, doc.phoneFraudResult);
+    report.aml = resolveAmlLandlordStatus(
+      doc.amlScreeningResult as Record<string, unknown> | null | undefined,
+    );
+
     const { riskScore, riskCategory, recommendation, riskBreakdown, checkSummaries } =
       this.buildScoredLandlordRiskArtifacts(docForRisk, report, tier);
     return {
       ...doc,
       landlordReport: {
         ...lr,
+        nin: report.nin as 'verified' | 'failed' | 'not_run' | 'not_provided',
+        phone: report.phone as 'valid' | 'invalid' | 'not_run' | 'not_provided',
+        aml: report.aml as 'low_risk' | 'medium_risk' | 'high_risk' | 'not_run' | 'error',
+        idDocument: report.idDocument as
+          | 'verified'
+          | 'failed'
+          | 'not_run'
+          | 'not_provided',
+        utilityBill: report.utilityBill as
+          | 'verified'
+          | 'failed'
+          | 'not_run'
+          | 'not_provided',
         riskScore,
         riskCategory,
         recommendation,
