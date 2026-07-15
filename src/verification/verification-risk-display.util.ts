@@ -53,7 +53,7 @@ export const sumRiskBreakdownEarned = (breakdown: RiskBreakdownCategory[]): numb
   breakdown.reduce((sum, category) => sum + category.earnedPoints, 0);
 
 /** When caps lower the trust score, scale earned points so the breakdown sums to the final score.
- * Proportional trim keeps approved/verified categories from being wiped to zero.
+ * Prefer trimming incomplete categories first so fully passed categories keep full credit longer.
  */
 export const alignBreakdownEarnedToTotal = (
   breakdown: RiskBreakdownCategory[],
@@ -74,47 +74,73 @@ export const alignBreakdownEarnedToTotal = (
     return breakdown;
   }
 
-  const factor = roundedTarget / currentTotal;
-  const result = breakdown.map((category) => ({
-    ...category,
-    earnedPoints: Math.max(
-      0,
-      Math.min(category.maxPoints, Math.floor(category.earnedPoints * factor)),
-    ),
-  }));
+  const result = breakdown.map((category) => ({ ...category }));
+  const isComplete = (category: RiskBreakdownCategory) =>
+    category.maxPoints > 0 && category.earnedPoints >= category.maxPoints;
 
-  let remainder = roundedTarget - sumRiskBreakdownEarned(result);
-  if (remainder <= 0) {
+  const scaleGroup = (keys: string[], groupTarget: number) => {
+    const group = result.filter((category) => keys.includes(category.key));
+    const groupTotal = sumRiskBreakdownEarned(group);
+    if (groupTotal <= 0 || groupTotal <= groupTarget) {
+      return;
+    }
+    const factor = groupTarget / groupTotal;
+    for (const category of group) {
+      category.earnedPoints = Math.max(
+        0,
+        Math.min(category.maxPoints, Math.floor(category.earnedPoints * factor)),
+      );
+    }
+    let remainder = groupTarget - sumRiskBreakdownEarned(group);
+    const restoreOrder = [
+      'identity',
+      'compliance',
+      'employment',
+      'guarantor',
+      'contact',
+      'financial',
+    ];
+    for (const key of restoreOrder) {
+      if (remainder <= 0) {
+        break;
+      }
+      const category = group.find((item) => item.key === key);
+      const original = breakdown.find((item) => item.key === key);
+      if (!category || !original || original.earnedPoints <= 0) {
+        continue;
+      }
+      const room = Math.min(
+        remainder,
+        original.earnedPoints - category.earnedPoints,
+        category.maxPoints - category.earnedPoints,
+      );
+      if (room <= 0) {
+        continue;
+      }
+      category.earnedPoints += room;
+      remainder -= room;
+    }
+  };
+
+  const completeKeys = result.filter(isComplete).map((category) => category.key);
+  const incompleteKeys = result
+    .filter((category) => !isComplete(category) && category.earnedPoints > 0)
+    .map((category) => category.key);
+  const completeSum = sumRiskBreakdownEarned(
+    result.filter((category) => completeKeys.includes(category.key)),
+  );
+
+  if (completeSum >= roundedTarget) {
+    // Even fully passed categories must share the capped total.
+    scaleGroup(
+      result.filter((category) => category.earnedPoints > 0).map((category) => category.key),
+      roundedTarget,
+    );
     return result;
   }
 
-  // Give leftover points back to categories that lost the most to flooring,
-  // preferring ones that already had earned credit (approved/verified paths).
-  const restoreOrder = ['identity', 'compliance', 'employment', 'guarantor', 'contact', 'financial'];
-  for (const key of restoreOrder) {
-    if (remainder <= 0) {
-      break;
-    }
-    const category = result.find((item) => item.key === key);
-    if (!category) {
-      continue;
-    }
-    const original = breakdown.find((item) => item.key === key);
-    if (!original || original.earnedPoints <= 0) {
-      continue;
-    }
-    const room = Math.min(
-      remainder,
-      original.earnedPoints - category.earnedPoints,
-      category.maxPoints - category.earnedPoints,
-    );
-    if (room <= 0) {
-      continue;
-    }
-    category.earnedPoints += room;
-    remainder -= room;
-  }
-
+  const incompleteTarget = roundedTarget - completeSum;
+  scaleGroup(incompleteKeys, incompleteTarget);
   return result;
 };
 
@@ -432,6 +458,12 @@ export const buildTenantRiskBreakdown = (
           ? 'no name extracted'
           : '20% of category';
 
+  const idDocumentOutcome = idNinAlignment.authentic
+    ? 'verified'
+    : report.idDocument === 'not_run' || report.idDocument === 'not_provided'
+      ? report.idDocument
+      : 'failed';
+
   const identityChecks: RiskBreakdownCheck[] = [
     {
       name: 'NIN verification',
@@ -463,7 +495,7 @@ export const buildTenantRiskBreakdown = (
     },
     {
       name: 'ID document',
-      outcome: report.idDocument,
+      outcome: idDocumentOutcome,
       contribution: idDocumentContribution,
     },
     ...(report.personalSection !== 'not_reviewed'
@@ -548,8 +580,8 @@ export const buildTenantRiskBreakdown = (
       earnedPoints: categoryEarned(scores.identityScore, w.identity),
       statusSummary:
         ninWasRunForDoc(doc, report) && !ninAlignment.namesMatch
-          ? `name mismatch · ${report.idDocument}`
-          : `${report.nin} · ${report.idDocument}`,
+          ? `name mismatch · ${idDocumentOutcome}`
+          : `${report.nin} · ${idDocumentOutcome}`,
       checks: identityChecks,
     },
     {
