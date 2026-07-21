@@ -329,7 +329,7 @@ export class PropertiesController {
       return res.status(HttpStatus.OK).json({
         status: 'success',
         message: 'No applications found',
-        data: null,
+        data: [],
       });
     } else {
       return res.status(HttpStatus.OK).json({
