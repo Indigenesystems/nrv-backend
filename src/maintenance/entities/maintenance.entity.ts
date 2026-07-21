@@ -74,6 +74,17 @@ export class Maintenance {
   scheduledDate?: Date;
 
   @Prop()
+  @IsOptional()
+  scheduledTime?: string;
+
+  @Prop({ type: [Object], default: [] })
+  statusHistory?: Array<{
+    status: MaintenanceStatus;
+    changedAt: Date;
+    note?: string;
+  }>;
+
+  @Prop()
   
   file?: string;
 
