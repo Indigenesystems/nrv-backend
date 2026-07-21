@@ -646,11 +646,19 @@ export class RoomsService {
       throw new Error('Application does not exists!');
     }
 
-    // Set status to 'ended' (or any other status you want)
+    // Set status to ended
     tenant.status = ApplicationStatus.ENDED;
-    tenant.rentEndDate = new Date(); // Set rentEndDate to current date (or provide a custom date)
+    tenant.rentEndDate = new Date();
 
-    // Save the updated tenant
+    // Free the unit so it can be re-listed / reassigned
+    if ((tenant as any).propertyId) {
+      await this.roomModel.findByIdAndUpdate(
+        (tenant as any).propertyId,
+        { assignedToTenant: false },
+        { new: true },
+      );
+    }
+
     return tenant.save();
   }
 }

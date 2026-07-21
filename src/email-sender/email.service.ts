@@ -1339,6 +1339,91 @@ export class EmailService {
 </html>`;
   }
 
+  private escapeHtml(value?: string | number | null): string {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  async sendMaintenanceNotification(payload: {
+    recipientEmail: string;
+    recipientName: string;
+    subject: string;
+    heading: string;
+    message: string;
+    requestTitle: string;
+    requestNumber: number;
+    propertyLabel: string;
+    status: string;
+    vendorName?: string;
+    vendorPhone?: string;
+    scheduledVisit?: string;
+    note?: string;
+    actionUrl: string;
+    actionLabel?: string;
+  }): Promise<void> {
+    const {
+      recipientEmail,
+      recipientName,
+      subject,
+      heading,
+      message,
+      requestTitle,
+      requestNumber,
+      propertyLabel,
+      status,
+      vendorName,
+      vendorPhone,
+      scheduledVisit,
+      note,
+      actionUrl,
+      actionLabel = 'View maintenance request',
+    } = payload;
+    const details = [
+      ['Request', `#${requestNumber} — ${requestTitle}`],
+      ['Apartment', propertyLabel],
+      ['Status', status],
+      vendorName ? ['Vendor', vendorName] : null,
+      vendorPhone ? ['Vendor phone', vendorPhone] : null,
+      scheduledVisit ? ['Scheduled visit', scheduledVisit] : null,
+      note ? ['Landlord note', note] : null,
+    ].filter(Boolean) as string[][];
+    const detailRows = details
+      .map(
+        ([label, value]) =>
+          `<tr><td style="padding:7px 12px 7px 0;color:#667085;vertical-align:top;">${this.escapeHtml(label)}</td><td style="padding:7px 0;font-weight:600;color:#101828;">${this.escapeHtml(value)}</td></tr>`,
+      )
+      .join('');
+    const safeActionUrl = this.escapeHtml(actionUrl);
+    const html = this.renderSimpleEmail({
+      title: this.escapeHtml(heading),
+      preheader: this.escapeHtml(message),
+      contentHtml: `
+        <p style="margin:0 0 12px;">Hello ${this.escapeHtml(recipientName)},</p>
+        <p style="margin:0 0 16px;">${this.escapeHtml(message)}</p>
+        <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 18px;border-top:1px solid #eaecf0;border-bottom:1px solid #eaecf0;">
+          ${detailRows}
+        </table>
+        <p style="margin:16px 0 0;">
+          <a href="${safeActionUrl}" target="_blank" style="display:inline-block;background:#03442C;color:#ffffff;text-decoration:none;padding:12px 16px;border-radius:8px;font-weight:600;">
+            ${this.escapeHtml(actionLabel)}
+          </a>
+        </p>
+        <p style="margin:12px 0 0;font-size:13px;color:#667085;">If the button doesn’t work, copy this link: <a href="${safeActionUrl}" target="_blank" style="color:#03442C;">${safeActionUrl}</a></p>
+      `,
+    });
+
+    await this.transporter.sendMail({
+      from: this.defaultFromAddress,
+      to: recipientEmail,
+      subject,
+      html,
+    });
+  }
+
   async sendNewPropertyApplicationNotificationToLandlord(payload: {
     landlordEmail: string;
     landlordName: string;

@@ -4,7 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import mongoose, { Model } from 'mongoose';
+import mongoose, { Model, Types } from 'mongoose';
 import { CloudinaryService } from '../upload/cloudinary.service';
 import { Property } from './entities/property.entity';
 import { RoomsService } from '../rooms/rooms.service';
@@ -779,6 +779,55 @@ export class PropertiesService {
     }
   }
 
+  private ownerIdMatch(id: any): Record<string, unknown> {
+    if (id === undefined || id === null || id === '') {
+      return { ownerId: id };
+    }
+    const asString = String(id);
+    const variants: unknown[] = [id, asString];
+    if (Types.ObjectId.isValid(asString)) {
+      variants.push(new Types.ObjectId(asString));
+    }
+    // Deduplicate by string form while keeping ObjectId instances
+    const unique: unknown[] = [];
+    const seen = new Set<string>();
+    for (const value of variants) {
+      const key =
+        value instanceof Types.ObjectId
+          ? `oid:${value.toString()}`
+          : `str:${String(value)}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      unique.push(value);
+    }
+    return unique.length === 1
+      ? { ownerId: unique[0] }
+      : { ownerId: { $in: unique } };
+  }
+
+  private normalizeApplicationStatusFilter(
+    status?: string,
+  ): string | { $in: string[] } | null {
+    const raw = status?.trim();
+    if (!raw) {
+      return null;
+    }
+    const lower = raw.toLowerCase();
+    if (lower === 'active_lease' || lower === 'active') {
+      return {
+        $in: [ApplicationStatus.ACTIVE_LEASE, 'active', 'Accepted'],
+      };
+    }
+    if (lower === 'ended' || lower === 'past') {
+      return {
+        $in: [ApplicationStatus.ENDED, 'ended', 'ENDED'],
+      };
+    }
+    return raw;
+  }
+
   async getLandlordApplications(
     page: number = 1,
     limit: number = 10,
@@ -786,60 +835,62 @@ export class PropertiesService {
     status?: string
   ): Promise<any> {
     try {
-      const now = new Date();
       const skip = (page - 1) * limit;
       const prefetchLimit = Math.max(1, page) * limit;
-  
-      // Format and normalize status
-      let formattedStatus = status?.trim() || null;
-      if (formattedStatus?.toLowerCase() === 'active_lease') {
-        formattedStatus = 'Active_lease';
-      }
-      if (formattedStatus?.toLowerCase() === 'ended') {
-        formattedStatus = ApplicationStatus.ENDED;
-      }
-  
-      // Build query filters
-      const buildQuery = () => {
-        const query: any = { ownerId: id };
-        if (formattedStatus === ApplicationStatus.ENDED) {
-          query.status = ApplicationStatus.ENDED;
-        } else if (formattedStatus) {
-          query.status = formattedStatus;
-        }
-        return query;
+      const statusFilter = this.normalizeApplicationStatusFilter(status);
+
+      const query: any = {
+        ...this.ownerIdMatch(id),
       };
-  
-      const query = buildQuery();
-  
+      if (statusFilter) {
+        query.status = statusFilter;
+      }
+
       // Run both queries in parallel
       const [applications, onboardedTenants] = await Promise.all([
         this.applicationModel
           .find(query)
-          .sort({ createdAt: -1 })
+          .sort({ updatedAt: -1, createdAt: -1 })
           .limit(prefetchLimit)
           .populate('ownerId')
           .populate({ path: 'propertyId', populate: { path: 'propertyId' } })
           .populate('applicant'),
-  
+
         this.landlordAssignedTenantModel
           .find(query)
-          .sort({ createdAt: -1 })
+          .sort({ updatedAt: -1, createdAt: -1 })
           .limit(prefetchLimit)
           .populate('ownerId')
           .populate({ path: 'propertyId', populate: { path: 'propertyId' } })
           .populate('applicant'),
       ]);
-  
-      // Combine and return results
+
+      // Combine, de-dupe by id, and return results
+      const seen = new Set<string>();
       const combined = [...applications, ...onboardedTenants]
+        .filter((row: any) => {
+          const key = String(row?._id || '');
+          if (!key || seen.has(key)) {
+            return false;
+          }
+          seen.add(key);
+          return true;
+        })
         .sort((a: any, b: any) => {
-          const aTime = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
-          const bTime = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
+          const aTime = a?.updatedAt
+            ? new Date(a.updatedAt).getTime()
+            : a?.createdAt
+              ? new Date(a.createdAt).getTime()
+              : 0;
+          const bTime = b?.updatedAt
+            ? new Date(b.updatedAt).getTime()
+            : b?.createdAt
+              ? new Date(b.createdAt).getTime()
+              : 0;
           return bTime - aTime;
         })
         .slice(skip, skip + limit);
-  
+
       return combined;
     } catch (error) {
       throw new Error(`Failed to fetch landlord applications: ${error}`);
@@ -936,50 +987,58 @@ export class PropertiesService {
       (existingApplication as any).status = newStatus;
       const saved = await (existingApplication as any).save();
 
-      // Notify applicant of status change (best-effort)
-      try {
-        const hydrated = await this.applicationModel
-          .findById(saved._id)
-          .populate('applicant')
-          .populate('ownerId')
-          .populate({ path: 'propertyId', populate: { path: 'propertyId' } })
-          .lean();
+      // Notify applicant of status change without blocking the API response
+      // (SMTP timeouts were delaying status updates by 15–20s on the client).
+      if (previousStatus !== newStatus) {
+        void (async () => {
+          try {
+            const hydrated = await this.applicationModel
+              .findById(saved._id)
+              .populate('applicant')
+              .populate('ownerId')
+              .populate({
+                path: 'propertyId',
+                populate: { path: 'propertyId' },
+              })
+              .lean();
 
-        const applicant: any = (hydrated as any)?.applicant;
-        const room: any = (hydrated as any)?.propertyId;
-        const property: any = room?.propertyId;
+            const applicant: any = (hydrated as any)?.applicant;
+            const room: any = (hydrated as any)?.propertyId;
+            const property: any = room?.propertyId;
 
-        const applicantName =
-          `${applicant?.firstName ?? ''} ${applicant?.lastName ?? ''}`.trim() ||
-          applicant?.fullName ||
-          'Applicant';
-        const propertyTitle =
-          property?.propertyName ||
-          property?.streetAddress ||
-          room?.name ||
-          'Property';
-        const propertyLocation = [
-          property?.streetAddress,
-          property?.city,
-          property?.state,
-        ]
-          .filter(Boolean)
-          .join(', ');
+            const applicantName =
+              `${applicant?.firstName ?? ''} ${applicant?.lastName ?? ''}`.trim() ||
+              applicant?.fullName ||
+              'Applicant';
+            const propertyTitle =
+              property?.propertyName ||
+              property?.streetAddress ||
+              room?.name ||
+              'Property';
+            const propertyLocation = [
+              property?.streetAddress,
+              property?.city,
+              property?.state,
+            ]
+              .filter(Boolean)
+              .join(', ');
 
-        if (applicant?.email && previousStatus !== newStatus) {
-          await this.emailService.sendApplicationStatusUpdateToApplicant({
-            applicantEmail: applicant.email,
-            applicantName,
-            status: newStatus,
-            propertyTitle,
-            propertyLocation,
-          });
-        }
-      } catch (err: any) {
-        console.error(
-          '[PropertiesService] Status update email notification failed:',
-          err?.message || err,
-        );
+            if (applicant?.email) {
+              await this.emailService.sendApplicationStatusUpdateToApplicant({
+                applicantEmail: applicant.email,
+                applicantName,
+                status: newStatus,
+                propertyTitle,
+                propertyLocation,
+              });
+            }
+          } catch (err: any) {
+            console.error(
+              '[PropertiesService] Status update email notification failed:',
+              err?.message || err,
+            );
+          }
+        })();
       }
 
       return saved;
@@ -1345,14 +1404,19 @@ export class PropertiesService {
 
   async findLandlordOnboardedTenants(id: any, status?: string): Promise<any> {
     const now = new Date();
-    let formattedStatus = status === 'Accepted' ? 'active' : status;
-    if (formattedStatus === 'ended') {
-      // Rent has already ended
+    const ownerFilter = this.ownerIdMatch(id);
+    const lower = status?.trim()?.toLowerCase();
+
+    if (lower === 'ended' || lower === 'past') {
       return await this.landlordAssignedTenantModel
         .find({
-          ownerId: id,
-          rentEndDate: { $lt: now },
+          ...ownerFilter,
+          $or: [
+            { status: { $in: [ApplicationStatus.ENDED, 'ended', 'ENDED'] } },
+            { rentEndDate: { $lt: now } },
+          ],
         })
+        .sort({ updatedAt: -1, createdAt: -1 })
         .populate('ownerId')
         .populate({
           path: 'propertyId',
@@ -1360,15 +1424,16 @@ export class PropertiesService {
         })
         .populate('applicant');
     }
-    if (formattedStatus === 'active') {
-      // Currently active leases
+
+    if (lower === 'active' || lower === 'active_lease' || status === 'Accepted') {
       return await this.landlordAssignedTenantModel
         .find({
-          ownerId: id,
-          status: { $in: ['active', 'Accepted'] },
-          rentStartDate: { $lte: now },
-          rentEndDate: { $gte: now },
+          ...ownerFilter,
+          status: {
+            $in: [ApplicationStatus.ACTIVE_LEASE, 'active', 'Accepted'],
+          },
         })
+        .sort({ updatedAt: -1, createdAt: -1 })
         .populate('ownerId')
         .populate({
           path: 'propertyId',
@@ -1376,14 +1441,13 @@ export class PropertiesService {
         })
         .populate('applicant');
     }
-    
-  
-    // Generic fallback for other statuses (e.g., pending, rejected)
+
     return await this.landlordAssignedTenantModel
       .find({
-        ownerId: id,
-        ...(formattedStatus ? { status: formattedStatus } : {}),
+        ...ownerFilter,
+        ...(status ? { status } : {}),
       })
+      .sort({ updatedAt: -1, createdAt: -1 })
       .populate('ownerId')
       .populate({
         path: 'propertyId',
