@@ -46,11 +46,18 @@ describe('UserController auth flows', () => {
       userService.findUserByEmail.mockResolvedValue({
         email: 'known@example.com',
       });
-      userService.savePasswordResetToken.mockResolvedValue(undefined);
+      userService.savePasswordResetToken.mockResolvedValue({
+        expiresAt: new Date('2026-07-28T13:00:00.000Z'),
+        reusedExistingCode: false,
+      });
 
       const result = await controller.requestPasswordReset('known@example.com');
 
-      expect(result).toEqual({ message: 'Password reset link sent.' });
+      expect(result).toEqual({
+        message:
+          'Password reset code sent. It remains valid for 1 hour from when it was first issued.',
+        expiresAt: '2026-07-28T13:00:00.000Z',
+      });
       expect(userService.savePasswordResetToken).toHaveBeenCalledWith(
         'known@example.com',
       );
