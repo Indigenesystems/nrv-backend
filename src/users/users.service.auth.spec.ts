@@ -17,6 +17,7 @@ import { UserVerification } from './entities/userVerification';
 
 describe('UserService auth flows', () => {
   let service: UserService;
+  let emailService: { sendResetPasswordToken: jest.Mock };
   let userModel: {
     findOne: jest.Mock;
     find: jest.Mock;
@@ -25,6 +26,7 @@ describe('UserService auth flows', () => {
   };
 
   beforeEach(async () => {
+    emailService = { sendResetPasswordToken: jest.fn().mockResolvedValue(undefined) };
     userModel = {
       findOne: jest.fn(),
       find: jest.fn().mockReturnValue({
@@ -47,7 +49,7 @@ describe('UserService auth flows', () => {
         { provide: getModelToken(NotificationSettings.name), useValue: {} },
         { provide: getModelToken(AgreementDocuments.name), useValue: {} },
         { provide: JwtService, useValue: { sign: jest.fn() } },
-        { provide: EmailService, useValue: { sendUserCreatedEmail: jest.fn() } },
+        { provide: EmailService, useValue: emailService },
         { provide: PropertiesService, useValue: {} },
         { provide: CloudinaryService, useValue: {} },
         {
@@ -87,6 +89,32 @@ describe('UserService auth flows', () => {
       expect(result).toEqual({
         message: 'An account with this phone number already exists',
       });
+    });
+  });
+
+  describe('Password reset code expiry', () => {
+    it('reuses an existing code until it expires', async () => {
+      const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+      userModel.findOne.mockResolvedValue({
+        _id: 'user-id',
+        email: 'user@example.com',
+        firstName: 'Jane',
+        lastName: 'Doe',
+        passwordResetToken: '654321',
+        passwordResetExpires: expiresAt,
+      });
+
+      const result = await service.savePasswordResetToken('user@example.com');
+
+      expect(result).toEqual({
+        expiresAt,
+        reusedExistingCode: true,
+      });
+      expect(userModel.findByIdAndUpdate).not.toHaveBeenCalled();
+      expect(emailService.sendResetPasswordToken).toHaveBeenCalledWith(
+        expect.objectContaining({ passwordResetToken: '654321' }),
+        expiresAt,
+      );
     });
   });
 

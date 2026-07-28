@@ -216,7 +216,7 @@ export class UserController {
   @Post('/request-password-reset')
   async requestPasswordReset(
     @Body('email') email: string,
-  ): Promise<{ message: string }> {
+  ): Promise<{ message: string; expiresAt: string }> {
     const validationResult = requestPasswordResetSchema.validate({ email });
     if (validationResult.error) {
       throw new BadRequestException(validationResult.error.message);
@@ -229,8 +229,14 @@ export class UserController {
       throw new NotFoundException('No account with this email exists');
     }
 
-    await this.userService.savePasswordResetToken(user.email);
-    return { message: 'Password reset link sent.' };
+    const { expiresAt } = await this.userService.savePasswordResetToken(
+      user.email,
+    );
+    return {
+      message:
+        'Password reset code sent. It remains valid for 1 hour from when it was first issued.',
+      expiresAt: expiresAt.toISOString(),
+    };
   }
 
   /**
