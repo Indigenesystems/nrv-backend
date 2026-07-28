@@ -880,7 +880,13 @@ export class EmailService {
     }
   }
 
-  async sendResetPasswordToken(payload: any): Promise<void> {
+  async sendResetPasswordToken(payload: any, expiresAt?: Date): Promise<void> {
+    const expiryLabel = expiresAt
+      ? new Intl.DateTimeFormat('en-NG', {
+          dateStyle: 'medium',
+          timeStyle: 'short',
+        }).format(expiresAt)
+      : '1 hour from now';
     const emailTemplate = `<!DOCTYPE html>
     <html>
     <head>
@@ -1037,7 +1043,7 @@ export class EmailService {
               </tr>
               <tr>
                 <td align="left" bgcolor="#ffffff" style="padding: 24px; font-family: 'Source Sans Pro', Helvetica, Arial, sans-serif; font-size: 16px; line-height: 24px;">
-                  <p style="margin: 0;">You made a request to reset your password. Kindly find the verification link - [verificationToken]</p>
+                  <p style="margin: 0;">You made a request to reset your password. Use the code below to complete your reset.</p>
                 </td>
               </tr>
               <tr>
@@ -1045,6 +1051,11 @@ export class EmailService {
                   <h1 style="margin: 0; font-size: 32px; font-weight: 700; letter-spacing: -1px; line-height: 48px;">[verificationToken]</h1>
               </td>
             </tr>
+              <tr>
+                <td align="left" bgcolor="#ffffff" style="padding: 0 24px 24px; font-family: 'Source Sans Pro', Helvetica, Arial, sans-serif; font-size: 14px; line-height: 22px; color: #475467;">
+                  <p style="margin: 0;">This code stays valid until <strong>[resetCodeExpiresAt]</strong>. If you request another reset before then, the same code will still work.</p>
+                </td>
+              </tr>
               <tr>
                 <td align="left" bgcolor="#ffffff" style="padding: 24px; font-family: 'Source Sans Pro', Helvetica, Arial, sans-serif; font-size: 16px; line-height: 24px;">
                     <p style="margin: 0;">If You have any questions or encounter any issues while accessing your account, please feel free to contact our support team at <a href="mailto:hello@naijarentverify.com">hello@naijarentverify.com</a>. We are here to assist you.</p>
@@ -1106,11 +1117,12 @@ export class EmailService {
       '[userName]': `${doc.firstName ?? ''} ${doc.lastName ?? ''}`.trim(),
       '[userEmail]': String(doc.email ?? ''),
       '[verificationToken]': String(payload.passwordResetToken ?? ''),
+      '[resetCodeExpiresAt]': expiryLabel,
       '[accountType]': String(payload.accountType ?? doc.accountType ?? ''),
     };
 
     const resultEmailTemplate = emailTemplate.replace(
-      /\[userName\]|\[userRoleTag\]|\[userEmail\]|\[userPassword\]|\[verificationToken\]|\[accountType\]|\[loginUrl\]|\[supportTeamEmail\]/g,
+      /\[userName\]|\[userRoleTag\]|\[userEmail\]|\[userPassword\]|\[verificationToken\]|\[resetCodeExpiresAt\]|\[accountType\]|\[loginUrl\]|\[supportTeamEmail\]/g,
       (match) => replacements[match] ?? match,
     );
 

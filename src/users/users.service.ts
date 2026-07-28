@@ -7,7 +7,7 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { User } from './entities/user.entity';
 import { Model } from 'mongoose';
-import { generateConfirmationCode } from '../helper/utils';
+import { generateConfirmationCode, PASSWORD_RESET_TTL_MS } from '../helper/utils';
 import { JwtService } from '@nestjs/jwt';
 import { EmailService } from '../email-sender/email.service';
 import { PropertiesService } from '../properties/properties.service';
@@ -551,30 +551,49 @@ export class UserService {
   }
 
   /**
-   * Save password reset token for a user
-   * @param email
+   * Save password reset token for a user.
+   * Reuses an existing code until it expires so repeat requests do not invalidate it early.
    */
-  async savePasswordResetToken(email: string): Promise<void> {
+  async savePasswordResetToken(
+    email: string,
+  ): Promise<{ expiresAt: Date; reusedExistingCode: boolean }> {
     const user: any = await this.findUserByEmail(email);
     if (!user) {
-      return;
+      throw new NotFoundException('No account with this email exists');
     }
 
-    const confirmationCode = generateConfirmationCode();
+    const now = new Date();
+    const existingExpiry = user.passwordResetExpires
+      ? new Date(user.passwordResetExpires)
+      : null;
+    const hasValidExistingCode = Boolean(
+      user.passwordResetToken &&
+        existingExpiry &&
+        existingExpiry.getTime() > now.getTime(),
+    );
 
-    await this.userModel.findByIdAndUpdate(user._id, {
-      passwordResetToken: confirmationCode,
-      passwordResetExpires: new Date(Date.now() + 3600000), // 1 hour expiration
-    });
+    const confirmationCode = hasValidExistingCode
+      ? String(user.passwordResetToken)
+      : generateConfirmationCode();
+    const expiresAt = hasValidExistingCode
+      ? existingExpiry!
+      : new Date(Date.now() + PASSWORD_RESET_TTL_MS);
+
+    if (!hasValidExistingCode) {
+      await this.userModel.findByIdAndUpdate(user._id, {
+        passwordResetToken: confirmationCode,
+        passwordResetExpires: expiresAt,
+      });
+    }
 
     user.passwordResetToken = confirmationCode;
 
     try {
-      await this.emailService.sendResetPasswordToken(user);
+      await this.emailService.sendResetPasswordToken(user, expiresAt);
     } catch (emailErr: any) {
       if (process.env.NODE_ENV !== 'production') {
         console.warn(
-          `[dev] Password reset code for ${email}: ${confirmationCode}`,
+          `[dev] Password reset code for ${email}: ${confirmationCode} (expires ${expiresAt.toISOString()})`,
         );
       }
       console.error(
@@ -585,6 +604,8 @@ export class UserService {
         'Unable to send password reset email right now. Please try again later.',
       );
     }
+
+    return { expiresAt, reusedExistingCode: hasValidExistingCode };
   }
 
   /**
@@ -603,7 +624,7 @@ export class UserService {
       );
     }
 
-    if (!user.passwordResetExpires || user.passwordResetExpires < new Date()) {
+    if (!user.passwordResetExpires || user.passwordResetExpires <= new Date()) {
       throw new BadRequestException(
         'This reset code has expired. Please request a new password reset.',
       );
