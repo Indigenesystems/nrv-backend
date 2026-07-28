@@ -266,9 +266,35 @@ export class UserService {
    * @returns User or null
    */
   async findUserByEmail(email: string): Promise<User | null> {
-    console.log({email});
-    
-    return await this.userModel.findOne({ email });
+    return await this.userModel.findOne({ email: email?.trim() });
+  }
+
+  private normalizePhone(phoneNumber?: string): string {
+    return (phoneNumber ?? '').trim().replace(/\s+/g, '');
+  }
+
+  /**
+   * Find user by phone number (normalized comparison).
+   */
+  async findUserByPhone(phoneNumber: string): Promise<User | null> {
+    const normalized = this.normalizePhone(phoneNumber);
+    if (!normalized) {
+      return null;
+    }
+
+    const candidates = await this.userModel
+      .find({ phoneNumber: { $nin: [null, ''] } })
+      .select('phoneNumber')
+      .lean();
+
+    const match = candidates.find(
+      (user) => this.normalizePhone(user.phoneNumber) === normalized,
+    );
+    if (!match) {
+      return null;
+    }
+
+    return await this.userModel.findById(match._id);
   }
 
   /**
@@ -287,13 +313,22 @@ export class UserService {
    */
   async createUser(user: User): Promise<User | { message: string }> {
     const confirmationCode = generateConfirmationCode();
+    const normalizedPhone = this.normalizePhone(user.phoneNumber);
+    user.phoneNumber = normalizedPhone;
     const existingUser = await this.userModel.findOne({ email: user.email });
     const checkExistingUserByNin = user.nin?.trim()
       ? await this.userModel.findOne({ nin: user.nin.trim() })
       : null;
+    const existingUserByPhone = normalizedPhone
+      ? await this.findUserByPhone(normalizedPhone)
+      : null;
 
     if (existingUser) {
       return { message: 'An account with this email already exists' };
+    }
+
+    if (existingUserByPhone) {
+      return { message: 'An account with this phone number already exists' };
     }
 
     if (checkExistingUserByNin && user.nin?.trim() && checkExistingUserByNin.nin?.trim()) {
@@ -558,26 +593,27 @@ export class UserService {
    * @param hashedPassword
    */
   async updatePassword(token: string, hashedPassword: string): Promise<void> {
-    try {
-      const user: any = await this.userModel.findOne({
-        passwordResetToken: token,
-      });
-      if (user.passwordResetToken === token && user) {
-        await this.userModel.findByIdAndUpdate(user._id, {
-          password: hashedPassword,
-          passwordResetToken: null, // Invalidate the token
-          passwordResetExpires: null,
-        });
-      } else {
-        throw new InternalServerErrorException(
-          'Failed to update password. Please try again later.',
-        );
-      }
-    } catch (error) {
-      throw new InternalServerErrorException(
-        'Failed to update password. Please try again later.',
+    const user: any = await this.userModel.findOne({
+      passwordResetToken: token,
+    });
+
+    if (!user) {
+      throw new BadRequestException(
+        'Invalid reset code. Please check the code and try again, or request a new password reset.',
       );
     }
+
+    if (!user.passwordResetExpires || user.passwordResetExpires < new Date()) {
+      throw new BadRequestException(
+        'This reset code has expired. Please request a new password reset.',
+      );
+    }
+
+    await this.userModel.findByIdAndUpdate(user._id, {
+      password: hashedPassword,
+      passwordResetToken: null,
+      passwordResetExpires: null,
+    });
   }
 
   async invalidatePasswordResetToken(userId: string): Promise<void> {

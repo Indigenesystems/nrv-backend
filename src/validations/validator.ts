@@ -1,8 +1,65 @@
 import * as Joi from 'joi';
 
+/** Letters, spaces, and hyphens only (e.g. Mary-Jane, John Paul). */
+export const PERSON_NAME_PATTERN = /^[A-Za-z]+(?:[ '\-][A-Za-z]+)*$/;
+
+export const personFirstNameRule = Joi.string()
+  .trim()
+  .required()
+  .pattern(PERSON_NAME_PATTERN)
+  .messages({
+    'string.empty': 'First name is required',
+    'any.required': 'First name is required',
+    'string.pattern.base':
+      'First name can only contain letters, spaces, and hyphens',
+  });
+
+export const personLastNameRule = Joi.string()
+  .trim()
+  .required()
+  .pattern(PERSON_NAME_PATTERN)
+  .messages({
+    'string.empty': 'Last name is required',
+    'any.required': 'Last name is required',
+    'string.pattern.base':
+      'Last name can only contain letters, spaces, and hyphens',
+  });
+
+export const passwordPolicyRule = Joi.string()
+  .required()
+  .min(8)
+  .pattern(/[A-Z]/)
+  .pattern(/[a-z]/)
+  .pattern(/\d/)
+  .pattern(/[^a-zA-Z0-9]/)
+  .messages({
+    'string.empty': 'Password is required',
+    'any.required': 'Password is required',
+    'string.min': 'Password must be at least 8 characters',
+    'string.pattern.base':
+      'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character',
+  });
+
+export const requestPasswordResetSchema = Joi.object({
+  email: Joi.string().email().required().messages({
+    'string.email': 'Invalid email address',
+    'any.required': 'Email is required',
+    'string.empty': 'Email is required',
+  }),
+});
+
+export const resetPasswordSchema = Joi.object({
+  token: Joi.string().trim().required().length(6).messages({
+    'string.empty': 'Reset code is required',
+    'any.required': 'Reset code is required',
+    'string.length': 'Reset code must be 6 digits',
+  }),
+  newPassword: passwordPolicyRule,
+});
+
 export const createUserByLandlordSchema = Joi.object({
-  firstName: Joi.string().required(),
-  lastName: Joi.string().required(),
+  firstName: personFirstNameRule,
+  lastName: personLastNameRule,
   email: Joi.string().email().required(),
   nin: Joi.string().required(),
   propertyId: Joi.string().required(),
@@ -13,12 +70,15 @@ export const createUserByLandlordSchema = Joi.object({
 });
 
 export const createUserSchema = Joi.object({
-  firstName: Joi.string().required(),
-  lastName: Joi.string().required(),
+  firstName: personFirstNameRule,
+  lastName: personLastNameRule,
   email: Joi.string().email().required(),
   nin: Joi.string().optional().allow('', null),
-  password: Joi.string().required(),
-  phoneNumber: Joi.string().required(),
+  password: passwordPolicyRule,
+  phoneNumber: Joi.string().trim().required().messages({
+    'any.required': 'Phone number is required',
+    'string.empty': 'Phone number is required',
+  }),
   homeAddress: Joi.string().optional().allow('', null),
   accountType: Joi.string().valid('tenant', 'landlord').required(), // Validate accountType to be either 'landlord' or 'tenant'
 });
