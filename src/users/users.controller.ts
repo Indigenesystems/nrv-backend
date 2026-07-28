@@ -21,6 +21,8 @@ import {
   confirmUserSchema,
   createUserByLandlordSchema,
   resendVerificationSchema,
+  requestPasswordResetSchema,
+  resetPasswordSchema,
 } from '../validations/validator';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UserService } from './users.service';
@@ -212,13 +214,21 @@ export class UserController {
    * Request password reset
    */
   @Post('/request-password-reset')
-  async requestPasswordReset(@Body('email') email: string): Promise<{ message: string } | void> {
-    const user: any = await this.userService.findUserByEmail(email);
-    if (!user) {
-      // You can either notify that the email was not found or just return a success message
-      return;
+  async requestPasswordReset(
+    @Body('email') email: string,
+  ): Promise<{ message: string }> {
+    const validationResult = requestPasswordResetSchema.validate({ email });
+    if (validationResult.error) {
+      throw new BadRequestException(validationResult.error.message);
     }
-    const token = this.authService.createPasswordResetToken(user._id);
+
+    const user = await this.userService.findUserByEmail(
+      validationResult.value.email,
+    );
+    if (!user) {
+      throw new NotFoundException('No account with this email exists');
+    }
+
     await this.userService.savePasswordResetToken(user.email);
     return { message: 'Password reset link sent.' };
   }
@@ -227,8 +237,15 @@ export class UserController {
    * Reset password
    */
   @Post('reset-password')
-  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto): Promise<{ message: string }> {
-    const { token, newPassword } = resetPasswordDto;
+  async resetPassword(
+    @Body() resetPasswordDto: ResetPasswordDto,
+  ): Promise<{ message: string }> {
+    const validationResult = resetPasswordSchema.validate(resetPasswordDto);
+    if (validationResult.error) {
+      throw new BadRequestException(validationResult.error.message);
+    }
+
+    const { token, newPassword } = validationResult.value;
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     await this.userService.updatePassword(token, hashedPassword);
     return { message: 'Password successfully reset.' };
