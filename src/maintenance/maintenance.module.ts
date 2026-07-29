@@ -39,6 +39,10 @@ import { UserVerification, UserVerificationSchema } from 'src/users/entities/use
 import { ActivitiesModule } from '../activities/activities.module';
 import { PlansModule } from '../plans/plans.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import {
+  RememberMeToken,
+  RememberMeTokenSchema,
+} from '../auth/entities/remember-me-token.entity';
 
 @Module({
   imports: [
@@ -58,6 +62,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
       },
       { name: NotificationSettings.name, schema: NotificationSettingsSchema },
       { name: UserVerification.name, schema: UserVerificationSchema },
+      { name: RememberMeToken.name, schema: RememberMeTokenSchema },
     ]),
   ],
   controllers: [MaintenanceController, RoomsController, UserController],

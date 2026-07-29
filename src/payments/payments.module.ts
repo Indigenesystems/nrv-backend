@@ -7,16 +7,18 @@ import { PaymentsService } from './payments.service';
 import { Payment, PaymentSchema } from './entities/payment.entity';
 import { UsersModule } from '../users/users.module';
 import { PlansModule } from '../plans/plans.module';
+import { EmailService } from '../email-sender/email.service';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
     HttpModule,
     UsersModule,
     PlansModule,
+    NotificationsModule,
     MongooseModule.forFeature([{ name: Payment.name, schema: PaymentSchema }]),
   ],
   controllers: [PaymentsController],
-  providers: [PaystackService, PaymentsService],
+  providers: [PaystackService, PaymentsService, EmailService],
 })
 export class PaymentsModule {}
-

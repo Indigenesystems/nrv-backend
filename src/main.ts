@@ -5,7 +5,7 @@ dotenv.config({ override: true });
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { CorsOptions } from '@nestjs/common/interfaces/external/cors-options.interface';
-
+import * as cookieParser from 'cookie-parser';
 
 const corsOptions: CorsOptions = {
   origin: [
@@ -21,15 +21,16 @@ const corsOptions: CorsOptions = {
     'https://admin-hub-fv4h.onrender.com',
     'https://nrv-frontend-zjim.onrender.com',
     'https://nrv-admin-site.onrender.com',
-    'https://nrv-admin-live.onrender.com'
-  ], // Allow requests from these origins
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'], // Allowed HTTP methods
-  allowedHeaders: ['Content-Type', 'Authorization'], // Allowed headers
-  credentials: true, // Allow cookies and credentials
+    'https://nrv-admin-live.onrender.com',
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
 };
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.use(cookieParser());
   app.enableCors(corsOptions);
   await app.listen(9000);
 }

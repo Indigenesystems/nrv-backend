@@ -588,6 +588,7 @@ export class VerificationService {
    * @returns Updated verification or throws if not found
    */
   async updateVerification(id: string, dto: UpdateVerificationDto): Promise<Verification> {
+    const previous = await this.verificationModel.findById(id).lean();
     const updated = await this.verificationModel.findByIdAndUpdate(
       id,
       { ...dto, dateUpdated: new Date() },
@@ -596,6 +597,55 @@ export class VerificationService {
     if (!updated) {
       throw new BadRequestException('Verification not found.');
     }
+
+    const previousStatus = (previous as any)?.status;
+    const nextStatus = (updated as any)?.status;
+    const statusChanged =
+      dto.status && previousStatus && String(previousStatus) !== String(nextStatus);
+
+    if (
+      statusChanged &&
+      (nextStatus === 'approved' || nextStatus === 'rejected')
+    ) {
+      try {
+        const tenantEmail = (updated as any)?.email;
+        let tenantUserId: string | null = null;
+        if (tenantEmail) {
+          const tenant: any = await this.userService.findUserByEmail(
+            String(tenantEmail).toLowerCase(),
+          );
+          tenantUserId = tenant?._id ? String(tenant._id) : null;
+        }
+
+        if (tenantUserId) {
+          const isApproved = nextStatus === 'approved';
+          await this.notificationsService.create({
+            targetRole: 'tenant',
+            userId: tenantUserId,
+            type: isApproved
+              ? 'verification_approved'
+              : 'verification_rejected',
+            title: isApproved
+              ? 'Verification approved'
+              : 'Verification rejected',
+            body: isApproved
+              ? 'Your tenant verification request was approved.'
+              : 'Your tenant verification request was rejected. Please review and try again.',
+            metadata: {
+              verificationRequestId: String(updated._id),
+              status: nextStatus,
+              actionUrl: `/dashboard/tenant/verification?verificationId=${encodeURIComponent(String(updated._id))}`,
+            },
+          });
+        }
+      } catch (notifyErr: unknown) {
+        console.error(
+          '[VerificationService] Status notification failed:',
+          (notifyErr as Error)?.message || notifyErr,
+        );
+      }
+    }
+
     return updated;
   }
 

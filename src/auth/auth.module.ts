@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { UserService } from '../users/users.service';
-import { JwtService } from '@nestjs/jwt';
+import { JwtModule } from '@nestjs/jwt';
 import { MongooseModule } from '@nestjs/mongoose';
 import { User, UserSchema } from '../users/entities/user.entity';
 import { EmailService } from '../email-sender/email.service';
@@ -33,24 +33,31 @@ import {
 import {
   AgreementDocuments,
   AgreementDocumentsSchema,
-} from 'src/properties/entities/agreement_documents.entity';
+} from '../properties/entities/agreement_documents.entity';
 
 import { UserVerification, UserVerificationSchema } from 'src/users/entities/userVerification';
 import { ActivitiesModule } from '../activities/activities.module';
 import { PlansModule } from '../plans/plans.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import {
+  RememberMeToken,
+  RememberMeTokenSchema,
+} from './entities/remember-me-token.entity';
 
 @Module({
   imports: [
     ActivitiesModule,
     PlansModule,
     NotificationsModule,
+    JwtModule.register({
+      secret: process.env.JWT_SECRET || '34ttyyuhbyh',
+      signOptions: { expiresIn: '1d' },
+    }),
     MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
       { name: Room.name, schema: RoomSchema },
       { name: Maintenance.name, schema: MaintenanceSchema },
       { name: Property.name, schema: PropertySchema },
-      { name: Application.name, schema: ApplicationSchema },
       { name: Application.name, schema: ApplicationSchema },
       {
         name: LandlordAssignedTenant.name,
@@ -59,17 +66,18 @@ import { NotificationsModule } from '../notifications/notifications.module';
       { name: NotificationSettings.name, schema: NotificationSettingsSchema },
       { name: AgreementDocuments.name, schema: AgreementDocumentsSchema },
       { name: UserVerification.name, schema: UserVerificationSchema },
+      { name: RememberMeToken.name, schema: RememberMeTokenSchema },
     ]),
   ],
   controllers: [AuthController],
   providers: [
     AuthService,
-    JwtService,
     UserService,
     EmailService,
     PropertiesService,
     RoomsService,
     CloudinaryService,
   ],
+  exports: [AuthService, MongooseModule],
 })
 export class AuthModule {}

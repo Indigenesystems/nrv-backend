@@ -13,10 +13,12 @@ import {
 } from './entities/conversation.entity';
 import { CloudinaryService } from 'src/upload/cloudinary.service';
 import { EmailService } from 'src/email-sender/email.service';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 
 @Module({
   imports: [
+    NotificationsModule,
     MongooseModule.forFeature([
       { name: Message.name, schema: MessageSchema },
       { name: Conversation.name, schema: ConversationSchema },
