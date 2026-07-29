@@ -46,6 +46,10 @@ import { StaffModule } from './staff/staff.module';
 import { PlansModule } from './plans/plans.module';
 import { PaymentsModule } from './payments/payments.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import {
+  RememberMeToken,
+  RememberMeTokenSchema,
+} from './auth/entities/remember-me-token.entity';
 
 @Module({
   imports: [
@@ -68,6 +72,7 @@ import { NotificationsModule } from './notifications/notifications.module';
       { name: 'Verification', schema: VerificationSchema },
       { name: 'LandlordAssignedTenant', schema: LandlordAssignedTenantSchema },
       { name: UserVerification.name, schema: UserVerificationSchema },
+      { name: RememberMeToken.name, schema: RememberMeTokenSchema },
     ]),
     JwtModule.register({
       secret: '34ttyyuhbyh',

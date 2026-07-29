@@ -24,6 +24,7 @@ import axios from 'axios';
 import { populate } from 'dotenv';
 import { ActivitiesService } from '../activities/activities.service';
 import { PlansService } from '../plans/plans.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class PropertiesService {
@@ -44,6 +45,7 @@ export class PropertiesService {
     private emailService: EmailService,
     private activitiesService: ActivitiesService,
     private plansService: PlansService,
+    private notificationsService: NotificationsService,
   ) {}
 
   async createProperty(createPropertyDto: any) {
@@ -759,12 +761,43 @@ export class PropertiesService {
           );
         }
 
+        if (landlord?._id) {
+          await this.notificationsService.create({
+            targetRole: 'landlord',
+            userId: String(landlord._id),
+            type: 'application_received',
+            title: `New application: ${propertyTitle}`,
+            body: `${applicantName} submitted a rental application.`,
+            metadata: {
+              applicationId: String(newApplication._id),
+              propertyTitle,
+              applicantName,
+              actionUrl: '/dashboard/landlord/tenants',
+            },
+          });
+        }
+
         if (applicant?.email) {
           await this.emailService.sendPropertyApplicationConfirmationToApplicant({
             applicantEmail: applicant.email,
             applicantName,
             propertyTitle,
             propertyLocation,
+          });
+        }
+
+        if (applicant?._id) {
+          await this.notificationsService.create({
+            targetRole: 'tenant',
+            userId: String(applicant._id),
+            type: 'application_submitted',
+            title: `Application sent: ${propertyTitle}`,
+            body: 'Your rental application was submitted to the landlord.',
+            metadata: {
+              applicationId: String(newApplication._id),
+              propertyTitle,
+              actionUrl: '/dashboard/tenant/properties/applications',
+            },
           });
         }
       } catch (err: any) {
@@ -1030,6 +1063,22 @@ export class PropertiesService {
                 status: newStatus,
                 propertyTitle,
                 propertyLocation,
+              });
+            }
+
+            if (applicant?._id) {
+              await this.notificationsService.create({
+                targetRole: 'tenant',
+                userId: String(applicant._id),
+                type: 'application_status_updated',
+                title: `Application ${newStatus}`,
+                body: `Your application for ${propertyTitle} is now ${newStatus}.`,
+                metadata: {
+                  applicationId: String((hydrated as any)?._id || ''),
+                  status: newStatus,
+                  propertyTitle,
+                  actionUrl: '/dashboard/tenant/properties/applications',
+                },
               });
             }
           } catch (err: any) {
