@@ -5,6 +5,8 @@ import { Payment, PaymentDocument, PaymentStatus } from './entities/payment.enti
 import { PlansService } from '../plans/plans.service';
 import { PaystackService } from './paystack.service';
 import { UserService } from '../users/users.service';
+import { EmailService } from '../email-sender/email.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 /** Abandoned Paystack checkouts are resumable for this long, then marked failed. */
 export const PAYMENT_PENDING_TTL_MS = 30 * 60 * 1000;
@@ -33,6 +35,8 @@ export class PaymentsService {
     private readonly plansService: PlansService,
     private readonly paystackService: PaystackService,
     private readonly userService: UserService,
+    private readonly emailService: EmailService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   /**
@@ -107,6 +111,98 @@ export class PaymentsService {
     );
   }
 
+  private getPaymentsActionUrl(): string {
+    const base =
+      process.env.FRONTEND_URL || 'https://www.naijarentverify.com';
+    return `${base.replace(/\/$/, '')}/dashboard/landlord/settings/plans`;
+  }
+
+  private formatPersonName(user: any): string {
+    const name = `${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim();
+    return name || user?.email || 'there';
+  }
+
+  private async notifyPaymentOutcome(
+    payment: PaymentDocument,
+    outcome: 'success' | 'failed',
+    reason?: string,
+  ): Promise<void> {
+    try {
+      const userId = payment.userId?.toString?.() ?? String(payment.userId);
+      const user = await this.userService.findUserById(userId);
+      if (!user?.email) {
+        return;
+      }
+
+      const recipientName = this.formatPersonName(user);
+      const amountNaira = payment.amountNaira ?? 0;
+      const planName = (payment as any).planName as string | undefined;
+      const actionUrl = this.getPaymentsActionUrl();
+      const accountType = (user as any)?.accountType;
+      const targetRole =
+        accountType === 'tenant' ? 'tenant' : 'landlord';
+
+      if (outcome === 'success') {
+        await Promise.allSettled([
+          this.emailService.sendPaymentSuccessEmail({
+            recipientEmail: user.email,
+            recipientName,
+            amountNaira,
+            planName,
+            reference: payment.reference,
+            paidAt: (payment as any).paidAt || new Date(),
+            actionUrl,
+          }),
+          this.notificationsService.create({
+            targetRole,
+            userId,
+            type: 'payment_success',
+            title: 'Payment successful',
+            body: `Your payment of ₦${Number(amountNaira).toLocaleString('en-NG')}${planName ? ` for ${planName}` : ''} was successful.`,
+            metadata: {
+              reference: payment.reference,
+              amountNaira,
+              planName,
+              actionUrl,
+            },
+          }),
+        ]);
+        return;
+      }
+
+      await Promise.allSettled([
+        this.emailService.sendPaymentFailedEmail({
+          recipientEmail: user.email,
+          recipientName,
+          amountNaira,
+          planName,
+          reference: payment.reference,
+          reason: reason || 'Payment could not be completed',
+          actionUrl,
+        }),
+        this.notificationsService.create({
+          targetRole,
+          userId,
+          type: 'payment_failed',
+          title: 'Payment unsuccessful',
+          body: `Your payment of ₦${Number(amountNaira).toLocaleString('en-NG')}${planName ? ` for ${planName}` : ''} could not be completed.`,
+          metadata: {
+            reference: payment.reference,
+            amountNaira,
+            planName,
+            reason,
+            actionUrl,
+          },
+        }),
+      ]);
+    } catch (err: unknown) {
+      console.error(
+        '[PaymentsService] Payment notification failed:',
+        (err as Error)?.message || err,
+      );
+    }
+  }
+
   private isPendingExpired(createdAt?: Date | string): boolean {
     if (!createdAt) {
       return true;
@@ -122,7 +218,11 @@ export class PaymentsService {
       return;
     }
 
-    await this.updatePaymentStatus(payment.reference, 'success', new Date());
+    const updated = await this.updatePaymentStatus(
+      payment.reference,
+      'success',
+      new Date(),
+    );
 
     const userId = payment.userId?.toString?.() ?? String(payment.userId);
     const planId = payment.planId?.toString?.() ?? String(payment.planId);
@@ -131,6 +231,8 @@ export class PaymentsService {
     if (payment.type === 'pack' && userId && planId) {
       await this.userService.purchasePackWithQuantity(userId, planId, quantity);
     }
+
+    void this.notifyPaymentOutcome(updated, 'success');
   }
 
   /**
@@ -171,6 +273,19 @@ export class PaymentsService {
     return data.authorization_url;
   }
 
+  private async markPaymentFailed(
+    reference: string,
+    reason?: string,
+  ): Promise<PaymentDocument> {
+    const existing = await this.findByReference(reference);
+    if (!existing || existing.status === 'failed' || existing.status === 'success') {
+      return existing as PaymentDocument;
+    }
+    const updated = await this.updatePaymentStatus(reference, 'failed');
+    void this.notifyPaymentOutcome(updated, 'failed', reason);
+    return updated;
+  }
+
   /**
    * Expire stale pending payments and sync open ones with Paystack.
    * Abandoned checkouts stay pending until the TTL so users can resume later.
@@ -183,7 +298,10 @@ export class PaymentsService {
     for (const payment of pending) {
       const createdAt = (payment as any).createdAt as Date | string | undefined;
       if (this.isPendingExpired(createdAt)) {
-        await this.updatePaymentStatus(payment.reference, 'failed');
+        await this.markPaymentFailed(
+          payment.reference,
+          'Checkout expired before payment was completed',
+        );
         continue;
       }
 
@@ -197,7 +315,10 @@ export class PaymentsService {
         }
 
         if (psStatus && TERMINAL_PAYSTACK_FAILURE.has(psStatus)) {
-          await this.updatePaymentStatus(payment.reference, 'failed');
+          await this.markPaymentFailed(
+            payment.reference,
+            `Paystack status: ${psStatus}`,
+          );
         }
       } catch {
         // Keep pending until TTL if Paystack is unreachable
@@ -234,7 +355,10 @@ export class PaymentsService {
 
     const createdAt = (payment as any).createdAt as Date | string | undefined;
     if (this.isPendingExpired(createdAt)) {
-      await this.updatePaymentStatus(reference, 'failed');
+      await this.markPaymentFailed(
+        reference,
+        'Checkout expired before payment was completed',
+      );
       return { kind: 'expired' };
     }
 
@@ -245,7 +369,7 @@ export class PaymentsService {
         return { kind: 'verify', reference };
       }
       if (psStatus && TERMINAL_PAYSTACK_FAILURE.has(psStatus)) {
-        await this.updatePaymentStatus(reference, 'failed');
+        await this.markPaymentFailed(reference, `Paystack status: ${psStatus}`);
         return { kind: 'expired' };
       }
     } catch {
@@ -257,7 +381,10 @@ export class PaymentsService {
       try {
         authorizationUrl = await this.refreshPendingCheckoutUrl(payment);
       } catch {
-        await this.updatePaymentStatus(reference, 'failed');
+        await this.markPaymentFailed(
+          reference,
+          'Unable to resume checkout',
+        );
         return { kind: 'expired' };
       }
     }

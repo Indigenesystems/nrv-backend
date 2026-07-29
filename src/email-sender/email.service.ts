@@ -1747,4 +1747,99 @@ export class EmailService {
       console.error('[EmailService] sendVerificationScreeningCompleteLandlordEmail failed:', err);
     }
   }
+
+  async sendPaymentSuccessEmail(payload: {
+    recipientEmail: string;
+    recipientName: string;
+    amountNaira: number;
+    planName?: string;
+    reference: string;
+    paidAt?: Date | string;
+    actionUrl?: string;
+  }): Promise<void> {
+    const actionUrl =
+      payload.actionUrl ||
+      `${this.getFrontendUrl()}/dashboard/landlord/settings/plans`;
+    const amount = Number(payload.amountNaira || 0).toLocaleString('en-NG');
+    const paidAt = payload.paidAt
+      ? new Date(payload.paidAt).toLocaleString()
+      : new Date().toLocaleString();
+
+    const html = this.renderSimpleEmail({
+      title: 'Payment successful',
+      preheader: `Your payment of ₦${amount} was successful.`,
+      contentHtml: `
+        <p style="margin:0 0 12px;">Hello ${payload.recipientName},</p>
+        <p style="margin:0 0 12px;">Your payment was successful.</p>
+        <p style="margin:0 0 6px;"><strong>Amount:</strong> ₦${amount}</p>
+        ${
+          payload.planName
+            ? `<p style="margin:0 0 6px;"><strong>Plan/Pack:</strong> ${payload.planName}</p>`
+            : ''
+        }
+        <p style="margin:0 0 6px;"><strong>Reference:</strong> ${payload.reference}</p>
+        <p style="margin:0 0 12px;"><strong>Date:</strong> ${paidAt}</p>
+        <p style="margin:16px 0 0;">
+          <a href="${actionUrl}" target="_blank" style="display:inline-block;background:#03442C;color:#ffffff;text-decoration:none;padding:12px 16px;border-radius:8px;font-weight:600;">
+            Go to dashboard
+          </a>
+        </p>
+      `,
+    });
+
+    await this.transporter.sendMail({
+      from: this.defaultFromAddress,
+      to: payload.recipientEmail,
+      subject: `Payment successful — ₦${amount}`,
+      html,
+    });
+  }
+
+  async sendPaymentFailedEmail(payload: {
+    recipientEmail: string;
+    recipientName: string;
+    amountNaira: number;
+    planName?: string;
+    reference: string;
+    reason?: string;
+    actionUrl?: string;
+  }): Promise<void> {
+    const actionUrl =
+      payload.actionUrl ||
+      `${this.getFrontendUrl()}/dashboard/landlord/settings/plans`;
+    const amount = Number(payload.amountNaira || 0).toLocaleString('en-NG');
+
+    const html = this.renderSimpleEmail({
+      title: 'Payment unsuccessful',
+      preheader: `Your payment of ₦${amount} could not be completed.`,
+      contentHtml: `
+        <p style="margin:0 0 12px;">Hello ${payload.recipientName},</p>
+        <p style="margin:0 0 12px;">We could not complete your payment.</p>
+        <p style="margin:0 0 6px;"><strong>Amount:</strong> ₦${amount}</p>
+        ${
+          payload.planName
+            ? `<p style="margin:0 0 6px;"><strong>Plan/Pack:</strong> ${payload.planName}</p>`
+            : ''
+        }
+        <p style="margin:0 0 6px;"><strong>Reference:</strong> ${payload.reference}</p>
+        ${
+          payload.reason
+            ? `<p style="margin:0 0 12px;"><strong>Reason:</strong> ${payload.reason}</p>`
+            : ''
+        }
+        <p style="margin:16px 0 0;">
+          <a href="${actionUrl}" target="_blank" style="display:inline-block;background:#03442C;color:#ffffff;text-decoration:none;padding:12px 16px;border-radius:8px;font-weight:600;">
+            Try again
+          </a>
+        </p>
+      `,
+    });
+
+    await this.transporter.sendMail({
+      from: this.defaultFromAddress,
+      to: payload.recipientEmail,
+      subject: `Payment unsuccessful — ₦${amount}`,
+      html,
+    });
+  }
 }
