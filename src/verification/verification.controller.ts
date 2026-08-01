@@ -8,7 +8,10 @@ import {
   BadRequestException,
   NotFoundException,
   InternalServerErrorException,
+  ForbiddenException,
+  UnauthorizedException,
   Res,
+  Req,
   HttpStatus,
   Patch,
   UseInterceptors,
@@ -16,6 +19,7 @@ import {
   Put,
   Query,
   UsePipes,
+  Headers,
 } from '@nestjs/common';
 import { VerificationService } from './verification.service';
 import { DojahTierService } from './dojah-tier.service';
@@ -30,8 +34,9 @@ import {
 } from './dto/create-verification.dto';
 import { UpdateVerificationDto } from './dto/update-verification.dto';
 import { RunPremiumScreeningDto, RunStandardScreeningDto } from './dto/run-screening.dto';
-import { Response } from 'express';
+import { Response, Request } from 'express';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
+import * as jwt from 'jsonwebtoken';
 
 // Helper for error responses
 function errorResponse(res: Response, error: any, defaultMsg: string, status = HttpStatus.BAD_REQUEST) {
@@ -39,6 +44,22 @@ function errorResponse(res: Response, error: any, defaultMsg: string, status = H
     status: 'error',
     message: error?.response || error?.message || defaultMsg,
   });
+}
+
+function getJwtUserId(authHeader?: string): string | null {
+  const token = authHeader?.startsWith('Bearer ')
+    ? authHeader.slice(7)
+    : authHeader;
+  if (!token) {
+    return null;
+  }
+  try {
+    const secret = process.env.JWT_SECRET || '34ttyyuhbyh';
+    const decoded: any = jwt.verify(token, secret);
+    return decoded?.sub ? String(decoded.sub) : null;
+  } catch {
+    return null;
+  }
 }
 
 @Controller('verification')
@@ -611,18 +632,28 @@ export class VerificationController {
   async getVerificationResponseByRequestAndEmail(
     @Param('verificationId') verificationId: string,
     @Query('email') email: string,
+    @Headers('authorization') authorization?: string,
   ) {
     if (!email?.trim()) {
       throw new BadRequestException('Email query parameter is required');
     }
     try {
-      const result = await this.verificationService.getVerificationResponseByRequestAndEmail(verificationId, email);
+      const requesterUserId = getJwtUserId(authorization);
+      const result =
+        await this.verificationService.getVerificationResponseByRequestAndEmail(
+          verificationId,
+          email,
+          { requesterUserId: requesterUserId || undefined },
+        );
       return verificationSuccessResponse(
         result ? 'Verification response fetched successfully' : 'No verification response yet',
         result ?? null,
       );
     } catch (error) {
       console.error('getVerificationResponseByRequestAndEmail error:', error);
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
       throw new InternalServerErrorException(
         error?.message || 'Failed to fetch verification response',
       );
@@ -664,14 +695,73 @@ export class VerificationController {
    * @returns Success response with verification response
    */
   @Get('/response/:id')
-  async getVerificationResponse(@Param('id') id: string): Promise<{ status: string; message: string; data: any }> {
+  async getVerificationResponse(
+    @Param('id') id: string,
+    @Headers('authorization') authorization?: string,
+  ): Promise<{ status: string; message: string; data: any }> {
     try {
-      const result = await this.verificationService.getVerificationResponseById(id);
+      const requesterUserId = getJwtUserId(authorization);
+      if (!requesterUserId) {
+        throw new UnauthorizedException(
+          'Authentication required to view this verification report.',
+        );
+      }
+      const result = await this.verificationService.getVerificationResponseById(
+        id,
+        { requesterUserId },
+      );
       if (!result) throw new NotFoundException('Verification not found.');
       return verificationSuccessResponse('Verification fetched successfully', result);
     } catch (error) {
       console.error('Error fetching verification by ID:', error);
-      throw new BadRequestException(error?.response || 'Failed to fetch verification record.');
+      if (
+        error instanceof UnauthorizedException ||
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+      throw new BadRequestException(error?.response || error?.message || 'Failed to fetch verification record.');
+    }
+  }
+
+  /**
+   * Tenant declines a pending verification consent request.
+   */
+  @Post(':id/decline')
+  async declineVerification(
+    @Param('id') id: string,
+    @Body() body: { email?: string },
+    @Headers('authorization') authorization?: string,
+  ) {
+    try {
+      const requesterUserId = getJwtUserId(authorization);
+      let email = body?.email?.trim();
+      if (!email && requesterUserId) {
+        const user: any = await this.userService.findUserById(requesterUserId);
+        email = user?.email;
+      }
+      if (!email) {
+        throw new BadRequestException('Tenant email is required to decline.');
+      }
+      const result = await this.verificationService.declineVerificationByTenant(
+        id,
+        email,
+      );
+      return verificationSuccessResponse(
+        'Verification request declined successfully',
+        result,
+      );
+    } catch (error) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof NotFoundException
+      ) {
+        throw error;
+      }
+      throw new BadRequestException(
+        error?.response || error?.message || 'Failed to decline verification.',
+      );
     }
   }
 
