@@ -1,48 +1,51 @@
 import { IsDateString, IsEmail, IsIn, IsMongoId, IsNotEmpty, IsNumber, IsOptional, IsPhoneNumber, IsString, Matches } from 'class-validator';
 
 export class CreateVerificationDto {
-  @IsString()
-  @IsNotEmpty()
+  @IsString({ message: 'First name is required' })
+  @IsNotEmpty({ message: 'First name is required' })
   firstName: string;
 
-  @IsString()
-  @IsNotEmpty()
+  @IsString({ message: 'Last name is required' })
+  @IsNotEmpty({ message: 'Last name is required' })
   lastName: string;
 
-  @IsEmail()
+  @IsEmail({}, { message: 'A valid email address is required' })
+  @IsNotEmpty({ message: 'Email is required' })
   email: string;
 
   @IsOptional()
-  @IsPhoneNumber('NG')
+  @IsPhoneNumber('NG', { message: 'Enter a valid Nigerian phone number' })
   phone?: string;
 
   @IsOptional()
   @IsString()
   nin?: string;
 
-  @IsString()
-  @IsNotEmpty()
+  @IsString({ message: 'Landlord display name is required' })
+  @IsNotEmpty({ message: 'Landlord display name is required' })
   landlordDisplayName: string;
 
-  @IsString()
-  @IsNotEmpty()
+  @IsString({ message: 'Landlord account is required' })
+  @IsNotEmpty({ message: 'Landlord account is required' })
   requestedBy: string;
 
   @IsOptional()
   @IsString()
-  @IsIn(['standard', 'premium'])
+  @IsIn(['standard', 'premium'], {
+    message: 'Verification tier must be standard or premium',
+  })
   verificationTier?: 'standard' | 'premium';
 
   @IsOptional()
-  @IsMongoId()
+  @IsMongoId({ message: 'Invalid application id' })
   applicationId?: string;
 
   @IsOptional()
-  @IsMongoId()
+  @IsMongoId({ message: 'Invalid room id' })
   roomId?: string;
 
   @IsOptional()
-  @IsMongoId()
+  @IsMongoId({ message: 'Invalid property id' })
   propertyId?: string;
 
   @IsOptional()

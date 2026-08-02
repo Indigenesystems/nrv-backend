@@ -610,7 +610,7 @@ export class EmailService {
 
     try {
       const info = await this.transporter.sendMail({
-        from: 'hello@naijarentverify.com',
+        from: this.defaultFromAddress,
         to: payload.email,
         subject: 'Invitation to Apply',
         html: resultEmailTemplate,
@@ -868,7 +868,7 @@ export class EmailService {
 
     try {
       await this.transporter.sendMail({
-        from: 'hello@naijarentverify.com',
+        from: this.defaultFromAddress,
         to: payload.email,
         subject: 'Your landlord has onboarded you on Naija Rent Verify',
         html: resultEmailTemplate,
@@ -1284,7 +1284,7 @@ export class EmailService {
 
     try {
       const info = await this.transporter.sendMail({
-        from: 'hello@naijarentverify.com',
+        from: this.defaultFromAddress,
         to: payload.recipientEmail,
         subject: 'You Have a New Message',
         html: resultEmailTemplate,
@@ -1470,7 +1470,7 @@ export class EmailService {
     });
 
     await this.transporter.sendMail({
-      from: 'hello@naijarentverify.com',
+      from: this.defaultFromAddress,
       to: payload.landlordEmail,
       subject: `New application: ${payload.propertyTitle}`,
       html,
@@ -1508,7 +1508,7 @@ export class EmailService {
     });
 
     await this.transporter.sendMail({
-      from: 'hello@naijarentverify.com',
+      from: this.defaultFromAddress,
       to: payload.applicantEmail,
       subject: `We received your application: ${payload.propertyTitle}`,
       html,
@@ -1547,7 +1547,7 @@ export class EmailService {
     });
 
     await this.transporter.sendMail({
-      from: 'hello@naijarentverify.com',
+      from: this.defaultFromAddress,
       to: payload.applicantEmail,
       subject: `Application status: ${payload.status} (${payload.propertyTitle})`,
       html,
@@ -1635,7 +1635,7 @@ export class EmailService {
 
     try {
       await this.transporter.sendMail({
-        from: 'hello@naijarentverify.com',
+        from: this.defaultFromAddress,
         to: payload.recipientEmail,
         subject: `Action Required: Verification Request from ${payload.landlordName}`,
         html: emailTemplate,
@@ -1700,7 +1700,7 @@ export class EmailService {
 
     try {
       await this.transporter.sendMail({
-        from: 'hello@naijarentverify.com',
+        from: this.defaultFromAddress,
         to: recipients.join(','),
         subject: `[NRV] Verification documents submitted — ${payload.tenantName || payload.tenantEmail}`,
         html,
@@ -1738,7 +1738,7 @@ export class EmailService {
 
     try {
       await this.transporter.sendMail({
-        from: 'hello@naijarentverify.com',
+        from: this.defaultFromAddress,
         to: payload.landlordEmail.trim(),
         subject: `[NRV] Verification complete — ${payload.tenantName}`,
         html,

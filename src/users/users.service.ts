@@ -386,59 +386,116 @@ export class UserService {
   async createUserByLandlord(
     user: any,
   ): Promise<User | any | { message: string; emailSent?: boolean }> {
+    const email = String(user?.email || '').trim().toLowerCase();
+    if (!email) {
+      throw new BadRequestException('Email is required');
+    }
+
+    const existingUser = await this.userModel.findOne({ email });
+    if (existingUser) {
+      return existingUser;
+    }
+
+    const nin =
+      typeof user.nin === 'string' && user.nin.trim() ? user.nin.trim() : null;
+    if (nin) {
+      const checkExistingUserByNin = await this.userModel.findOne({ nin });
+      if (checkExistingUserByNin) {
+        throw new BadRequestException(
+          'A user with this NIN already exists.',
+        );
+      }
+    }
+
     const confirmationCode = generateConfirmationCode();
-    const existingUser = await this.userModel.findOne({ email: user.email });
-    const checkExistingUserByNin = await this.userModel.findOne({
-      nin: user.nin,
+    const password = generateConfirmationCode();
+    const defaultPlan = await this.plansService.getDefaultPlan();
+
+    const newUser = new this.userModel({
+      ...user,
+      email,
+      nin,
+      confirmationCode,
+      password,
+      status: user.status || 'active',
+      planId: (defaultPlan as any)._id,
     });
 
-
-    user.confirmationCode = confirmationCode;
-    user.password = generateConfirmationCode();
-    user.status = 'active';
-    const defaultPlan = await this.plansService.getDefaultPlan();
-    (user as any).planId = (defaultPlan as any)._id;
-    const newUser = new this.userModel(user);
-   console.log({user});
-   
     try {
       const createdUser: any = await newUser.save();
-      if (createdUser) {
-        console.log({ createdUser });
+      if (!createdUser) {
+        throw new InternalServerErrorException(
+          'Failed to create user. Please try again later.',
+        );
+      }
 
-        try {
-          console.log(`Sending onboard/password email to ${user.email}`);
-          await this.emailService.sendUserCreatedByLandlordEmail(user);
-          console.log(`Onboard email sent successfully to ${user.email}`);
-        } catch (emailErr: any) {
-          console.error(`Onboard email failed for ${user.email}:`, emailErr?.message || emailErr);
-          // Don't fail user creation - tenant can use "Forgot password" or landlord can share credentials
+      try {
+        await this.emailService.sendUserCreatedByLandlordEmail({
+          ...user,
+          email,
+          password,
+          confirmationCode,
+        });
+      } catch (emailErr: any) {
+        console.error(
+          `Onboard email failed for ${email}:`,
+          emailErr?.message || emailErr,
+        );
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn(
+            `[dev] Landlord-created tenant credentials for ${email}: password/temp=${password}`,
+          );
         }
+      }
 
-        // Create notification settings for the new user
+      try {
         const notificationSettings = new this.notificationSettingsModel({
           userId: createdUser._id,
-          platformUpdates: true, // default values
+          platformUpdates: true,
           promotions: true,
           weeklyOpportunities: true,
           feedbackOpportunities: true,
           maintenanceUpdates: true,
-          messagePreference: 'all', // default preference
+          messagePreference: 'all',
         });
         await notificationSettings.save();
-
-        const formattedPayload = {
-          ...user,
-          applicant: createdUser._id,
-          
-        };
-        await this.propertiesService.mapCreatedUserToApartment(
-          formattedPayload,
+      } catch (settingsErr: any) {
+        console.error(
+          `Notification settings create failed for ${email}:`,
+          settingsErr?.message || settingsErr,
         );
       }
+
+      // Only map to a unit when this was an apartment onboarding (not verification-only invite)
+      if (user.propertyId) {
+        try {
+          await this.propertiesService.mapCreatedUserToApartment({
+            ...user,
+            email,
+            applicant: createdUser._id,
+            propertyId: user.propertyId,
+          });
+        } catch (mapErr: any) {
+          console.error(
+            `mapCreatedUserToApartment failed for ${email}:`,
+            mapErr?.message || mapErr,
+          );
+          // User account still exists; do not roll back invite/onboard account creation
+        }
+      }
+
       return createdUser;
-    } catch (error) {
-      console.error('Error creating user:', error);
+    } catch (error: any) {
+      if (error?.code === 11000) {
+        const again = await this.userModel.findOne({ email });
+        if (again) {
+          return again;
+        }
+        throw new BadRequestException(
+          'A user with this email or NIN already exists.',
+        );
+      }
+      console.error('Error creating user:', error?.message || error);
       throw new InternalServerErrorException(
         'Failed to create user. Please try again later.',
       );

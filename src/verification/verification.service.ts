@@ -11,6 +11,7 @@ import { UpdateVerificationDto } from './dto/update-verification.dto';
 import {
   Verification,
   VerificationDocument,
+  VerificationStatus,
 } from './entities/verification.entity';
 import { EmailService } from '../email-sender/email.service';
 import { VerificationResponse } from './entities/verification-response.entity';
@@ -442,12 +443,27 @@ export class VerificationService {
     const creditCostNaira =
       tier === 'premium' ? UNIT_PRICE_NAIRA.premium : UNIT_PRICE_NAIRA.standard;
 
+    const emailNormalized = String(dto.email || '').trim().toLowerCase();
+    const existingPending = await this.verificationModel.findOne({
+      email: new RegExp(
+        `^${emailNormalized.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`,
+        'i',
+      ),
+      requestedBy,
+      status: VerificationStatus.PENDING,
+    });
+    if (existingPending) {
+      throw new BadRequestException(
+        'A verification request for this tenant is already in progress. Wait for it to complete or be declined before requesting again.',
+      );
+    }
+
     try {
       const uniqueId = await this.generateUniqueVerificationId();
       const created = new this.verificationModel({
         firstName: dto.firstName,
         lastName: dto.lastName,
-        email: dto.email,
+        email: emailNormalized,
         phone: dto.phone,
         nin: dto.nin,
         landlordDisplayName: dto.landlordDisplayName,
@@ -484,11 +500,9 @@ export class VerificationService {
           const newTenant = {
             firstName: dto.firstName,
             lastName: dto.lastName,
-            email: dto.email,
+            email: emailNormalized || dto.email,
             phoneNumber: dto.phone || '',
-            nin: '',
             homeAddress: '',
-            confirmationCode: '',
             status: 'active',
             isOnboarded: false,
             accountType: 'tenant',
@@ -514,6 +528,9 @@ export class VerificationService {
         });
       } catch (emailErr) {
         console.error('Verification invite email failed (verification was saved):', emailErr?.message || emailErr);
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn(`[dev] Tenant verification invite link: ${verificationLink}`);
+        }
         // Don't fail the request - verification is already saved
       }
 
@@ -638,6 +655,61 @@ export class VerificationService {
             },
           });
         }
+
+        // Release report to landlord only after admin approval
+        if (nextStatus === 'approved') {
+          const landlordId = (updated as any)?.requestedBy
+            ? String((updated as any).requestedBy)
+            : '';
+          if (landlordId) {
+            const responseDoc = await this.verificationResponseModel
+              .findOne({ verificationId: String(updated._id) })
+              .sort({ createdAt: -1 })
+              .lean();
+            const responseId = responseDoc?._id
+              ? String(responseDoc._id)
+              : '';
+            const fe = (
+              process.env.FRONTEND_URL || 'http://localhost:3000'
+            ).replace(/\/+$/, '');
+            const actionUrl = responseId
+              ? `${fe}/dashboard/landlord/properties/verification/response/${encodeURIComponent(responseId)}?email=${encodeURIComponent(String((updated as any).email || ''))}`
+              : `${fe}/dashboard/landlord/properties/verification`;
+
+            await this.notificationsService.create({
+              targetRole: 'landlord',
+              userId: landlordId,
+              type: 'verification_complete',
+              title: 'Verification approved — report ready',
+              body: `Admin approved verification for ${(updated as any).firstName || 'your tenant'}. You can now review the full report.`,
+              metadata: {
+                verificationRequestId: String(updated._id),
+                verificationResponseId: responseId,
+                tenantEmail: (updated as any).email,
+                status: 'approved',
+                actionUrl: `/dashboard/landlord/properties/verification/response/${encodeURIComponent(responseId || String(updated._id))}?email=${encodeURIComponent(String((updated as any).email || ''))}`,
+              },
+            });
+
+            const landlordUser = await this.userService.findUserById(landlordId);
+            const lu = landlordUser as any;
+            if (lu?.email) {
+              await this.emailService.sendVerificationScreeningCompleteLandlordEmail(
+                {
+                  landlordEmail: String(lu.email),
+                  landlordName:
+                    [lu?.firstName, lu?.lastName].filter(Boolean).join(' ') ||
+                    'there',
+                  tenantName:
+                    `${(updated as any).firstName || ''} ${(updated as any).lastName || ''}`.trim() ||
+                    (updated as any).email ||
+                    'Tenant',
+                  actionUrl,
+                },
+              );
+            }
+          }
+        }
       } catch (notifyErr: unknown) {
         console.error(
           '[VerificationService] Status notification failed:',
@@ -728,54 +800,117 @@ export class VerificationService {
    * @param id
    * @returns Verification response or null
    */
-  async getVerificationResponseById(id: string): Promise<VerificationResponse | null> {
+  async getVerificationResponseById(
+    id: string,
+    options?: { requesterUserId?: string; allowUnapprovedReport?: boolean },
+  ): Promise<any> {
     const doc = await this.verificationResponseModel.findOne({ _id: id }).lean();
-    const refreshed = await this.withFreshLandlordReportScoring(doc);
-    return redactVerificationResponseForAdmin(
-      refreshed as Record<string, unknown> | null,
-    ) as unknown as VerificationResponse | null;
-  }
-
-  /**
-   * Get the latest verification response for a user
-   * @param userId
-   * @returns Latest VerificationResponse or null
-   */
-  async getLatestVerificationResponseByUser(userId: string): Promise<VerificationResponse | null> {
-    // If VerificationResponse has a userId/requestedBy field, use it. Otherwise, join by email.
-    // Here, we assume the VerificationResponse has a requestedBy or userId field.
-    return this.verificationResponseModel
-      .findOne({ requestedBy: userId })
-      .sort({ createdAt: -1 });
-  }
-
-  /**
-   * Get all verifications by email
-   * @param email
-   * @returns Array of verifications
-   */
-  async getVerificationsByEmail(email: string): Promise<Verification[]> {
-    return this.verificationModel.find({ email }).populate('requestedBy');
+    if (!doc) {
+      return null;
+    }
+    return this.authorizeAndShapeLandlordResponse(doc as any, options);
   }
 
   /**
    * Get a verification response by verification request ID and tenant email
-   * @param verificationId
-   * @param email
-   * @returns VerificationResponse or null
    */
-  async getVerificationResponseByRequestAndEmail(verificationId: string, email: string) {
+  async getVerificationResponseByRequestAndEmail(
+    verificationId: string,
+    email: string,
+    options?: { requesterUserId?: string; allowUnapprovedReport?: boolean },
+  ) {
     if (!verificationId?.trim() || !email?.trim()) {
       return null;
     }
     const vid = verificationId.trim();
     const em = email.trim();
     const doc = await this.verificationResponseModel
-      .findOne({ verificationId: vid, email: new RegExp(`^${em.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') })
+      .findOne({
+        verificationId: vid,
+        email: new RegExp(
+          `^${em.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`,
+          'i',
+        ),
+      })
       .select('-__v')
       .lean()
       .exec();
-    return this.withFreshLandlordReportScoring(doc);
+    if (!doc) {
+      return null;
+    }
+    return this.authorizeAndShapeLandlordResponse(doc as any, options);
+  }
+
+  async getLatestVerificationResponseByUser(userId: string): Promise<VerificationResponse | null> {
+    return this.verificationResponseModel
+      .findOne({ requestedBy: userId })
+      .sort({ createdAt: -1 });
+  }
+
+  async getVerificationsByEmail(email: string): Promise<Verification[]> {
+    return this.verificationModel.find({ email }).populate('requestedBy');
+  }
+
+  private async authorizeAndShapeLandlordResponse(
+    doc: Record<string, unknown>,
+    options?: { requesterUserId?: string; allowUnapprovedReport?: boolean },
+  ) {
+    const verificationId = String(doc.verificationId || '');
+    const request = verificationId
+      ? await this.verificationModel.findById(verificationId).lean()
+      : null;
+
+    if (options?.requesterUserId) {
+      const ownerId = request?.requestedBy
+        ? String((request as any).requestedBy)
+        : '';
+      const isLandlordOwner = ownerId && ownerId === String(options.requesterUserId);
+      if (!isLandlordOwner) {
+        const actor: any = await this.userService.findUserById(
+          String(options.requesterUserId),
+        );
+        const actorEmail = String(actor?.email || '').toLowerCase();
+        const responseEmail = String(doc.email || '').toLowerCase();
+        if (!actorEmail || actorEmail !== responseEmail) {
+          throw new BadRequestException(
+            'You are not authorized to view this verification report.',
+          );
+        }
+      }
+    }
+
+    const refreshed = await this.withFreshLandlordReportScoring(doc);
+    const status = String((request as any)?.status || '').toLowerCase();
+    const approved = status === VerificationStatus.APPROVED;
+    const allowReport =
+      options?.allowUnapprovedReport === true || approved;
+
+    if (!refreshed) {
+      return null;
+    }
+
+    const shaped: any = {
+      ...refreshed,
+      verificationRequestStatus: status || 'pending',
+      reportReleased: allowReport,
+    };
+
+    if (!allowReport) {
+      shaped.landlordReport = null;
+      shaped.riskScore = undefined;
+      shaped.riskCategory = undefined;
+      delete shaped.identificationDocumentAnalysis;
+      delete shaped.utilityBillAnalysis;
+      delete shaped.bankStatementAnalysis;
+      delete shaped.ninVerification;
+      delete shaped.bvnVerification;
+      delete shaped.phoneVerification;
+      delete shaped.amlScreening;
+    }
+
+    return redactVerificationResponseForAdmin(
+      shaped as Record<string, unknown>,
+    );
   }
 
   /** Recompute risk breakdown / score on read so API matches current tier weights and tenant fields. */
@@ -806,7 +941,64 @@ export class VerificationService {
       { value: 'pending', label: 'Verification Requested' },
       { value: 'approved', label: 'Verification completed' },
       { value: 'rejected', label: 'Rejected' },
+      { value: 'declined', label: 'Declined by tenant' },
     ];
+  }
+
+  /**
+   * Tenant declines a verification consent request.
+   */
+  async declineVerificationByTenant(
+    id: string,
+    tenantEmail: string,
+  ): Promise<Verification> {
+    const verification = await this.verificationModel.findById(id);
+    if (!verification) {
+      throw new NotFoundException('Verification request not found.');
+    }
+    const requestEmail = String((verification as any).email || '').toLowerCase();
+    const actorEmail = String(tenantEmail || '').trim().toLowerCase();
+    if (!actorEmail || requestEmail !== actorEmail) {
+      throw new BadRequestException(
+        'You are not allowed to decline this verification request.',
+      );
+    }
+    const current = String((verification as any).status || '').toLowerCase();
+    if (current !== VerificationStatus.PENDING) {
+      throw new BadRequestException(
+        'Only pending verification requests can be declined.',
+      );
+    }
+    (verification as any).status = VerificationStatus.DECLINED;
+    (verification as any).dateUpdated = new Date();
+    await verification.save();
+
+    try {
+      const landlordId = (verification as any).requestedBy
+        ? String((verification as any).requestedBy)
+        : '';
+      if (landlordId) {
+        await this.notificationsService.create({
+          targetRole: 'landlord',
+          userId: landlordId,
+          type: 'verification_declined',
+          title: 'Tenant declined verification',
+          body: `${(verification as any).firstName || 'A tenant'} declined your verification request.`,
+          metadata: {
+            verificationRequestId: String(verification._id),
+            status: VerificationStatus.DECLINED,
+            actionUrl: '/dashboard/landlord/properties/verification',
+          },
+        });
+      }
+    } catch (notifyErr: unknown) {
+      console.error(
+        '[VerificationService] Decline notification failed:',
+        (notifyErr as Error)?.message || notifyErr,
+      );
+    }
+
+    return verification;
   }
 
   async verifyBvnWithDojah(bvn: string) {
@@ -1958,16 +2150,18 @@ export class VerificationService {
         landlordScreeningCompleteNotifiedAt?: Date;
       }).landlordScreeningCompleteNotifiedAt;
       if (landlordId && !alreadyNotified) {
+        // Soft notify only — full report is released after admin approval.
         await this.notificationsService.create({
           targetRole: 'landlord',
           userId: landlordId,
-          type: 'verification_complete',
-          title: 'Tenant verification complete',
-          body: `Automated screening finished for ${updatedDoc.fullName || 'your tenant'}. Review the verification report in your dashboard.`,
+          type: 'verification_screening_submitted',
+          title: 'Tenant verification submitted for review',
+          body: `Automated screening finished for ${updatedDoc.fullName || 'your tenant'}. An administrator will review it before the full report is released.`,
           metadata: {
             verificationResponseId: responseId,
             verificationRequestId: String(updatedDoc.verificationId ?? ''),
             tenantEmail: updatedDoc.email,
+            actionUrl: '/dashboard/landlord/properties/verification',
           },
         });
         try {
@@ -1980,8 +2174,8 @@ export class VerificationService {
               targetRole: 'tenant',
               userId: tenantUid,
               type: 'verification_screening_complete',
-              title: 'Your verification screening is complete',
-              body: 'Automated checks have finished. Your landlord can review the report; you may check your verification status in the app.',
+              title: 'Your verification is under review',
+              body: 'Automated checks have finished. An administrator will review your submission before results are shared with your landlord.',
               metadata: {
                 verificationResponseId: responseId,
                 verificationRequestId: String(updatedDoc.verificationId ?? ''),
@@ -1991,23 +2185,6 @@ export class VerificationService {
         } catch {
           // best-effort tenant notify
         }
-        const landlordUser = await this.userService.findUserById(landlordId);
-        const lu = landlordUser as any;
-        const landlordEmail = lu?.email ? String(lu.email) : '';
-        const landlordName =
-          [lu?.firstName, lu?.lastName].filter(Boolean).join(' ') || 'there';
-        const fe = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(
-          /\/+$/,
-          '',
-        );
-        const tenantEmailEnc = encodeURIComponent(updatedDoc.email || '');
-        const actionUrl = `${fe}/dashboard/landlord/properties/verification/response/${encodeURIComponent(responseId)}?email=${tenantEmailEnc}`;
-        await this.emailService.sendVerificationScreeningCompleteLandlordEmail({
-          landlordEmail,
-          landlordName,
-          tenantName: updatedDoc.fullName || updatedDoc.email || 'Tenant',
-          actionUrl,
-        });
         await this.emitVerificationEventWebhook('verification.complete', {
           verificationRequestId: String(updatedDoc.verificationId ?? ''),
           verificationResponseId: responseId,
@@ -2021,7 +2198,7 @@ export class VerificationService {
       }
     } catch (notifyErr: any) {
       console.error(
-        `[${operation}] Landlord notifications / email / webhook failed:`,
+        `[${operation}] Landlord notifications / webhook failed:`,
         notifyErr?.message || notifyErr,
       );
     }
