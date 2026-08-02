@@ -407,7 +407,17 @@ export class RoomsService {
     // Apply pagination
     const skip = (page - 1) * limit;
     const properties = await query.skip(skip).limit(limit).exec();
-    return properties;
+    if (id) {
+      return properties;
+    }
+    // Hide rooms whose parent property is inactive/removed
+    return (properties || []).filter((room: any) => {
+      const prop = room?.propertyId;
+      if (!prop) {
+        return false;
+      }
+      return String(prop.status || 'active').toLowerCase() !== 'inactive';
+    });
   }
 
   async countAvailableApartments(
@@ -624,11 +634,16 @@ export class RoomsService {
     rentStartDate: Date,
   ): Promise<LandlordAssignedTenant | any> {
     const singleApp = await this.applicationModel.findById(id);
-    this.roomModel.findByIdAndUpdate(
-      singleApp.propertyId,
-      { assignedToTenant: true, listRoom: false },
-      { new: true },
-    );
+    if (!singleApp) {
+      throw new Error('Application not found');
+    }
+    if ((singleApp as any).propertyId) {
+      await this.roomModel.findByIdAndUpdate(
+        (singleApp as any).propertyId,
+        { assignedToTenant: true, listRoom: false },
+        { new: true },
+      );
+    }
     return this.applicationModel.findByIdAndUpdate(
       id,
       { rentEndDate, rentStartDate, status: ApplicationStatus.ACTIVE_LEASE },
@@ -654,7 +669,7 @@ export class RoomsService {
     if ((tenant as any).propertyId) {
       await this.roomModel.findByIdAndUpdate(
         (tenant as any).propertyId,
-        { assignedToTenant: false },
+        { assignedToTenant: false, listRoom: true },
         { new: true },
       );
     }

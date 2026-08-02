@@ -9,6 +9,7 @@ export enum VerificationStatus {
   PENDING = 'pending',
   APPROVED = 'approved',
   REJECTED = 'rejected',
+  DECLINED = 'declined',
 }
 
 @Schema({ timestamps: true })

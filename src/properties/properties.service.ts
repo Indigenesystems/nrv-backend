@@ -56,6 +56,34 @@ export class PropertiesService {
     }
     // Properties can be added without purchasing credits; no limit enforced.
 
+    const streetAddress = String(createPropertyDto.location || createPropertyDto.streetAddress || '')
+      .trim();
+    const city = String(createPropertyDto.city || '').trim();
+    const state = String(createPropertyDto.state || '').trim();
+    if (streetAddress && city && state) {
+      const duplicate = await this.propertyModel.findOne({
+        createdBy: createdByUserId,
+        streetAddress: new RegExp(
+          `^${streetAddress.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`,
+          'i',
+        ),
+        city: new RegExp(
+          `^${city.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`,
+          'i',
+        ),
+        state: new RegExp(
+          `^${state.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`,
+          'i',
+        ),
+        status: { $ne: 'inactive' },
+      });
+      if (duplicate) {
+        throw new BadRequestException(
+          'A property with this address already exists on your account.',
+        );
+      }
+    }
+
     let landlordInsurancePolicyUrls: any = null;
     let utilityAndMaintenanceUrls: any = null;
     let otherDocumentsUrls: any = null;
@@ -98,7 +126,7 @@ export class PropertiesService {
     const propertyData = {
       file: fileUrl,
       city: createPropertyDto.city,
-      streetAddress: createPropertyDto.location,
+      streetAddress: createPropertyDto.location || createPropertyDto.streetAddress,
       state: createPropertyDto.state,
       propertyType: createPropertyDto.propertyType,
       createdBy: createPropertyDto.createdBy,
@@ -253,7 +281,7 @@ export class PropertiesService {
       singleProperty.otherDocuments.push(...otherDocumentsUrls);
     }
 
-    // Upload multiple images
+    // Upload multiple images (replace when replaceImages=true)
     if (updatePropertyDto.images && updatePropertyDto.images.length > 0) {
       imageUrls = await Promise.all(
         updatePropertyDto.images.map(
@@ -263,7 +291,14 @@ export class PropertiesService {
         ),
       );
 
-      singleProperty.imageUrls.push(...imageUrls);
+      const shouldReplace =
+        updatePropertyDto.replaceImages === true ||
+        updatePropertyDto.replaceImages === 'true';
+      if (shouldReplace) {
+        singleProperty.imageUrls = imageUrls;
+      } else {
+        singleProperty.imageUrls.push(...imageUrls);
+      }
     }
 
     // Upload/replace main property image (file)
@@ -273,6 +308,18 @@ export class PropertiesService {
         : updatePropertyDto.file;
       if (fileToUpload) {
         singleProperty.file = await this.cloudinaryService.upload(fileToUpload);
+        // Keep marketplace thumbnails in sync when units rely on property image
+        await this.roomModel.updateMany(
+          {
+            propertyId: singleProperty._id,
+            $or: [
+              { imageUrls: { $exists: false } },
+              { imageUrls: { $size: 0 } },
+              { imageUrls: null },
+            ],
+          },
+          { $set: { file: singleProperty.file } },
+        );
       }
     }
 
@@ -282,6 +329,9 @@ export class PropertiesService {
     }
     if (updatePropertyDto.city) {
       singleProperty.city = updatePropertyDto.city;
+    }
+    if (updatePropertyDto.location && !updatePropertyDto.streetAddress) {
+      singleProperty.streetAddress = updatePropertyDto.location;
     }
     if (updatePropertyDto.propertyType) {
       try {
@@ -312,6 +362,13 @@ export class PropertiesService {
     }
     if (updatePropertyDto.status) {
       singleProperty.status = updatePropertyDto.status;
+      // Soft-remove from marketplace when property is inactivated
+      if (String(updatePropertyDto.status).toLowerCase() === 'inactive') {
+        await this.roomModel.updateMany(
+          { propertyId: singleProperty._id },
+          { $set: { listRoom: false } },
+        );
+      }
     }
 
     // Persist changes on the mongoose document (avoid writing computed/join fields).
@@ -656,6 +713,13 @@ export class PropertiesService {
           metadata: { propertyId: id },
         });
       }
+      // Ensure marketplace listings disappear immediately
+      await this.roomModel.updateMany(
+        { propertyId: id },
+        { $set: { listRoom: false, approved: false } },
+      );
+      propertyToDelete.status = 'inactive';
+      await propertyToDelete.save();
     }
 
     const deletedProperty: any = await this.propertyModel.findByIdAndDelete(id);
@@ -1019,6 +1083,27 @@ export class PropertiesService {
       const previousStatus = (existingApplication as any)?.status;
       (existingApplication as any).status = newStatus;
       const saved = await (existingApplication as any).save();
+
+      // When application is accepted or lease starts, mark unit as rented and unlist it.
+      const occupancyStatuses = [
+        ApplicationStatus.ACCEPTED,
+        ApplicationStatus.ACTIVE_LEASE,
+        'Accepted',
+        'Active_lease',
+      ];
+      if (occupancyStatuses.includes(newStatus as any)) {
+        const targetRoomId =
+          roomId ||
+          (existingApplication as any)?.propertyId?._id ||
+          (existingApplication as any)?.propertyId;
+        if (targetRoomId) {
+          await this.roomModel.findByIdAndUpdate(
+            targetRoomId,
+            { assignedToTenant: true, listRoom: false },
+            { new: true },
+          );
+        }
+      }
 
       // Notify applicant of status change without blocking the API response
       // (SMTP timeouts were delaying status updates by 15–20s on the client).
@@ -1434,6 +1519,11 @@ export class PropertiesService {
   async mapCreatedUserToApartment(payload: any): Promise<any> {
     try {
       const { propertyId } = payload;
+      if (!propertyId) {
+        throw new BadRequestException(
+          'propertyId is required to map a tenant to an apartment.',
+        );
+      }
       const isMapped = await this.isPropertyMappedToActiveTenant(propertyId);
 
       if (isMapped) {
