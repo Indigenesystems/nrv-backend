@@ -1699,14 +1699,61 @@ export class EmailService {
     });
 
     try {
-      await this.transporter.sendMail({
-        from: this.defaultFromAddress,
+      await this.deliverMail({
         to: recipients.join(','),
         subject: `[NRV] Verification documents submitted — ${payload.tenantName || payload.tenantEmail}`,
         html,
       });
     } catch (err) {
       console.error('[EmailService] sendVerificationDocumentsSubmittedAdminEmail failed:', err);
+    }
+  }
+
+  async sendVerificationDeclinedAdminEmail(payload: {
+    tenantName: string;
+    tenantEmail: string;
+    verificationRequestId: string;
+    landlordDisplayName?: string;
+    declinedAt?: string;
+    adminActionUrl?: string;
+  }): Promise<void> {
+    const recipients = this.getVerificationAdminRecipientEmails();
+    if (recipients.length === 0) {
+      return;
+    }
+    const adminUrl =
+      payload.adminActionUrl ||
+      `${(process.env.ADMIN_HUB_URL || process.env.NRV_ADMIN_HUB_URL || this.getFrontendUrl()).replace(/\/+$/, '')}/verifications/${encodeURIComponent(payload.verificationRequestId)}`;
+    const when = payload.declinedAt
+      ? new Date(payload.declinedAt).toLocaleString()
+      : new Date().toLocaleString();
+
+    const html = this.renderSimpleEmail({
+      title: 'Tenant declined verification',
+      preheader: `${payload.tenantName || payload.tenantEmail} declined a verification request.`,
+      contentHtml: `
+        <p style="margin:0 0 12px;">A tenant has declined a verification consent request.</p>
+        <p style="margin:0 0 6px;"><strong>Tenant:</strong> ${payload.tenantName || '—'}</p>
+        <p style="margin:0 0 6px;"><strong>Email:</strong> ${payload.tenantEmail || '—'}</p>
+        <p style="margin:0 0 6px;"><strong>Landlord:</strong> ${payload.landlordDisplayName || '—'}</p>
+        <p style="margin:0 0 6px;"><strong>Request ID:</strong> ${payload.verificationRequestId}</p>
+        <p style="margin:0 0 12px;"><strong>Declined at:</strong> ${when}</p>
+        <p style="margin:16px 0 0;">
+          <a href="${adminUrl}" target="_blank" style="display:inline-block;background:#03442C;color:#ffffff;text-decoration:none;padding:12px 16px;border-radius:8px;font-weight:600;">
+            Open in admin hub
+          </a>
+        </p>
+      `,
+    });
+
+    try {
+      await this.deliverMail({
+        to: recipients.join(','),
+        subject: `[NRV] Verification declined — ${payload.tenantName || payload.tenantEmail}`,
+        html,
+      });
+    } catch (err) {
+      console.error('[EmailService] sendVerificationDeclinedAdminEmail failed:', err);
     }
   }
 

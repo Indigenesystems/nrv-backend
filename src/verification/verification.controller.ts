@@ -56,7 +56,29 @@ function getJwtUserId(authHeader?: string): string | null {
   try {
     const secret = process.env.JWT_SECRET || '34ttyyuhbyh';
     const decoded: any = jwt.verify(token, secret);
+    if (decoded?.type === 'staff') {
+      return null;
+    }
     return decoded?.sub ? String(decoded.sub) : null;
+  } catch {
+    return null;
+  }
+}
+
+function getStaffJwt(authHeader?: string): { sub: string; roleSlug?: string } | null {
+  const token = authHeader?.startsWith('Bearer ')
+    ? authHeader.slice(7)
+    : authHeader;
+  if (!token) {
+    return null;
+  }
+  try {
+    const secret = process.env.JWT_SECRET || '34ttyyuhbyh';
+    const decoded: any = jwt.verify(token, secret);
+    if (decoded?.type !== 'staff' || !decoded?.sub) {
+      return null;
+    }
+    return { sub: String(decoded.sub), roleSlug: decoded.roleSlug };
   } catch {
     return null;
   }
@@ -638,12 +660,21 @@ export class VerificationController {
       throw new BadRequestException('Email query parameter is required');
     }
     try {
+      const staff = getStaffJwt(authorization);
       const requesterUserId = getJwtUserId(authorization);
+      if (!staff && !requesterUserId) {
+        throw new UnauthorizedException(
+          'Authentication required to view this verification report.',
+        );
+      }
       const result =
         await this.verificationService.getVerificationResponseByRequestAndEmail(
           verificationId,
           email,
-          { requesterUserId: requesterUserId || undefined },
+          {
+            requesterUserId: requesterUserId || undefined,
+            allowUnapprovedReport: !!staff,
+          },
         );
       return verificationSuccessResponse(
         result ? 'Verification response fetched successfully' : 'No verification response yet',
@@ -651,7 +682,12 @@ export class VerificationController {
       );
     } catch (error) {
       console.error('getVerificationResponseByRequestAndEmail error:', error);
-      if (error instanceof BadRequestException) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof UnauthorizedException ||
+        error instanceof ForbiddenException ||
+        error instanceof NotFoundException
+      ) {
         throw error;
       }
       throw new InternalServerErrorException(
@@ -700,15 +736,19 @@ export class VerificationController {
     @Headers('authorization') authorization?: string,
   ): Promise<{ status: string; message: string; data: any }> {
     try {
+      const staff = getStaffJwt(authorization);
       const requesterUserId = getJwtUserId(authorization);
-      if (!requesterUserId) {
+      if (!staff && !requesterUserId) {
         throw new UnauthorizedException(
           'Authentication required to view this verification report.',
         );
       }
       const result = await this.verificationService.getVerificationResponseById(
         id,
-        { requesterUserId },
+        {
+          requesterUserId: requesterUserId || undefined,
+          allowUnapprovedReport: !!staff,
+        },
       );
       if (!result) throw new NotFoundException('Verification not found.');
       return verificationSuccessResponse('Verification fetched successfully', result);
@@ -716,6 +756,7 @@ export class VerificationController {
       console.error('Error fetching verification by ID:', error);
       if (
         error instanceof UnauthorizedException ||
+        error instanceof ForbiddenException ||
         error instanceof NotFoundException ||
         error instanceof BadRequestException
       ) {

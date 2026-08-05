@@ -25,12 +25,14 @@ import {
 import { ActivitiesModule } from '../activities/activities.module';
 import { PlansModule } from '../plans/plans.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { StaffModule } from '../staff/staff.module';
 
 @Module({
   imports: [
     ActivitiesModule,
     PlansModule,
     NotificationsModule,
+    StaffModule,
     MongooseModule.forFeature([
       { name: Property.name, schema: PropertySchema },
       { name: AgreementDocuments.name, schema: AgreementDocumentsSchema },
