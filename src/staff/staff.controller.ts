@@ -7,15 +7,24 @@ import {
   Param,
   Delete,
   Query,
-  BadRequestException,
   UsePipes,
   ValidationPipe,
+  UseGuards,
+  Req,
+  ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { StaffService } from './staff.service';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { CreateStaffDto } from './dto/create-staff.dto';
 import { UpdateStaffDto } from './dto/update-staff.dto';
 import { OnboardStaffDto } from './dto/onboard-staff.dto';
+import {
+  RequireStaffPermissions,
+  StaffPermissionsGuard,
+} from './guards/staff-permissions.guard';
+import { StaffJwtGuard } from './guards/staff-jwt.guard';
+import { canAssignStaffRole } from './staff-permissions';
 
 @Controller('staff')
 export class StaffController {
@@ -23,6 +32,8 @@ export class StaffController {
 
   // ---- Roles ----
   @Post('roles')
+  @UseGuards(StaffJwtGuard, StaffPermissionsGuard)
+  @RequireStaffPermissions('roles.write')
   @UsePipes(new ValidationPipe({ whitelist: true }))
   async createRole(@Body() dto: CreateRoleDto) {
     const role = await this.staffService.createRole(dto);
@@ -30,12 +41,16 @@ export class StaffController {
   }
 
   @Get('roles')
+  @UseGuards(StaffJwtGuard, StaffPermissionsGuard)
+  @RequireStaffPermissions('staff.read')
   async getRoles() {
     const roles = await this.staffService.findAllRoles();
     return { status: 'success', message: 'Roles fetched', data: roles };
   }
 
   @Get('roles/:id')
+  @UseGuards(StaffJwtGuard, StaffPermissionsGuard)
+  @RequireStaffPermissions('staff.read')
   async getRoleById(@Param('id') id: string) {
     const role = await this.staffService.findRoleById(id);
     return { status: 'success', message: 'Role fetched', data: role };
@@ -43,16 +58,34 @@ export class StaffController {
 
   // ---- Staff (Person) ----
   @Post()
+  @UseGuards(StaffJwtGuard, StaffPermissionsGuard)
+  @RequireStaffPermissions('staff.write')
   @UsePipes(new ValidationPipe({ whitelist: true }))
   async createStaff(
     @Body() dto: CreateStaffDto,
-    @Query('invitedBy') invitedBy?: string,
+    @Query('invitedBy') invitedBy: string | undefined,
+    @Req() req: { staff?: { sub: string; roleSlug?: string } },
   ) {
-    const staff = await this.staffService.createStaff(dto, invitedBy);
+    const actorSlug = req.staff?.roleSlug;
+    const targetRole = await this.staffService.findRoleById(dto.roleId);
+    if (!targetRole) {
+      throw new BadRequestException('Invalid roleId');
+    }
+    if (!canAssignStaffRole(actorSlug, (targetRole as any).slug)) {
+      throw new ForbiddenException(
+        'You cannot assign a role more privileged than your own.',
+      );
+    }
+    const staff = await this.staffService.createStaff(
+      dto,
+      invitedBy || req.staff?.sub,
+    );
     return { status: 'success', message: 'Staff created', data: staff };
   }
 
   @Get()
+  @UseGuards(StaffJwtGuard, StaffPermissionsGuard)
+  @RequireStaffPermissions('staff.read')
   async getStaff(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
@@ -80,18 +113,38 @@ export class StaffController {
   }
 
   @Get(':id')
+  @UseGuards(StaffJwtGuard, StaffPermissionsGuard)
+  @RequireStaffPermissions('staff.read')
   async getStaffById(@Param('id') id: string) {
     const staff = await this.staffService.findStaffById(id);
     return { status: 'success', message: 'Staff fetched', data: staff };
   }
 
   @Patch(':id')
+  @UseGuards(StaffJwtGuard, StaffPermissionsGuard)
+  @RequireStaffPermissions('staff.write')
   @UsePipes(new ValidationPipe({ whitelist: true }))
-  async updateStaff(@Param('id') id: string, @Body() dto: UpdateStaffDto) {
+  async updateStaff(
+    @Param('id') id: string,
+    @Body() dto: UpdateStaffDto,
+    @Req() req: { staff?: { roleSlug?: string } },
+  ) {
+    if (dto.roleId) {
+      const targetRole = await this.staffService.findRoleById(dto.roleId);
+      if (!targetRole) {
+        throw new BadRequestException('Invalid roleId');
+      }
+      if (!canAssignStaffRole(req.staff?.roleSlug, (targetRole as any).slug)) {
+        throw new ForbiddenException(
+          'You cannot assign a role more privileged than your own.',
+        );
+      }
+    }
     const staff = await this.staffService.updateStaff(id, dto);
     return { status: 'success', message: 'Staff updated', data: staff };
   }
 
+  /** Invitees set password without admin staff.write — keep public. */
   @Post(':id/onboard')
   @UsePipes(new ValidationPipe({ whitelist: true }))
   async onboardStaff(@Param('id') id: string, @Body() dto: OnboardStaffDto) {
@@ -100,6 +153,8 @@ export class StaffController {
   }
 
   @Delete(':id')
+  @UseGuards(StaffJwtGuard, StaffPermissionsGuard)
+  @RequireStaffPermissions('staff.write')
   async deleteStaff(@Param('id') id: string) {
     await this.staffService.deleteStaff(id);
     return { status: 'success', message: 'Staff deleted' };
