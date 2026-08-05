@@ -701,30 +701,61 @@ export class PropertiesService {
 
   async deletePropertyById(id: any) {
     const propertyToDelete = await this.propertyModel.findById(id);
-    if (propertyToDelete) {
-      const createdBy = propertyToDelete.createdBy as any;
-      const userId =
-        typeof createdBy === 'object' ? createdBy?._id?.toString() : createdBy?.toString();
-      if (userId) {
-        await this.activitiesService.create({
-          type: 'Property Deleted',
-          details: `${propertyToDelete.propertyName || propertyToDelete.streetAddress || 'Property'} has been removed`,
-          userId,
-          metadata: { propertyId: id },
-        });
-      }
-      // Ensure marketplace listings disappear immediately
-      await this.roomModel.updateMany(
-        { propertyId: id },
-        { $set: { listRoom: false, approved: false } },
-      );
-      propertyToDelete.status = 'inactive';
-      await propertyToDelete.save();
+    if (!propertyToDelete) {
+      return null;
     }
 
-    const deletedProperty: any = await this.propertyModel.findByIdAndDelete(id);
-    const deletedRooms: any = await this.roomService.deleteRoomByPropertyId(id);
-    return deletedProperty;
+    const alreadyDeleted =
+      String((propertyToDelete as any).status || '').toLowerCase() === 'deleted';
+    if (alreadyDeleted) {
+      return propertyToDelete;
+    }
+
+    // Block delete when any unit is rented / has an active lease
+    const roomIds = await this.roomModel.find({ propertyId: id }).distinct('_id');
+    const occupiedRoom = await this.roomModel
+      .findOne({ propertyId: id, assignedToTenant: true })
+      .lean();
+    const activeLease = await this.applicationModel
+      .findOne({
+        propertyId: { $in: roomIds },
+        status: {
+          $in: [
+            ApplicationStatus.ACTIVE_LEASE,
+            ApplicationStatus.ACCEPTED,
+            'Active_lease',
+            'Accepted',
+            'active',
+          ],
+        },
+      })
+      .lean();
+    if (occupiedRoom || activeLease) {
+      throw new BadRequestException(
+        'This property cannot be deleted because one or more units are rented or have an active lease.',
+      );
+    }
+
+    const createdBy = propertyToDelete.createdBy as any;
+    const userId =
+      typeof createdBy === 'object' ? createdBy?._id?.toString() : createdBy?.toString();
+    if (userId) {
+      await this.activitiesService.create({
+        type: 'Property Deleted',
+        details: `${propertyToDelete.propertyName || propertyToDelete.streetAddress || 'Property'} has been removed`,
+        userId,
+        metadata: { propertyId: id },
+      });
+    }
+
+    // Soft delete: unlist rooms and mark property deleted (keep for admin)
+    await this.roomModel.updateMany(
+      { propertyId: id },
+      { $set: { listRoom: false, approved: false } },
+    );
+    propertyToDelete.status = 'deleted';
+    await propertyToDelete.save();
+    return propertyToDelete;
   }
 
   async deleteDocument(propertyId: string, documentUrl: string): Promise<any> {
@@ -1837,7 +1868,7 @@ export class PropertiesService {
         {
           $match: {
             'property.state': stateRegex,
-            'property.status': { $ne: 'inactive' },
+            'property.status': { $nin: ['inactive', 'deleted'] },
           },
         },
         {

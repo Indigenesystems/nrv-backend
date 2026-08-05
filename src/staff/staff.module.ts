@@ -8,6 +8,7 @@ import { StaffController } from './staff.controller';
 import { StaffAuthController } from './auth/staff-auth.controller';
 import { StaffAuthService } from './auth/staff-auth.service';
 import { StaffJwtGuard } from './guards/staff-jwt.guard';
+import { StaffPermissionsGuard } from './guards/staff-permissions.guard';
 
 @Module({
   imports: [
@@ -16,12 +17,17 @@ import { StaffJwtGuard } from './guards/staff-jwt.guard';
       { name: Staff.name, schema: StaffSchema },
     ]),
     JwtModule.register({
-      secret: '34ttyyuhbyh',
+      secret: process.env.JWT_SECRET || '34ttyyuhbyh',
       signOptions: { expiresIn: '1d' },
     }),
   ],
   controllers: [StaffController, StaffAuthController],
-  providers: [StaffService, StaffAuthService, StaffJwtGuard],
-  exports: [StaffService],
+  providers: [
+    StaffService,
+    StaffAuthService,
+    StaffJwtGuard,
+    StaffPermissionsGuard,
+  ],
+  exports: [StaffService, StaffJwtGuard, StaffPermissionsGuard, JwtModule],
 })
 export class StaffModule {}

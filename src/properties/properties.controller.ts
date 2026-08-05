@@ -11,6 +11,8 @@ import {
   Query,
   Res,
   HttpStatus,
+  Headers,
+  ForbiddenException,
 } from '@nestjs/common';
 import { PropertiesService } from './properties.service';
 import { CreatePropertyDto } from './dto/create-property.dto';
@@ -21,11 +23,30 @@ import {
   updatePropertySchema,
 } from '../validations/validator';
 import { Response } from 'express';
+import { JwtService } from '@nestjs/jwt';
+import { tryParseStaffJwt } from '../staff/guards/staff-permissions.guard';
+import { staffHasPermission } from '../staff/staff-permissions';
 
 
 @Controller('properties')
 export class PropertiesController {
-  constructor(private propertiesService: PropertiesService) {}
+  constructor(
+    private propertiesService: PropertiesService,
+    private readonly jwtService: JwtService,
+  ) {}
+
+  private assertStaffCanMutateProperty(authorization?: string, forDelete = false) {
+    const staff = tryParseStaffJwt(this.jwtService, authorization);
+    if (!staff) {
+      return;
+    }
+    const permission = forDelete ? 'properties.delete' : 'properties.write';
+    if (!staffHasPermission(staff.roleSlug, permission as any)) {
+      throw new ForbiddenException(
+        'You do not have permission to perform this action.',
+      );
+    }
+  }
 
   @Post('/add')
   @UseInterceptors(
@@ -91,7 +112,16 @@ export class PropertiesController {
       otherDocuments?: Express.Multer.File;
     },
     @Res() res: Response,
+    @Headers('authorization') authorization?: string,
   ) {
+    try {
+      this.assertStaffCanMutateProperty(authorization, false);
+    } catch (error) {
+      return res.status(HttpStatus.FORBIDDEN).json({
+        status: 'error',
+        message: error?.message || 'Forbidden',
+      });
+    }
     const validationResult = updatePropertySchema.validate(body);
 
     if (validationResult.error) {
@@ -240,18 +270,34 @@ export class PropertiesController {
   }
 
   @Delete('/delete/:id')
-  async deletePropertyById(@Param('id') id: string, @Res() res: Response) {
-    const property = await this.propertiesService.deletePropertyById(id);
-    if (!property) {
-      return res.status(HttpStatus.NOT_FOUND).json({
-        status: 'error',
-        message: 'Property not found',
-        data: null,
-      });
-    } else {
+  async deletePropertyById(
+    @Param('id') id: string,
+    @Res() res: Response,
+    @Headers('authorization') authorization?: string,
+  ) {
+    try {
+      this.assertStaffCanMutateProperty(authorization, true);
+      const property = await this.propertiesService.deletePropertyById(id);
+      if (!property) {
+        return res.status(HttpStatus.NOT_FOUND).json({
+          status: 'error',
+          message: 'Property not found',
+          data: null,
+        });
+      }
       return res.status(HttpStatus.OK).json({
         status: 'success',
         message: 'Property deleted successfully',
+        data: property,
+      });
+    } catch (error) {
+      const status =
+        error instanceof ForbiddenException
+          ? HttpStatus.FORBIDDEN
+          : HttpStatus.BAD_REQUEST;
+      return res.status(status).json({
+        status: 'error',
+        message: error?.message || 'Failed to delete property',
         data: null,
       });
     }

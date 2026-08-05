@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -181,6 +182,15 @@ export class VerificationService {
     if (!request) {
       throw new BadRequestException('Verification request not found. Invalid verificationId.');
     }
+    const requestStatus = String((request as any).status || '').toLowerCase();
+    if (
+      requestStatus === VerificationStatus.DECLINED ||
+      requestStatus === VerificationStatus.REJECTED
+    ) {
+      throw new BadRequestException(
+        'This verification request was declined or rejected and can no longer be completed.',
+      );
+    }
     const tier = (request as { verificationTier?: string }).verificationTier ?? 'standard';
     const bvn = dto.bvn?.trim();
     if (tier === 'premium' && !bvn) {
@@ -220,6 +230,25 @@ export class VerificationService {
       }
     }
     return created;
+  }
+
+  private async assertRequestAllowsTenantEdits(verificationId: string) {
+    if (!verificationId) {
+      return;
+    }
+    const request = await this.verificationModel.findById(verificationId).lean();
+    if (!request) {
+      throw new BadRequestException('Verification request not found.');
+    }
+    const status = String((request as any).status || '').toLowerCase();
+    if (
+      status === VerificationStatus.DECLINED ||
+      status === VerificationStatus.REJECTED
+    ) {
+      throw new BadRequestException(
+        'This verification request was declined or rejected and can no longer be updated.',
+      );
+    }
   }
 
   /**
@@ -263,6 +292,11 @@ export class VerificationService {
    * Only sets employment-related fields so other response data is preserved.
    */
   async updateEmployment(id: string, dto: UpdateEmploymentDto): Promise<VerificationResponse | null> {
+    const existing = await this.verificationResponseModel.findById(id);
+    if (!existing) {
+      throw new NotFoundException('Verification response not found');
+    }
+    await this.assertRequestAllowsTenantEdits(String((existing as any).verificationId || ''));
     const update: Record<string, unknown> = {};
     if (dto.employmentStatus !== undefined) update.employmentStatus = dto.employmentStatus;
     if (dto.roleInCompany !== undefined) update.roleInCompany = dto.roleInCompany;
@@ -271,8 +305,6 @@ export class VerificationService {
     if (dto.monthlyIncome !== undefined) update.monthlyIncome = dto.monthlyIncome;
     if (dto.dateJoined !== undefined) update.dateJoined = dto.dateJoined;
     if (Object.keys(update).length === 0) {
-      const existing = await this.verificationResponseModel.findById(id);
-      if (!existing) throw new NotFoundException('Verification response not found');
       return existing;
     }
     const updated = await this.verificationResponseModel.findByIdAndUpdate(
@@ -291,6 +323,11 @@ export class VerificationService {
    * @returns Updated verification response or null
    */
   async updateGuarantor(id: string, dto: UpdateGuarantorDto): Promise<VerificationResponse | null> {
+    const existing = await this.verificationResponseModel.findById(id);
+    if (!existing) {
+      return null;
+    }
+    await this.assertRequestAllowsTenantEdits(String((existing as any).verificationId || ''));
     const updated = await this.verificationResponseModel.findByIdAndUpdate(id, dto, { new: true });
     if (!updated) {
       return null;
@@ -305,6 +342,11 @@ export class VerificationService {
    * @returns Updated verification response or null
    */
   async uploadAffordability(id: string, files: any, body?: any): Promise<VerificationResponse | null> {
+    const existingDoc = await this.verificationResponseModel.findById(id);
+    if (!existingDoc) {
+      throw new NotFoundException('Verification response not found');
+    }
+    await this.assertRequestAllowsTenantEdits(String((existingDoc as any).verificationId || ''));
     const updatePayload: Partial<VerificationResponse> = {};
     // Helper for uploading a file and returning its URL
     const uploadFile = async (file: Express.Multer.File | undefined) => {
@@ -860,7 +902,9 @@ export class VerificationService {
       ? await this.verificationModel.findById(verificationId).lean()
       : null;
 
-    if (options?.requesterUserId) {
+    if (options?.allowUnapprovedReport === true) {
+      // Staff/admin read path — skip landlord/tenant ownership gate.
+    } else if (options?.requesterUserId) {
       const ownerId = request?.requestedBy
         ? String((request as any).requestedBy)
         : '';
@@ -872,11 +916,15 @@ export class VerificationService {
         const actorEmail = String(actor?.email || '').toLowerCase();
         const responseEmail = String(doc.email || '').toLowerCase();
         if (!actorEmail || actorEmail !== responseEmail) {
-          throw new BadRequestException(
+          throw new ForbiddenException(
             'You are not authorized to view this verification report.',
           );
         }
       }
+    } else {
+      throw new ForbiddenException(
+        'Authentication required to view this verification report.',
+      );
     }
 
     const refreshed = await this.withFreshLandlordReportScoring(doc);
@@ -973,6 +1021,13 @@ export class VerificationService {
     (verification as any).dateUpdated = new Date();
     await verification.save();
 
+    const tenantLabel =
+      `${(verification as any).firstName || ''} ${(verification as any).lastName || ''}`.trim() ||
+      (verification as any).email ||
+      'A tenant';
+    const requestId = String(verification._id);
+    const declinedAt = new Date().toISOString();
+
     try {
       const landlordId = (verification as any).requestedBy
         ? String((verification as any).requestedBy)
@@ -983,18 +1038,61 @@ export class VerificationService {
           userId: landlordId,
           type: 'verification_declined',
           title: 'Tenant declined verification',
-          body: `${(verification as any).firstName || 'A tenant'} declined your verification request.`,
+          body: `${tenantLabel} declined your verification request.`,
           metadata: {
-            verificationRequestId: String(verification._id),
+            verificationRequestId: requestId,
             status: VerificationStatus.DECLINED,
-            actionUrl: '/dashboard/landlord/properties/verification',
+            tenantEmail: (verification as any).email,
+            tenantName: tenantLabel,
+            declinedAt,
+            actionUrl: `/dashboard/landlord/properties/verification/response/${requestId}?email=${encodeURIComponent(String((verification as any).email || ''))}`,
           },
         });
       }
     } catch (notifyErr: unknown) {
       console.error(
-        '[VerificationService] Decline notification failed:',
+        '[VerificationService] Decline landlord notification failed:',
         (notifyErr as Error)?.message || notifyErr,
+      );
+    }
+
+    try {
+      await this.notificationsService.create({
+        targetRole: 'admin',
+        type: 'verification_declined',
+        title: 'Tenant declined verification request',
+        body: `${tenantLabel} (${(verification as any).email || 'unknown'}) declined a verification request.`,
+        metadata: {
+          verificationRequestId: requestId,
+          status: VerificationStatus.DECLINED,
+          tenantEmail: (verification as any).email,
+          tenantName: tenantLabel,
+          landlordId: (verification as any).requestedBy
+            ? String((verification as any).requestedBy)
+            : undefined,
+          declinedAt,
+          actionUrl: `/verifications/${requestId}`,
+        },
+      });
+    } catch (adminNotifyErr: unknown) {
+      console.error(
+        '[VerificationService] Decline admin notification failed:',
+        (adminNotifyErr as Error)?.message || adminNotifyErr,
+      );
+    }
+
+    try {
+      await this.emailService.sendVerificationDeclinedAdminEmail({
+        tenantName: tenantLabel,
+        tenantEmail: String((verification as any).email || ''),
+        verificationRequestId: requestId,
+        landlordDisplayName: String((verification as any).landlordDisplayName || ''),
+        declinedAt,
+      });
+    } catch (emailErr: unknown) {
+      console.error(
+        '[VerificationService] Decline admin email failed:',
+        (emailErr as Error)?.message || emailErr,
       );
     }
 

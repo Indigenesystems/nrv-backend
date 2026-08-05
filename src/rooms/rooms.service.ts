@@ -416,7 +416,8 @@ export class RoomsService {
       if (!prop) {
         return false;
       }
-      return String(prop.status || 'active').toLowerCase() !== 'inactive';
+      const status = String(prop.status || 'active').toLowerCase();
+      return status !== 'inactive' && status !== 'deleted';
     });
   }
 
