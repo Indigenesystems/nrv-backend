@@ -795,6 +795,10 @@ export class PropertiesService {
     if (body.file != 'null' || null) {
       fileUrl = await this.cloudinaryService.upload(body.file[0]);
     }
+    const monthlyIncomeRaw =
+      body.monthlyIncome != null && body.monthlyIncome !== ''
+        ? Number(body.monthlyIncome)
+        : undefined;
     const applicationData = {
       propertyId: body.propertyId,
       ownerId: body.ownerId,
@@ -802,10 +806,13 @@ export class PropertiesService {
       status: body.status,
       identificationCard: fileUrl || null,
       currentEmployer: body.currentEmployer,
-      reasonForLiving: body.reasonForLiving,
+      reasonForLiving: body.reasonForLiving || body.reasonForLeaving,
       jobTitle: body.jobTitle,
-      currentResidence: body.currentResidence,
-      monthlyIncome: body.monthlyIncome,
+      currentResidence: body.currentResidence || body.currentAddress,
+      monthlyIncome:
+        monthlyIncomeRaw != null && !Number.isNaN(monthlyIncomeRaw)
+          ? monthlyIncomeRaw
+          : undefined,
     };
 
     try {

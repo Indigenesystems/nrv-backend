@@ -98,13 +98,32 @@ export class VerificationController {
    * @returns Success response with created verification
    */
   @Post('tenant')
-  async submitTenantVerification(@Body(new ValidationPipe({ whitelist: true })) dto: CreateVerificationDto): Promise<{ status: string; message: string; data: any }> {
+  async submitTenantVerification(
+    @Body(new ValidationPipe({ whitelist: true })) dto: CreateVerificationDto,
+    @Headers('authorization') authorization?: string,
+  ): Promise<{ status: string; message: string; data: any }> {
     try {
-      const result = await this.verificationService.createVerificationRequest(dto);
+      const requesterUserId = getJwtUserId(authorization);
+      if (!requesterUserId) {
+        throw new UnauthorizedException(
+          'Authentication required to submit a verification request.',
+        );
+      }
+      const result = await this.verificationService.createVerificationRequest(
+        dto,
+        { actorUserId: requesterUserId },
+      );
       return verificationSuccessResponse('Tenant verification request submitted successfully', result);
     } catch (error) {
       console.error('Error submitting tenant verification:', error);
-      throw new BadRequestException(error?.response || 'Could not submit verification request.');
+      if (
+        error instanceof UnauthorizedException ||
+        error instanceof ForbiddenException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+      throw new BadRequestException(error?.response || error?.message || 'Could not submit verification request.');
     }
   }
 

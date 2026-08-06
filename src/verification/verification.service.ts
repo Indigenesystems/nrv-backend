@@ -456,16 +456,36 @@ export class VerificationService {
    */
   async createVerificationRequest(
     dto: CreateVerificationDto,
+    options?: { actorUserId?: string },
   ): Promise<{ message: string; data: Verification; user: any }> {
     const requestedBy = typeof dto.requestedBy === 'string' ? dto.requestedBy : (dto.requestedBy as any)?.toString?.();
     if (!requestedBy) {
       throw new BadRequestException('requestedBy (landlord id) is required.');
     }
+
+    const actorUserId = options?.actorUserId ? String(options.actorUserId) : '';
+    if (!actorUserId) {
+      throw new ForbiddenException(
+        'Authentication required to create a verification request.',
+      );
+    }
+    if (actorUserId !== String(requestedBy)) {
+      throw new ForbiddenException(
+        'You can only create verification requests from your own landlord account.',
+      );
+    }
+
     const user = await this.userService.findUserById(requestedBy);
     if (!user) {
       throw new BadRequestException('User not found.');
     }
     const u = user as any;
+    const accountType = String(u.accountType || '').toLowerCase();
+    if (accountType !== 'landlord' && accountType !== 'property owner') {
+      throw new ForbiddenException(
+        'Only landlord accounts can request tenant verifications or use verification credits.',
+      );
+    }
     const standardAvail = (u.standardVerificationBalance ?? 0) - (u.standardVerificationUsed ?? 0);
     const premiumAvail = (u.premiumVerificationBalance ?? 0) - (u.premiumVerificationUsed ?? 0);
     const tier = dto.verificationTier ?? 'standard';

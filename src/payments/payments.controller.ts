@@ -1,9 +1,13 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Post, Query, ForbiddenException } from '@nestjs/common';
 import { PaystackService } from './paystack.service';
 import { PaymentsService } from './payments.service';
 import { UserService } from '../users/users.service';
 import { PlansService, UNIT_PRICE_NAIRA } from '../plans/plans.service';
 import { calculatePackPricing } from './payment-pricing.util';
+import {
+  assertLandlordAccountType,
+  requireAuthenticatedUserId,
+} from '../auth/user-jwt.util';
 
 /** Where landlords start a tenant verification after buying credits. */
 export const LANDLORD_VERIFICATION_REQUEST_PATH =
@@ -26,13 +30,22 @@ export class PaymentsController {
   async initializePack(
     @Body()
     body: { userId: string; planId: string; amountNaira: number; quantity?: number },
+    @Headers('authorization') authorization?: string,
   ) {
+    const actorUserId = requireAuthenticatedUserId(authorization);
     const { userId, planId, amountNaira, quantity = 1 } = body;
+
+    if (String(userId) !== String(actorUserId)) {
+      throw new ForbiddenException(
+        'You can only purchase verification credits for your own account.',
+      );
+    }
 
     const user = await this.userService.findUserById(userId);
     if (!user) {
       return { status: 'error', message: 'User not found' };
     }
+    assertLandlordAccountType((user as any).accountType);
 
     let plan: any;
     try {
