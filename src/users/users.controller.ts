@@ -15,6 +15,8 @@ import {
   HttpStatus,
   HttpException,
   Query,
+  Headers,
+  ForbiddenException,
 } from '@nestjs/common';
 import {
   createUserSchema,
@@ -28,6 +30,10 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UserService } from './users.service';
 import { ConfirmUserDto } from './dto/confirm-user.dto';
 import { User } from './entities/user.entity';
+import {
+  assertLandlordAccountType,
+  requireAuthenticatedUserId,
+} from '../auth/user-jwt.util';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { AuthService } from '../auth/auth.service';
 import * as bcrypt from 'bcryptjs';
@@ -303,10 +309,22 @@ export class UserController {
   async purchasePack(
     @Param('id') id: string,
     @Body('planId') planId: string,
+    @Headers('authorization') authorization?: string,
   ): Promise<{ status: string; message: string; data: any }> {
     if (!planId) {
       throw new BadRequestException('planId is required');
     }
+    const actorUserId = requireAuthenticatedUserId(authorization);
+    if (String(actorUserId) !== String(id)) {
+      throw new ForbiddenException(
+        'You can only purchase verification credits for your own account.',
+      );
+    }
+    const actor = await this.userService.findUserById(actorUserId);
+    if (!actor) {
+      throw new NotFoundException('User not found');
+    }
+    assertLandlordAccountType((actor as any).accountType);
     const updated = await this.userService.purchasePack(id, planId);
     return {
       status: 'success',
