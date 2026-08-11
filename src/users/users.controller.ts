@@ -17,6 +17,7 @@ import {
   Query,
   Headers,
   ForbiddenException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import {
   createUserSchema,
@@ -40,6 +41,29 @@ import * as bcrypt from 'bcryptjs';
 import { UpdateNotificationSettingsDto } from './dto/update-notificationSettings.dto';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { query, Response } from 'express';
+import * as jwt from 'jsonwebtoken';
+import { staffHasPermission } from '../staff/staff-permissions';
+
+const getStaffJwt = (
+  authHeader?: string,
+): { sub: string; roleSlug?: string } | null => {
+  const token = authHeader?.startsWith('Bearer ')
+    ? authHeader.slice(7)
+    : authHeader;
+  if (!token) {
+    return null;
+  }
+  try {
+    const secret = process.env.JWT_SECRET || '34ttyyuhbyh';
+    const decoded: any = jwt.verify(token, secret);
+    if (decoded?.type !== 'staff' || !decoded?.sub) {
+      return null;
+    }
+    return { sub: String(decoded.sub), roleSlug: decoded.roleSlug };
+  } catch {
+    return null;
+  }
+};
 
 
 @Controller('users')
@@ -53,13 +77,23 @@ export class UserController {
    * Create a new user
    */
   @Post()
-  async createUser(@Body() userData: CreateUserDto): Promise<{ status: string; message: string; data?: any }> {
+  @UseInterceptors(FileFieldsInterceptor([{ name: 'file', maxCount: 1 }]))
+  async createUser(
+    @Body() userData: CreateUserDto,
+    @UploadedFiles()
+    files?: {
+      file?: Express.Multer.File[];
+    },
+  ): Promise<{ status: string; message: string; data?: any }> {
     try {
       const validationResult = createUserSchema.validate(userData);
       if (validationResult.error) {
         throw new BadRequestException(validationResult.error.message);
       }
-      const createdUser: any = await this.userService.createUser(userData);
+      const createdUser: any = await this.userService.createUser({
+        ...userData,
+        ...(files || {}),
+      });
       if (createdUser.firstName) {
         return {
           status: 'success',
@@ -181,6 +215,52 @@ export class UserController {
         throw new InternalServerErrorException('Failed to confirm account');
       }
     }
+  }
+
+  /**
+   * Admin: suspend, deactivate, or reactivate a user account with a reason.
+   */
+  @Patch(':id/account-status')
+  async setAccountStatus(
+    @Param('id') id: string,
+    @Body()
+    body: { status?: string; reason?: string },
+    @Headers('authorization') authorization?: string,
+  ): Promise<{ status: string; message: string; data: any }> {
+    const staff = getStaffJwt(authorization);
+    if (!staff) {
+      throw new UnauthorizedException('Staff authentication required.');
+    }
+    if (!staffHasPermission(staff.roleSlug, 'staff.write')) {
+      throw new ForbiddenException(
+        'Only admins can suspend or deactivate user accounts.',
+      );
+    }
+    const nextStatus = String(body?.status || '')
+      .trim()
+      .toLowerCase();
+    if (
+      nextStatus !== 'active' &&
+      nextStatus !== 'suspended' &&
+      nextStatus !== 'deactivated'
+    ) {
+      throw new BadRequestException(
+        'Status must be active, suspended, or deactivated.',
+      );
+    }
+    const updated = await this.userService.setAccountStatus(id, {
+      status: nextStatus as 'active' | 'suspended' | 'deactivated',
+      reason: String(body?.reason || ''),
+      changedBy: staff.sub,
+    });
+    if (nextStatus === 'suspended' || nextStatus === 'deactivated') {
+      await this.authService.revokeAllRememberMeTokensForUser(id);
+    }
+    return {
+      status: 'success',
+      message: `Account ${nextStatus} successfully`,
+      data: updated,
+    };
   }
 
   /**

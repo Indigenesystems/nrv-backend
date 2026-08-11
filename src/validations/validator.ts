@@ -117,7 +117,9 @@ export const createPropertySchema = Joi.object({
 });
 
 export const updatePropertySchema = Joi.object({
-  status: Joi.string().valid('active', 'inactive').optional(),
+  status: Joi.string()
+    .valid('active', 'inactive', 'suspended', 'deactivated')
+    .optional(),
   streetAddress: Joi.string().optional(),
   city: Joi.string().optional(),
   state: Joi.string().optional(),

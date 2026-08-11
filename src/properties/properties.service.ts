@@ -416,6 +416,7 @@ export class PropertiesService {
 
     if (userId) {
       propertyQuery.createdBy = userId;
+      propertyQuery.status = { $ne: 'deleted' };
     }
 
     if (search) {
@@ -475,7 +476,10 @@ export class PropertiesService {
     const { userId, page, limit } = params;
     const [data, total] = await Promise.all([
       this.findAllProperty(page, limit, userId),
-      this.propertyModel.countDocuments({ createdBy: userId }),
+      this.propertyModel.countDocuments({
+        createdBy: userId,
+        status: { $ne: 'deleted' },
+      }),
     ]);
     return {
       data: Array.isArray(data) ? data : [],
@@ -543,9 +547,11 @@ export class PropertiesService {
       };
     }
     
-    // Status filter
+    // Status filter — default excludes soft-deleted listings from admin "all"
     if (status) {
       query.status = status;
+    } else {
+      query.status = { $ne: 'deleted' };
     }
     
     // Property type filter
@@ -1046,29 +1052,55 @@ export class PropertiesService {
   ): Promise<any> {
     try {
       const skip = (page - 1) * limit;
-      let query = this.applicationModel.find({ applicant: id });
-
+      const prefetchLimit = Math.max(1, page) * limit;
+      const query: any = { applicant: id };
       if (status) {
-        query = query.where('status').equals(status);
+        query.status = status;
       }
 
-      const applications = await query
-        .populate('ownerId')
-        .populate({
-          path: 'propertyId',
-          populate: {
+      const [applications, onboarded] = await Promise.all([
+        this.applicationModel
+          .find(query)
+          .populate('ownerId')
+          .populate({
             path: 'propertyId',
-            
-          },
+            populate: { path: 'propertyId' },
+          })
+          .populate('applicant')
+          .sort({ createdAt: -1 })
+          .limit(prefetchLimit)
+          .exec(),
+        this.landlordAssignedTenantModel
+          .find(query)
+          .populate('ownerId')
+          .populate({
+            path: 'propertyId',
+            populate: { path: 'propertyId' },
+          })
+          .populate('applicant')
+          .sort({ createdAt: -1 })
+          .limit(prefetchLimit)
+          .exec(),
+      ]);
+
+      const seen = new Set<string>();
+      return [...applications, ...onboarded]
+        .filter((row: any) => {
+          const key = String(row?._id || '');
+          if (!key || seen.has(key)) {
+            return false;
+          }
+          seen.add(key);
+          return true;
         })
-        .populate('applicant')
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .exec();
-      return applications;
+        .sort((a: any, b: any) => {
+          const aTime = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const bTime = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return bTime - aTime;
+        })
+        .slice(skip, skip + limit);
     } catch (error) {
-      throw new Error(`Failed to fetch landlord applications: ${error}`);
+      throw new Error(`Failed to fetch tenant applications: ${error}`);
     }
   }
 

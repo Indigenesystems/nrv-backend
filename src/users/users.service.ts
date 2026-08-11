@@ -311,10 +311,23 @@ export class UserService {
    * @param user
    * @returns Created user or error message
    */
-  async createUser(user: User): Promise<User | { message: string }> {
+  async createUser(user: any): Promise<User | { message: string }> {
     const confirmationCode = generateConfirmationCode();
     const normalizedPhone = this.normalizePhone(user.phoneNumber);
     user.phoneNumber = normalizedPhone;
+
+    let fileUrl: string | undefined;
+    if (user.file && Array.isArray(user.file) && user.file.length > 0) {
+      fileUrl = await this.cloudinaryService.upload(user.file[0]);
+    } else if (user.file && typeof user.file === 'object' && user.file.buffer) {
+      fileUrl = await this.cloudinaryService.upload(user.file);
+    }
+    if (fileUrl) {
+      user.file = fileUrl;
+    } else {
+      delete user.file;
+    }
+
     const existingUser = await this.userModel.findOne({ email: user.email });
     const checkExistingUserByNin = user.nin?.trim()
       ? await this.userModel.findOne({ nin: user.nin.trim() })
@@ -595,16 +608,68 @@ export class UserService {
     let fileUrl: string | undefined;
     if (updatedUser.file && updatedUser.file.length > 0) {
       fileUrl = await this.cloudinaryService.upload(updatedUser.file[0]);
-      console.log({ fileUrl });
     }
 
-    const updateData = { ...updatedUser, file: fileUrl };
+    // End users cannot change identity fields via profile settings.
+    const updateData: any = { ...updatedUser };
+    delete updateData.firstName;
+    delete updateData.lastName;
+    delete updateData.email;
+    delete updateData.status;
+    delete updateData.statusReason;
+    delete updateData.statusChangedAt;
+    delete updateData.statusChangedBy;
+    delete updateData.password;
+    delete updateData.confirmationCode;
+    delete updateData.accountType;
 
-    console.log({ updateData });
+    if (fileUrl) {
+      updateData.file = fileUrl;
+    } else {
+      delete updateData.file;
+    }
 
     return await this.userModel.findByIdAndUpdate(id, updateData, {
       new: true,
     });
+  }
+
+  /**
+   * Admin-only: suspend, deactivate, or reactivate a platform user with a reason.
+   */
+  async setAccountStatus(
+    id: string,
+    input: {
+      status: 'active' | 'suspended' | 'deactivated';
+      reason: string;
+      changedBy: string;
+    },
+  ): Promise<User> {
+    const reason = String(input.reason || '').trim();
+    if (reason.length < 5) {
+      throw new BadRequestException(
+        'A valid reason of at least 5 characters is required.',
+      );
+    }
+    const allowed = ['active', 'suspended', 'deactivated'];
+    if (!allowed.includes(input.status)) {
+      throw new BadRequestException('Invalid account status.');
+    }
+
+    const user = await this.userModel.findByIdAndUpdate(
+      id,
+      {
+        status: input.status,
+        statusReason: reason,
+        statusChangedAt: new Date(),
+        statusChangedBy: input.changedBy,
+      },
+      { new: true },
+    );
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    return user;
   }
 
   /**
