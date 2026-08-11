@@ -38,6 +38,16 @@ export class User {
   
   status: string;
 
+  /** Admin-provided reason when suspending or deactivating an account. */
+  @Prop()
+  statusReason?: string;
+
+  @Prop()
+  statusChangedAt?: Date;
+
+  @Prop()
+  statusChangedBy?: string;
+
   @Prop()
   
   confirmationCode: string;

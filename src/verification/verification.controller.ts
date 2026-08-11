@@ -37,6 +37,7 @@ import { RunPremiumScreeningDto, RunStandardScreeningDto } from './dto/run-scree
 import { Response, Request } from 'express';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import * as jwt from 'jsonwebtoken';
+import { staffHasPermission } from '../staff/staff-permissions';
 
 // Helper for error responses
 function errorResponse(res: Response, error: any, defaultMsg: string, status = HttpStatus.BAD_REQUEST) {
@@ -856,19 +857,37 @@ export class VerificationController {
   }
 
   /**
-   * Update a verification request (e.g. status: approved | rejected)
-   * @param id
-   * @returns Success response with updated verification
+   * Update a verification request (e.g. status: approved | rejected).
+   * Staff with verifications.write only (Viewers are blocked).
    */
   @Patch(':id')
   async updateVerification(
     @Param('id') id: string,
     @Body(new ValidationPipe({ whitelist: true })) dto: UpdateVerificationDto,
+    @Headers('authorization') authorization?: string,
   ): Promise<{ status: string; message: string; data: any }> {
     try {
+      const staff = getStaffJwt(authorization);
+      if (!staff) {
+        throw new UnauthorizedException(
+          'Staff authentication required to update verification status.',
+        );
+      }
+      if (!staffHasPermission(staff.roleSlug, 'verifications.write')) {
+        throw new ForbiddenException(
+          'You do not have permission to approve or reject verifications.',
+        );
+      }
       const result = await this.verificationService.updateVerification(id, dto);
       return verificationSuccessResponse('Verification updated successfully', result);
     } catch (error) {
+      if (
+        error instanceof UnauthorizedException ||
+        error instanceof ForbiddenException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
       throw new BadRequestException(error?.response || error?.message || 'Failed to update verification.');
     }
   }

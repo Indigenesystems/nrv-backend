@@ -93,6 +93,22 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
+    const accountStatus = String(user.status || '').toLowerCase();
+    if (accountStatus === 'suspended') {
+      throw new UnauthorizedException(
+        user.statusReason
+          ? `Your account has been suspended: ${user.statusReason}`
+          : 'Your account has been suspended. Please contact support.',
+      );
+    }
+    if (accountStatus === 'deactivated') {
+      throw new UnauthorizedException(
+        user.statusReason
+          ? `Your account has been deactivated: ${user.statusReason}`
+          : 'Your account has been deactivated. Please contact support.',
+      );
+    }
+
     const rememberMe = Boolean(loginUserDto.rememberMe);
     const session = await this.createSessionForUser(user, rememberMe);
 
@@ -183,7 +199,12 @@ export class AuthService {
     const user: any = await this.userService.findUserById(
       String(record.userId),
     );
-    if (!user || user.status === 'inactive') {
+    if (
+      !user ||
+      user.status === 'inactive' ||
+      user.status === 'suspended' ||
+      user.status === 'deactivated'
+    ) {
       await this.revokeRememberMeToken(rawToken);
       throw new UnauthorizedException('Unable to restore session');
     }
