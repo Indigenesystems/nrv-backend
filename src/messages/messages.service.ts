@@ -63,7 +63,9 @@ export class MessagingService {
       const actionUrl =
         accountType === 'tenant'
           ? '/dashboard/tenant/messages'
-          : '/dashboard/landlord/messages';
+          : senderId
+            ? `/dashboard/landlord/messages/${senderId}`
+            : '/dashboard/landlord/messages';
       void this.notificationsService
         .create({
           targetRole: accountType,
@@ -107,9 +109,58 @@ export class MessagingService {
           { sender: recipient, recipient: sender },
         ],
       })
-      .sort({ createdAt: 1 }) // Sort by creation date in ascending order
-      .populate('sender') // Populate the sender field with user data
-      .populate('recipient') // Populate the recipient field with user data
+      .sort({ createdAt: 1 })
+      .populate('sender')
+      .populate('recipient')
       .exec();
+  }
+
+  async getConversationPartners(userId: string): Promise<
+    Array<{
+      partnerId: string;
+      partner: any;
+      lastMessage: string;
+      lastMessageAt: Date;
+    }>
+  > {
+    const messages = await this.messageModel
+      .find({
+        $or: [{ sender: userId }, { recipient: userId }],
+      })
+      .sort({ createdAt: -1 })
+      .populate('sender', 'firstName lastName email accountType')
+      .populate('recipient', 'firstName lastName email accountType')
+      .exec();
+
+    const partners = new Map<
+      string,
+      {
+        partnerId: string;
+        partner: any;
+        lastMessage: string;
+        lastMessageAt: Date;
+      }
+    >();
+
+    for (const message of messages) {
+      const sender: any = message.sender;
+      const recipient: any = message.recipient;
+      const senderId = String(sender?._id || sender || '');
+      const recipientId = String(recipient?._id || recipient || '');
+      const partnerId =
+        senderId === String(userId) ? recipientId : senderId;
+      const partner = senderId === String(userId) ? recipient : sender;
+      if (!partnerId || partnerId === String(userId) || partners.has(partnerId)) {
+        continue;
+      }
+      partners.set(partnerId, {
+        partnerId,
+        partner,
+        lastMessage: String(message.content || ''),
+        lastMessageAt: (message as any).createdAt,
+      });
+    }
+
+    return Array.from(partners.values());
   }
 }

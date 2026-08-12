@@ -66,6 +66,12 @@ export class Application {
   @Prop({ default: null })
   
   rentStartDate: Date;
+
+  @Prop()
+  endTenancyReason?: string;
+
+  @Prop()
+  endTenancyComment?: string;
 }
 
 export type ApplicationDocument = Application & Document;

@@ -652,7 +652,10 @@ export class RoomsService {
     );
   }
 
-  async endRentTenure(id: string): Promise<LandlordAssignedTenant> {
+  async endRentTenure(
+    id: string,
+    input?: { reason?: string; comment?: string },
+  ): Promise<LandlordAssignedTenant> {
     // Find the tenant by ID in either LandlordAssignedTenant or Application
     let tenant = await this.landlordAssignedTenantModel.findById(id);
     if (!tenant) {
@@ -665,6 +668,12 @@ export class RoomsService {
     // Set status to ended
     tenant.status = ApplicationStatus.ENDED;
     tenant.rentEndDate = new Date();
+    if (input?.reason) {
+      (tenant as any).endTenancyReason = String(input.reason).trim();
+    }
+    if (input?.comment) {
+      (tenant as any).endTenancyComment = String(input.comment).trim();
+    }
 
     // Free the unit so it can be re-listed / reassigned
     if ((tenant as any).propertyId) {

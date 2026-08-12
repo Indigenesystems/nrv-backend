@@ -30,6 +30,12 @@ export class LandlordAssignedTenant {
   @Prop({ default: null })
   
   rentEndDate: Date;
+
+  @Prop()
+  endTenancyReason?: string;
+
+  @Prop()
+  endTenancyComment?: string;
 }
 
 export type LandlordAssignedTenantDocument = LandlordAssignedTenant & Document;

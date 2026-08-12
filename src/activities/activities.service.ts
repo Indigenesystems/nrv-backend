@@ -38,4 +38,13 @@ export class ActivitiesService {
       .lean()
       .exec();
   }
+
+  async findRecent(limit: number = 50): Promise<ActivityDocument[]> {
+    return this.activityModel
+      .find()
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean()
+      .exec();
+  }
 }
