@@ -585,7 +585,7 @@ export class UserService {
     if (String(user.confirmationCode) !== String(confirmationCode)) {
       throw new BadRequestException('Incorrect confirmation code');
     }
-    const payload = { email: user.email, sub: user['_id'] };
+    const payload = { email: user.email, sub: String(user['_id']) };
     const accessToken = this.jwtService.sign(payload);
     user.status = 'active';
     user.isOnboarded = false;

@@ -102,16 +102,22 @@ export class VerificationController {
   async submitTenantVerification(
     @Body(new ValidationPipe({ whitelist: true })) dto: CreateVerificationDto,
     @Headers('authorization') authorization?: string,
+    @Req() req?: Request,
   ): Promise<{ status: string; message: string; data: any }> {
     try {
-      const requesterUserId = getJwtUserId(authorization);
+      const authHeader =
+        authorization ||
+        (typeof req?.headers?.authorization === 'string'
+          ? req.headers.authorization
+          : undefined);
+      const requesterUserId = getJwtUserId(authHeader);
       if (!requesterUserId) {
         throw new UnauthorizedException(
           'Authentication required to submit a verification request.',
         );
       }
       const result = await this.verificationService.createVerificationRequest(
-        dto,
+        { ...dto, requestedBy: requesterUserId },
         { actorUserId: requesterUserId },
       );
       return verificationSuccessResponse('Tenant verification request submitted successfully', result);
