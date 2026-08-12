@@ -69,7 +69,7 @@ export class AuthService {
     const expiresIn = rememberMe
       ? ACCESS_TOKEN_REMEMBER_EXPIRES
       : ACCESS_TOKEN_SHORT_EXPIRES;
-    const payload = { email: user.email, sub: user['_id'] };
+    const payload = { email: user.email, sub: String(user['_id']) };
     const accessToken = this.jwtService.sign(payload, { expiresIn });
     const safeUser = this.sanitizeUserForClient(user);
 
@@ -217,7 +217,7 @@ export class AuthService {
 
   async generateToken(email: string) {
     const user = await this.userService.findUserByEmail(email);
-    const payload = { email: user.email, sub: user['_id'] };
+    const payload = { email: user.email, sub: String(user['_id']) };
     const accessToken = this.jwtService.sign(payload);
     return { user, accessToken };
   }
