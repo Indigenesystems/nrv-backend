@@ -43,6 +43,7 @@ import { VerificationSchema } from './verification/entities/verification.entity'
 import { ActivitiesModule } from './activities/activities.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { StaffModule } from './staff/staff.module';
+import { SupportModule } from './support/support.module';
 import { PlansModule } from './plans/plans.module';
 import { PaymentsModule } from './payments/payments.module';
 import { NotificationsModule } from './notifications/notifications.module';
@@ -89,6 +90,7 @@ import {
     ActivitiesModule,
     DashboardModule,
     StaffModule,
+    SupportModule,
   ],
   controllers: [AppController, UserController, AuthController, PropertiesController, RoomsController, UserController, MaintenanceController, MessagingController],
   providers: [AppService, UserService, AuthService, EmailService, CloudinaryService, PropertiesService, RoomsService, MaintenanceService, MessagingService], 

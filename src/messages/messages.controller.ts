@@ -84,4 +84,24 @@ export class MessagingController {
       });
     }
   }
+
+  @Get('partners/:userId')
+  async getConversationPartners(
+    @Param('userId') userId: string,
+    @Res() res: Response,
+  ) {
+    try {
+      const partners = await this.messagingService.getConversationPartners(userId);
+      return res.status(HttpStatus.OK).json({
+        status: 'success',
+        message: 'Conversation partners fetched successfully',
+        data: partners,
+      });
+    } catch (error) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        status: 'error',
+        message: error.message,
+      });
+    }
+  }
 }

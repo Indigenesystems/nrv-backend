@@ -1286,10 +1286,14 @@ export class PropertiesService {
         .countDocuments({ ownerId: id, status: 'Accepted' })
         .exec();
 
-      const x = await this.findLandlordOnboardedTenants(id);
-      const totalActiveTenantsPromise = this.applicationModel
-        .countDocuments({ ownerId: id, status: 'Accepted' })
-        .exec();
+      const activeLeaseQuery = {
+        ownerId: id,
+        status: ApplicationStatus.ACTIVE_LEASE,
+      };
+      const totalActiveTenantsPromise = Promise.all([
+        this.applicationModel.countDocuments(activeLeaseQuery).exec(),
+        this.landlordAssignedTenantModel.countDocuments(activeLeaseQuery).exec(),
+      ]).then(([applicationCount, assignedCount]) => applicationCount + assignedCount);
 
       const totalPropertiesPromise = this.propertyModel
         .countDocuments({ createdBy: id })
@@ -1331,12 +1335,10 @@ export class PropertiesService {
           totalActiveTenantsLastMonthPromise,
         ]);
 
-      const totalActiveTenantsCount = totalActiveTenants + x.length;
-
       return {
         totalNew,
         totalAccepted,
-        totalActiveTenants: totalActiveTenantsCount,
+        totalActiveTenants,
         totalProperties,
         totalNewLastMonth,
         totalAcceptedLastMonth,
@@ -1382,7 +1384,7 @@ export class PropertiesService {
         totalNew,
         totalAccepted,
         totalRejected,
-        totalActiveTenants,
+        totalMaintenance,
         rentedFromApplications,
         rentedFromAssigned,
       ] = await Promise.all([
@@ -1398,7 +1400,8 @@ export class PropertiesService {
         totalNew,
         totalAccepted,
         totalRejected,
-        totalActiveTenants,
+        totalMaintenance,
+        totalActiveTenants: totalMaintenance,
         totalRentedApartments,
       };
     } catch (error) {

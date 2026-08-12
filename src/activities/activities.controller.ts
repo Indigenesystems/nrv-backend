@@ -6,6 +6,31 @@ import { ActivitiesService } from './activities.service';
 export class ActivitiesController {
   constructor(private readonly activitiesService: ActivitiesService) {}
 
+  @Get('admin/reports')
+  async findAdminReports(
+    @Query('limit') limit: string = '50',
+    @Res() res: Response,
+  ) {
+    try {
+      const limitNum = parseInt(limit, 10) || 50;
+      const activities = await this.activitiesService.findRecent(limitNum);
+      return res.status(HttpStatus.OK).json({
+        status: 'success',
+        data: activities.map((a: any) => ({
+          type: a.type,
+          details: a.details,
+          userId: a.userId,
+          createdAt: a.createdAt,
+        })),
+      });
+    } catch (error) {
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        status: 'error',
+        message: error?.message || 'Failed to fetch activity reports',
+      });
+    }
+  }
+
   @Get()
   async findAll(
     @Query('userId') userId: string,
