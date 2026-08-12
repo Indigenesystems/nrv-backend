@@ -365,10 +365,12 @@ export class RoomsController {
   assignStartAndEndDate;
 
   @Put(':id/end-tenure')
-  async endRentTenure(@Param('id') id: string) {
+  async endRentTenure(
+    @Param('id') id: string,
+    @Body() body: { reason?: string; comment?: string },
+  ) {
     try {
-      // Find the landlord assigned tenant by ID and mark the tenure as ended
-      const updatedTenant = await this.roomsService.endRentTenure(id);
+      const updatedTenant = await this.roomsService.endRentTenure(id, body);
 
       if (!updatedTenant) {
         throw new BadRequestException('LandlordAssignedTenant not found');

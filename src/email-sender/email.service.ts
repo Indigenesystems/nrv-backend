@@ -1889,4 +1889,34 @@ export class EmailService {
       html,
     });
   }
+
+  async sendSupportContactEmail(payload: {
+    name: string;
+    email: string;
+    subject: string;
+    message: string;
+    channel?: string;
+  }): Promise<void> {
+    const supportTo =
+      (process.env.SUPPORT_EMAIL || 'info@naijarentverify.com').trim();
+    const channel = String(payload.channel || 'email');
+    const html = `
+      <div style="font-family: Arial, sans-serif; line-height: 1.5;">
+        <h2>Support request (${channel})</h2>
+        <p><strong>Name:</strong> ${payload.name}</p>
+        <p><strong>Email:</strong> ${payload.email}</p>
+        <p><strong>Subject:</strong> ${payload.subject}</p>
+        <p><strong>Message:</strong></p>
+        <p>${payload.message}</p>
+      </div>
+    `;
+
+    await this.deliverMail({
+      from: this.defaultFromAddress,
+      to: supportTo,
+      replyTo: payload.email,
+      subject: `[Support] ${payload.subject}`,
+      html,
+    });
+  }
 }
