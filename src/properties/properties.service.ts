@@ -801,20 +801,38 @@ export class PropertiesService {
     if (body.file != 'null' || null) {
       fileUrl = await this.cloudinaryService.upload(body.file[0]);
     }
+    const asText = (value: unknown) => {
+      const raw = Array.isArray(value) ? value[0] : value;
+      if (raw == null) {
+        return '';
+      }
+      return String(raw).trim();
+    };
+    const applicantProfile = body.applicant
+      ? await this.userModel.findById(body.applicant).lean()
+      : null;
     const monthlyIncomeRaw =
       body.monthlyIncome != null && body.monthlyIncome !== ''
-        ? Number(body.monthlyIncome)
-        : undefined;
+        ? Number(Array.isArray(body.monthlyIncome) ? body.monthlyIncome[0] : body.monthlyIncome)
+        : applicantProfile?.monthlyIncome != null && applicantProfile.monthlyIncome !== ''
+          ? Number(applicantProfile.monthlyIncome)
+          : undefined;
     const applicationData = {
       propertyId: body.propertyId,
       ownerId: body.ownerId,
       applicant: body.applicant,
       status: body.status,
       identificationCard: fileUrl || null,
-      currentEmployer: body.currentEmployer,
-      reasonForLiving: body.reasonForLiving || body.reasonForLeaving,
-      jobTitle: body.jobTitle,
-      currentResidence: body.currentResidence || body.currentAddress,
+      currentEmployer:
+        asText(body.currentEmployer) || asText(applicantProfile?.currentEmployer) || undefined,
+      reasonForLiving:
+        asText(body.reasonForLiving) || asText(body.reasonForLeaving) || undefined,
+      jobTitle: asText(body.jobTitle) || asText(applicantProfile?.jobTitle) || undefined,
+      currentResidence:
+        asText(body.currentResidence) ||
+        asText(body.currentAddress) ||
+        asText(applicantProfile?.homeAddress) ||
+        undefined,
       monthlyIncome:
         monthlyIncomeRaw != null && !Number.isNaN(monthlyIncomeRaw)
           ? monthlyIncomeRaw
@@ -1813,6 +1831,39 @@ export class PropertiesService {
     }
   }
 
+  private hydrateApplicationEmploymentFields(application: any): any {
+    if (!application) {
+      return application;
+    }
+    const obj = typeof application.toObject === 'function'
+      ? application.toObject()
+      : { ...application };
+    const applicant = obj.applicant && typeof obj.applicant === 'object'
+      ? obj.applicant
+      : {};
+    if (!obj.jobTitle && applicant.jobTitle) {
+      obj.jobTitle = applicant.jobTitle;
+    }
+    if (!obj.currentEmployer && applicant.currentEmployer) {
+      obj.currentEmployer = applicant.currentEmployer;
+    }
+    if (
+      obj.monthlyIncome == null &&
+      applicant.monthlyIncome != null &&
+      applicant.monthlyIncome !== ''
+    ) {
+      const parsed = Number(applicant.monthlyIncome);
+      obj.monthlyIncome = Number.isNaN(parsed)
+        ? applicant.monthlyIncome
+        : parsed;
+    }
+    if (!obj.currentResidence) {
+      obj.currentResidence =
+        obj.currentAddress || applicant.homeAddress || obj.currentResidence;
+    }
+    return obj;
+  }
+
   async getLandlordApplicationById(applicationId: string): Promise<any> {
     try {
       const application = await this.applicationModel
@@ -1828,7 +1879,7 @@ export class PropertiesService {
         .exec();
   
       if (!application) {
-        const application = await this.landlordAssignedTenantModel
+        const assigned = await this.landlordAssignedTenantModel
         .findById(applicationId)
         .populate('ownerId')
         .populate({
@@ -1840,10 +1891,10 @@ export class PropertiesService {
         .populate('applicant')
         .exec();
 
-        return application
+        return this.hydrateApplicationEmploymentFields(assigned);
       }
   
-      return application;
+      return this.hydrateApplicationEmploymentFields(application);
     } catch (error) {
       throw new Error(`Failed to fetch landlord application: ${error.message}`);
     }
