@@ -58,6 +58,7 @@ export class MessagingService {
       });
 
     const recipient: any = populatedResponse.recipient;
+    const senderId = String((populatedResponse.sender as any)?._id || '');
     if (recipient?._id) {
       const accountType = recipient.accountType === 'tenant' ? 'tenant' : 'landlord';
       const actionUrl =

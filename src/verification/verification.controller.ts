@@ -38,6 +38,7 @@ import { Response, Request } from 'express';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import * as jwt from 'jsonwebtoken';
 import { staffHasPermission } from '../staff/staff-permissions';
+import { getUserJwtPayload } from '../auth/user-jwt.util';
 
 // Helper for error responses
 function errorResponse(res: Response, error: any, defaultMsg: string, status = HttpStatus.BAD_REQUEST) {
@@ -48,22 +49,7 @@ function errorResponse(res: Response, error: any, defaultMsg: string, status = H
 }
 
 function getJwtUserId(authHeader?: string): string | null {
-  const token = authHeader?.startsWith('Bearer ')
-    ? authHeader.slice(7)
-    : authHeader;
-  if (!token) {
-    return null;
-  }
-  try {
-    const secret = process.env.JWT_SECRET || '34ttyyuhbyh';
-    const decoded: any = jwt.verify(token, secret);
-    if (decoded?.type === 'staff') {
-      return null;
-    }
-    return decoded?.sub ? String(decoded.sub) : null;
-  } catch {
-    return null;
-  }
+  return getUserJwtPayload(authHeader)?.sub ?? null;
 }
 
 function getStaffJwt(authHeader?: string): { sub: string; roleSlug?: string } | null {
@@ -102,16 +88,22 @@ export class VerificationController {
   async submitTenantVerification(
     @Body(new ValidationPipe({ whitelist: true })) dto: CreateVerificationDto,
     @Headers('authorization') authorization?: string,
+    @Req() req?: Request,
   ): Promise<{ status: string; message: string; data: any }> {
     try {
-      const requesterUserId = getJwtUserId(authorization);
+      const authHeader =
+        authorization ||
+        (typeof req?.headers?.authorization === 'string'
+          ? req.headers.authorization
+          : undefined);
+      const requesterUserId = getJwtUserId(authHeader);
       if (!requesterUserId) {
         throw new UnauthorizedException(
           'Authentication required to submit a verification request.',
         );
       }
       const result = await this.verificationService.createVerificationRequest(
-        dto,
+        { ...dto, requestedBy: requesterUserId },
         { actorUserId: requesterUserId },
       );
       return verificationSuccessResponse('Tenant verification request submitted successfully', result);

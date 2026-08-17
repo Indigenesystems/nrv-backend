@@ -76,7 +76,7 @@ import {
       { name: RememberMeToken.name, schema: RememberMeTokenSchema },
     ]),
     JwtModule.register({
-      secret: '34ttyyuhbyh',
+      secret: process.env.JWT_SECRET || '34ttyyuhbyh',
       signOptions: { expiresIn: '1d' },
     }),
     AuthModule,
