@@ -38,6 +38,7 @@ import { Response, Request } from 'express';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import * as jwt from 'jsonwebtoken';
 import { staffHasPermission } from '../staff/staff-permissions';
+import { getUserJwtPayload } from '../auth/user-jwt.util';
 
 // Helper for error responses
 function errorResponse(res: Response, error: any, defaultMsg: string, status = HttpStatus.BAD_REQUEST) {
@@ -48,22 +49,7 @@ function errorResponse(res: Response, error: any, defaultMsg: string, status = H
 }
 
 function getJwtUserId(authHeader?: string): string | null {
-  const token = authHeader?.startsWith('Bearer ')
-    ? authHeader.slice(7)
-    : authHeader;
-  if (!token) {
-    return null;
-  }
-  try {
-    const secret = process.env.JWT_SECRET || '34ttyyuhbyh';
-    const decoded: any = jwt.verify(token, secret);
-    if (decoded?.type === 'staff') {
-      return null;
-    }
-    return decoded?.sub ? String(decoded.sub) : null;
-  } catch {
-    return null;
-  }
+  return getUserJwtPayload(authHeader)?.sub ?? null;
 }
 
 function getStaffJwt(authHeader?: string): { sub: string; roleSlug?: string } | null {
