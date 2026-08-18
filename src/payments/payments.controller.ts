@@ -230,5 +230,18 @@ export class PaymentsController {
       data: { authorization_url: outcome.authorization_url },
     };
   }
+
+  /**
+   * Paystack webhook — fulfills successful pack purchases when the callback page is missed.
+   */
+  @Post('webhook')
+  async paystackWebhook(@Body() body: { event?: string; data?: { reference?: string } }) {
+    const result = await this.paymentsService.handlePaystackWebhook(body);
+    return {
+      status: 'success',
+      handled: result.handled,
+      reference: result.reference,
+    };
+  }
 }
 

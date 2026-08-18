@@ -112,6 +112,36 @@ export class UserService {
     });
   }
 
+  /** Restore one standard credit after a declined/rejected verification (never below 0 used). */
+  async restoreStandardVerification(userId: string): Promise<void> {
+    const user = await this.userModel.findById(userId).lean();
+    if (!user) {
+      return;
+    }
+    const used = Number((user as any).standardVerificationUsed ?? 0);
+    if (used < 1) {
+      return;
+    }
+    await this.userModel.findByIdAndUpdate(userId, {
+      $inc: { standardVerificationUsed: -1 },
+    });
+  }
+
+  /** Restore one premium credit after a declined/rejected verification (never below 0 used). */
+  async restorePremiumVerification(userId: string): Promise<void> {
+    const user = await this.userModel.findById(userId).lean();
+    if (!user) {
+      return;
+    }
+    const used = Number((user as any).premiumVerificationUsed ?? 0);
+    if (used < 1) {
+      return;
+    }
+    await this.userModel.findByIdAndUpdate(userId, {
+      $inc: { premiumVerificationUsed: -1 },
+    });
+  }
+
   /**
    * Add credits one-by-one (or in quantity) for affordability. Each field is optional.
    */

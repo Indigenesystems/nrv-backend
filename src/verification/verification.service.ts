@@ -172,6 +172,30 @@ export class VerificationService {
     );
   }
 
+  private async refundVerificationCreditIfNeeded(
+    verification: Verification | VerificationDocument | Record<string, unknown>,
+  ): Promise<void> {
+    const doc = verification as any;
+    if (doc?.creditRefundedAt) {
+      return;
+    }
+    const landlordId = doc?.requestedBy ? String(doc.requestedBy) : '';
+    if (!landlordId) {
+      return;
+    }
+    const tier = String(doc?.verificationTier || 'standard').toLowerCase();
+    if (tier === 'premium') {
+      await this.userService.restorePremiumVerification(landlordId);
+    } else {
+      await this.userService.restoreStandardVerification(landlordId);
+    }
+    if (doc?._id) {
+      await this.verificationModel.findByIdAndUpdate(doc._id, {
+        creditRefundedAt: new Date(),
+      });
+    }
+  }
+
   /**
    * Create a new tenant verification response
    * @param dto
@@ -686,6 +710,10 @@ export class VerificationService {
       statusChanged &&
       (nextStatus === 'approved' || nextStatus === 'rejected')
     ) {
+      if (nextStatus === 'rejected') {
+        await this.refundVerificationCreditIfNeeded(updated);
+      }
+
       try {
         const tenantEmail = (updated as any)?.email;
         let tenantUserId: string | null = null;
@@ -1040,6 +1068,7 @@ export class VerificationService {
     (verification as any).status = VerificationStatus.DECLINED;
     (verification as any).dateUpdated = new Date();
     await verification.save();
+    await this.refundVerificationCreditIfNeeded(verification);
 
     const tenantLabel =
       `${(verification as any).firstName || ''} ${(verification as any).lastName || ''}`.trim() ||
