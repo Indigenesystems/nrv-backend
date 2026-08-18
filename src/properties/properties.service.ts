@@ -898,7 +898,7 @@ export class PropertiesService {
               applicationId: String(newApplication._id),
               propertyTitle,
               applicantName,
-              actionUrl: '/dashboard/landlord/tenants',
+              actionUrl: `/dashboard/landlord/properties/renters/${String(newApplication._id)}`,
             },
           });
         }
