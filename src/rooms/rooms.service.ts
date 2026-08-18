@@ -72,7 +72,12 @@ export class RoomsService {
       otherAmentities,
     }: any = createRoomDTO;
 
-    const parsedRentAmount = parseInt(rentAmount);
+    const parsedRentAmount = parseInt(String(rentAmount).replace(/,/g, ''), 10);
+    if (!Number.isFinite(parsedRentAmount) || parsedRentAmount <= 0) {
+      throw new BadRequestException(
+        'Rent amount must be a positive number greater than zero.',
+      );
+    }
 
     if (typeof otherAmentities === 'string') {
       otherAmentities = JSON.parse(otherAmentities);

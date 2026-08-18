@@ -77,6 +77,10 @@ export class Verification {
 
   @Prop({ default: () => new Date() })
   dateUpdated: Date;
+
+  /** When the landlord's consumed credit was refunded (decline/reject). */
+  @Prop({ default: null })
+  creditRefundedAt?: Date;
 }
 
 export const VerificationSchema = SchemaFactory.createForClass(Verification);

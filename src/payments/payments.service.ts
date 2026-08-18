@@ -218,12 +218,6 @@ export class PaymentsService {
       return;
     }
 
-    const updated = await this.updatePaymentStatus(
-      payment.reference,
-      'success',
-      new Date(),
-    );
-
     const userId = payment.userId?.toString?.() ?? String(payment.userId);
     const planId = payment.planId?.toString?.() ?? String(payment.planId);
     const quantity = Math.max(1, payment.quantity ?? 1);
@@ -232,7 +226,49 @@ export class PaymentsService {
       await this.userService.purchasePackWithQuantity(userId, planId, quantity);
     }
 
+    const updated = await this.updatePaymentStatus(
+      payment.reference,
+      'success',
+      new Date(),
+    );
+
     void this.notifyPaymentOutcome(updated, 'success');
+  }
+
+  /**
+   * Handle Paystack webhook charge.success — verify with Paystack then fulfill (idempotent).
+   */
+  async handlePaystackWebhook(payload: {
+    event?: string;
+    data?: { reference?: string; status?: string };
+  }): Promise<{ handled: boolean; reference?: string }> {
+    const event = String(payload?.event || '').toLowerCase();
+    const reference = payload?.data?.reference;
+    if (!reference) {
+      return { handled: false };
+    }
+
+    if (event !== 'charge.success') {
+      return { handled: false, reference };
+    }
+
+    const paymentRecord = await this.findByReference(reference);
+    if (!paymentRecord) {
+      return { handled: false, reference };
+    }
+
+    if (paymentRecord.status === 'success') {
+      return { handled: true, reference };
+    }
+
+    const result = await this.paystackService.verifyTransaction(reference);
+    const psStatus = result?.data?.status as string | undefined;
+    if (!result?.status || psStatus !== 'success') {
+      return { handled: false, reference };
+    }
+
+    await this.fulfillSuccessfulPayment(paymentRecord);
+    return { handled: true, reference };
   }
 
   /**
