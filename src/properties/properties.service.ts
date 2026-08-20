@@ -1014,7 +1014,14 @@ export class PropertiesService {
     }
     if (lower === 'ended' || lower === 'past') {
       return {
-        $in: [ApplicationStatus.ENDED, 'ended', 'ENDED'],
+        $in: [
+          ApplicationStatus.ENDED,
+          ApplicationStatus.EXPIRED,
+          'ended',
+          'ENDED',
+          'Expired',
+          'expired',
+        ],
       };
     }
     return raw;

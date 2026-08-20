@@ -609,11 +609,16 @@ export class RoomsService {
     rentEndDate: Date,
   ): Promise<LandlordAssignedTenant | null> {
     try {
+      const update = {
+        rentEndDate,
+        status: ApplicationStatus.ACTIVE_LEASE,
+      };
+
       // Attempt to update the landlordAssignedTenantModel
       const updatedTenant =
         await this.landlordAssignedTenantModel.findByIdAndUpdate(
           id,
-          { rentEndDate },
+          update,
           { new: true },
         );
 
@@ -625,7 +630,7 @@ export class RoomsService {
       // Fallback to updating the applicationModel
       const updatedApplication = await this.applicationModel.findByIdAndUpdate(
         id,
-        { rentEndDate },
+        update,
         { new: true },
       );
 

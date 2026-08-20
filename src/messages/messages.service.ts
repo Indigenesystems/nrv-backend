@@ -18,11 +18,21 @@ export class MessagingService {
 
   // Add a new message
   async createMessage(createMessageDto: any): Promise<Message | any> {
-    let fileUrls: any = null;
+    const attachedFiles: Express.Multer.File[] = Array.isArray(
+      createMessageDto.file,
+    )
+      ? createMessageDto.file
+      : [];
+    const content = String(createMessageDto.content || '').trim();
 
-    if (createMessageDto.file) {
+    if (!content && attachedFiles.length === 0) {
+      throw new Error('Message must include text or at least one image.');
+    }
+
+    let fileUrls: string[] = [];
+    if (attachedFiles.length > 0) {
       fileUrls = await Promise.all(
-        createMessageDto.file.map(async (file: Express.Multer.File) => {
+        attachedFiles.map(async (file: Express.Multer.File) => {
           return await this.cloudinaryService.upload(file);
         }),
       );
@@ -31,7 +41,7 @@ export class MessagingService {
     const newMessage = new this.messageModel({
       sender: createMessageDto.sender,
       recipient: createMessageDto.recipient,
-      content: createMessageDto.content,
+      content,
       files: fileUrls,
     });
 
@@ -43,12 +53,18 @@ export class MessagingService {
       .populate('sender', 'firstName lastName email accountType')
       .populate('recipient', 'firstName lastName email accountType');
 
+    const previewBody =
+      content ||
+      (fileUrls.length > 1
+        ? `Sent ${fileUrls.length} photos`
+        : 'Sent a photo');
+
     void this.emailService
       .sendMessageNotification({
         recipientName: populatedResponse.recipient['firstName'],
         senderName: populatedResponse.sender['firstName'],
         recipientEmail: populatedResponse.recipient['email'],
-        messageContent: populatedResponse.content,
+        messageContent: previewBody,
       })
       .catch((emailErr: unknown) => {
         console.error(
@@ -73,7 +89,7 @@ export class MessagingService {
           userId: String(recipient._id),
           type: 'message_received',
           title: `New message from ${populatedResponse.sender['firstName'] || 'someone'}`,
-          body: String(populatedResponse.content || '').slice(0, 140),
+          body: previewBody.slice(0, 140),
           metadata: {
             messageId: String(populatedResponse._id),
             senderId: String((populatedResponse.sender as any)?._id || ''),
@@ -154,10 +170,21 @@ export class MessagingService {
       if (!partnerId || partnerId === String(userId) || partners.has(partnerId)) {
         continue;
       }
+      const files = Array.isArray((message as any).files)
+        ? (message as any).files
+        : [];
+      const text = String(message.content || '').trim();
+      const lastMessage =
+        text ||
+        (files.length > 1
+          ? `Sent ${files.length} photos`
+          : files.length === 1
+            ? 'Sent a photo'
+            : '');
       partners.set(partnerId, {
         partnerId,
         partner,
-        lastMessage: String(message.content || ''),
+        lastMessage,
         lastMessageAt: (message as any).createdAt,
       });
     }

@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, MaxLength } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 
 
 export class CreateMessageDto {
@@ -14,9 +14,10 @@ export class CreateMessageDto {
   
   recipient: string;
 
+  /** Optional when one or more image/file attachments are sent. */
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   @MaxLength(500, { message: 'Content must not exceed 500 characters' })
   
-  content: string;
+  content?: string;
 }

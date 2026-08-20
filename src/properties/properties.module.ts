@@ -26,6 +26,7 @@ import { ActivitiesModule } from '../activities/activities.module';
 import { PlansModule } from '../plans/plans.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { StaffModule } from '../staff/staff.module';
+import { LeaseLifecycleService } from './lease-lifecycle.service';
 
 @Module({
   imports: [
@@ -54,6 +55,8 @@ import { StaffModule } from '../staff/staff.module';
     RoomsService,
     EmailService,
     CloudinaryService,
+    LeaseLifecycleService,
   ],
+  exports: [LeaseLifecycleService],
 })
 export class PropertiesModule {}
