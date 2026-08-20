@@ -72,8 +72,14 @@ export class RoomsService {
       otherAmentities,
     }: any = createRoomDTO;
 
-    const parsedRentAmount = parseInt(String(rentAmount).replace(/,/g, ''), 10);
-    if (!Number.isFinite(parsedRentAmount) || parsedRentAmount <= 0) {
+    const raw = String(rentAmount ?? '').replace(/,/g, '');
+    if (raw.includes('-')) {
+      throw new BadRequestException(
+        'Rent amount must be a positive number greater than zero.',
+      );
+    }
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
       throw new BadRequestException(
         'Rent amount must be a positive number greater than zero.',
       );
@@ -89,7 +95,7 @@ export class RoomsService {
       propertyId,
       apartmentType,
       rentAmountMetrics,
-      rentAmount: parsedRentAmount,
+      rentAmount: parsed,
       file: fileUrl,
       noOfRooms,
       noOfBaths,
@@ -603,11 +609,16 @@ export class RoomsService {
     rentEndDate: Date,
   ): Promise<LandlordAssignedTenant | null> {
     try {
+      const update = {
+        rentEndDate,
+        status: ApplicationStatus.ACTIVE_LEASE,
+      };
+
       // Attempt to update the landlordAssignedTenantModel
       const updatedTenant =
         await this.landlordAssignedTenantModel.findByIdAndUpdate(
           id,
-          { rentEndDate },
+          update,
           { new: true },
         );
 
@@ -619,7 +630,7 @@ export class RoomsService {
       // Fallback to updating the applicationModel
       const updatedApplication = await this.applicationModel.findByIdAndUpdate(
         id,
-        { rentEndDate },
+        update,
         { new: true },
       );
 

@@ -59,7 +59,8 @@ export class RoomsController {
       const data = await this.roomsService.createRooms(createRoomDTO);
       return {
         status: 'success',
-        message: 'Rooms added successfully',
+        message:
+          'Unit added successfully. It is not publicly listed yet — open the unit and request listing approval so an admin can review it.',
         data: data,
       };
     } catch (error) {

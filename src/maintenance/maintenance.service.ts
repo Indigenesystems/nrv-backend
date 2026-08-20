@@ -50,6 +50,7 @@ export class MaintenanceService {
         description: createMaintenanceDto.description,
         roomId: createMaintenanceDto.roomId,
         createdBy: createMaintenanceDto.createdBy,
+        priority: createMaintenanceDto.priority || 'Medium',
         file: fileUrl,
         statusHistory: [
           {
@@ -446,10 +447,19 @@ export class MaintenanceService {
           ? MaintenanceStatus.RESOLVED
           : status?.trim();
       let filtered = normalizedStatus
-        ? filteredByOwner.filter(
-            (item) =>
-              item.status?.toLowerCase() === normalizedStatus.toLowerCase(),
-          )
+        ? (() => {
+            const statusKey = String(normalizedStatus).toLowerCase();
+            if (statusKey === 'new' || statusKey === 'active') {
+              return filteredByOwner.filter((item) =>
+                ['new', 'acknowledged'].includes(
+                  String(item.status || '').toLowerCase(),
+                ),
+              );
+            }
+            return filteredByOwner.filter(
+              (item) => item.status?.toLowerCase() === statusKey,
+            );
+          })()
         : filteredByOwner;
 
       if (search) {
@@ -479,6 +489,8 @@ export class MaintenanceService {
       summary.Emergency = filteredByOwner.filter(
         (item) => item.priority === 'Emergency',
       ).length;
+      summary.openTickets =
+        (summary.New || 0) + (summary.Acknowledged || 0);
 
       return {
         ...paginateAndSummarize(filtered, page, limit, [

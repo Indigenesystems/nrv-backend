@@ -174,8 +174,22 @@ export class PropertiesService {
             );
           }
 
+          const rawRent = String(room?.rentAmount ?? '').replace(/,/g, '');
+          if (rawRent.includes('-')) {
+            throw new BadRequestException(
+              'Rent amount must be a positive number greater than zero.',
+            );
+          }
+          const parsed = Number(rawRent);
+          if (!Number.isFinite(parsed) || parsed <= 0) {
+            throw new BadRequestException(
+              'Rent amount must be a positive number greater than zero.',
+            );
+          }
+
           return this.roomModel.create({
             ...room,
+            rentAmount: parsed,
             roomId: randomInt(10000000),
             propertyId: createdProperty._id,
             imageUrls: roomImageUrls || [], // Add room-level images
@@ -554,9 +568,28 @@ export class PropertiesService {
       query.status = { $ne: 'deleted' };
     }
     
-    // Property type filter
-    if (propertyType) {
-      query.propertyType = propertyType;
+    // Property type filter (stored as { value, label } or legacy string)
+    if (propertyType && propertyType !== 'all') {
+      const normalized = String(propertyType).trim().toLowerCase();
+      const typePatterns: Record<string, RegExp> = {
+        apartment: /apartment|flat|duplex|bedroom/i,
+        house: /house|bungalow|detached|semi/i,
+        commercial: /commercial|office|warehouse|shop/i,
+      };
+      const pattern =
+        typePatterns[normalized] ||
+        new RegExp(normalized.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      const typeClause = {
+        $or: [
+          { 'propertyType.value': pattern },
+          { 'propertyType.label': pattern },
+          { propertyType: pattern },
+        ],
+      };
+      query =
+        Object.keys(query).length > 0
+          ? { $and: [query, typeClause] }
+          : typeClause;
     }
 
     if (pendingListingApproval) {
@@ -981,7 +1014,14 @@ export class PropertiesService {
     }
     if (lower === 'ended' || lower === 'past') {
       return {
-        $in: [ApplicationStatus.ENDED, 'ended', 'ENDED'],
+        $in: [
+          ApplicationStatus.ENDED,
+          ApplicationStatus.EXPIRED,
+          'ended',
+          'ENDED',
+          'Expired',
+          'expired',
+        ],
       };
     }
     return raw;
