@@ -139,7 +139,21 @@ export const createRoomSchema = Joi.object({
   propertyId: Joi.any().required(),
   apartmentType: Joi.string().required(),
   rentAmountMetrics: Joi.string().required(),
-  rentAmount: Joi.string().required(),
+  rentAmount: Joi.string()
+    .required()
+    .custom((value, helpers) => {
+      if (String(value).includes('-')) {
+        return helpers.error('any.invalid');
+      }
+      const parsed = Number(String(value).replace(/,/g, ''));
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        return helpers.error('any.invalid');
+      }
+      return value;
+    })
+    .messages({
+      'any.invalid': 'Rent amount must be a positive number greater than zero.',
+    }),
   file: Joi.any().optional(),
   noOfBaths: Joi.string().required(),
   noOfRooms: Joi.string().required(),
@@ -156,6 +170,10 @@ export const createMaintenanceSchema = Joi.object({
   roomId: Joi.any().required(),
   file: Joi.any().optional(),
   createdBy: Joi.any().required(),
+  priority: Joi.string()
+    .valid('Low', 'Medium', 'High', 'Emergency')
+    .optional()
+    .default('Medium'),
 });
 
 export const createExpenseSchema = Joi.object({

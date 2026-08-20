@@ -112,7 +112,7 @@ export class UserService {
     });
   }
 
-  /** Restore one standard credit after a declined/rejected verification (never below 0 used). */
+  /** Restore one standard credit after a tenant-declined verification (never below 0 used). */
   async restoreStandardVerification(userId: string): Promise<void> {
     const user = await this.userModel.findById(userId).lean();
     if (!user) {
@@ -127,7 +127,7 @@ export class UserService {
     });
   }
 
-  /** Restore one premium credit after a declined/rejected verification (never below 0 used). */
+  /** Restore one premium credit after a tenant-declined verification (never below 0 used). */
   async restorePremiumVerification(userId: string): Promise<void> {
     const user = await this.userModel.findById(userId).lean();
     if (!user) {

@@ -78,7 +78,7 @@ export class Verification {
   @Prop({ default: () => new Date() })
   dateUpdated: Date;
 
-  /** When the landlord's consumed credit was refunded (decline/reject). */
+  /** When the landlord's consumed credit was refunded (tenant decline only). */
   @Prop({ default: null })
   creditRefundedAt?: Date;
 }

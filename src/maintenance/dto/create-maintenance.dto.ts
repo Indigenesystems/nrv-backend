@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
 
 
 export class CreateMaintenanceDTO {
@@ -21,4 +21,8 @@ export class CreateMaintenanceDTO {
   @IsNotEmpty()
   
   createdBy: string;
+
+  @IsString()
+  @IsOptional()
+  priority?: string;
 }

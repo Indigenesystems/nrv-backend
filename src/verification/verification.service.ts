@@ -710,10 +710,6 @@ export class VerificationService {
       statusChanged &&
       (nextStatus === 'approved' || nextStatus === 'rejected')
     ) {
-      if (nextStatus === 'rejected') {
-        await this.refundVerificationCreditIfNeeded(updated);
-      }
-
       try {
         const tenantEmail = (updated as any)?.email;
         let tenantUserId: string | null = null;
