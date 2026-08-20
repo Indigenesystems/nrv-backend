@@ -72,8 +72,14 @@ export class RoomsService {
       otherAmentities,
     }: any = createRoomDTO;
 
-    const parsedRentAmount = parseInt(String(rentAmount).replace(/,/g, ''), 10);
-    if (!Number.isFinite(parsedRentAmount) || parsedRentAmount <= 0) {
+    const raw = String(rentAmount ?? '').replace(/,/g, '');
+    if (raw.includes('-')) {
+      throw new BadRequestException(
+        'Rent amount must be a positive number greater than zero.',
+      );
+    }
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
       throw new BadRequestException(
         'Rent amount must be a positive number greater than zero.',
       );
@@ -89,7 +95,7 @@ export class RoomsService {
       propertyId,
       apartmentType,
       rentAmountMetrics,
-      rentAmount: parsedRentAmount,
+      rentAmount: parsed,
       file: fileUrl,
       noOfRooms,
       noOfBaths,

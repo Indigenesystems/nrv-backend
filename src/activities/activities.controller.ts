@@ -8,12 +8,20 @@ export class ActivitiesController {
 
   @Get('admin/reports')
   async findAdminReports(
-    @Query('limit') limit: string = '50',
     @Res() res: Response,
+    @Query('limit') limit: string = '50',
+    @Query('type') type?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
   ) {
     try {
       const limitNum = parseInt(limit, 10) || 50;
-      const activities = await this.activitiesService.findRecent(limitNum);
+      const activities = await this.activitiesService.findFiltered({
+        limit: limitNum,
+        type,
+        from: from ? new Date(from) : undefined,
+        to: to ? new Date(to) : undefined,
+      });
       return res.status(HttpStatus.OK).json({
         status: 'success',
         data: activities.map((a: any) => ({
@@ -27,6 +35,34 @@ export class ActivitiesController {
       return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
         status: 'error',
         message: error?.message || 'Failed to fetch activity reports',
+      });
+    }
+  }
+
+  @Get('admin/detailed-reports')
+  async findDetailedAdminReports(
+    @Res() res: Response,
+    @Query('limit') limit: string = '100',
+    @Query('type') type?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    try {
+      const limitNum = parseInt(limit, 10) || 100;
+      const data = await this.activitiesService.getDetailedAdminReport({
+        limit: limitNum,
+        type,
+        from: from ? new Date(from) : undefined,
+        to: to ? new Date(to) : undefined,
+      });
+      return res.status(HttpStatus.OK).json({
+        status: 'success',
+        data,
+      });
+    } catch (error) {
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        status: 'error',
+        message: error?.message || 'Failed to fetch detailed admin reports',
       });
     }
   }
