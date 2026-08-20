@@ -1436,6 +1436,51 @@ export class EmailService {
     });
   }
 
+  async sendLeaseExpiredNotificationToLandlord(payload: {
+    landlordEmail: string;
+    landlordName: string;
+    applicantName: string;
+    propertyTitle: string;
+    endDateLabel: string;
+    actionUrl?: string;
+  }): Promise<void> {
+    const actionUrl =
+      payload.actionUrl ||
+      `${this.getFrontendUrl()}/dashboard/landlord/tenants`;
+    const fullActionUrl = actionUrl.startsWith('http')
+      ? actionUrl
+      : `${this.getFrontendUrl()}${actionUrl}`;
+
+    const html = this.renderSimpleEmail({
+      title: `Lease ended for ${payload.propertyTitle}`,
+      preheader: `${payload.applicantName}'s lease has reached its end date.`,
+      contentHtml: `
+        <p style="margin:0 0 12px;">Hello ${payload.landlordName},</p>
+        <p style="margin:0 0 12px;">
+          The lease with <strong>${payload.applicantName}</strong> for
+          <strong>${payload.propertyTitle}</strong> reached its end date
+          (${payload.endDateLabel}).
+        </p>
+        <p style="margin:0 0 12px;">
+          Please renew/extend the lease or end tenancy and leave a comment about the tenant.
+        </p>
+        <p style="margin:16px 0 0;">
+          <a href="${fullActionUrl}" target="_blank" style="display:inline-block;background:#03442C;color:#ffffff;text-decoration:none;padding:12px 16px;border-radius:8px;font-weight:600;">
+            Review lease
+          </a>
+        </p>
+        <p style="margin:12px 0 0;font-size:13px;color:#667085;">If the button doesn’t work, copy this link: <a href="${fullActionUrl}" target="_blank" style="color:#03442C;">${fullActionUrl}</a></p>
+      `,
+    });
+
+    await this.transporter.sendMail({
+      from: this.defaultFromAddress,
+      to: payload.landlordEmail,
+      subject: `Lease ended: ${payload.propertyTitle}`,
+      html,
+    });
+  }
+
   async sendNewPropertyApplicationNotificationToLandlord(payload: {
     landlordEmail: string;
     landlordName: string;
